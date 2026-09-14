@@ -27,3 +27,6 @@ Thumbs.db
 
 # Supabase CLI local metadata
 supabase/.temp/
+
+# Secretos locales (clave privada del updater, passwords) — nunca al repo
+.secrets/

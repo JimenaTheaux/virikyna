@@ -1,0 +1,46 @@
+name: Release Virikyna Local (Windows)
+
+# Solo Virikyna Local (la Caja), solo Windows.
+# Se dispara al pushear un tag "virikyna-local-v*" (ej. virikyna-local-v0.1.1).
+# Compila el instalador firmado (updater de Tauri), genera latest.json,
+# y publica ambos en GitHub Releases — el mecanismo que la app usa para
+# detectar y aplicar actualizaciones solas (docs/05_stack_tecnico.md, sección 8).
+
+on:
+  push:
+    tags:
+      - 'virikyna-local-v*'
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Instalar dependencias (monorepo)
+        run: npm ci
+
+      - name: Build + release Virikyna Local
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        with:
+          projectPath: apps/virikyna-local
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Virikyna Local ${{ github.ref_name }}'
+          releaseBody: 'Ver cambios en el historial de commits.'
+          releaseDraft: false
+          prerelease: false
+          args: --target x86_64-pc-windows-msvc
