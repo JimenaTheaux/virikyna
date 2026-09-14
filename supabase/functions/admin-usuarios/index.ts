@@ -29,14 +29,27 @@ type Body =
   | { accion: 'blanquear_password'; user_id: string; password_nueva: string }
   | { accion: 'desactivar_usuario'; user_id: string; activo: boolean }
 
+// Sin esto, el navegador bloquea el preflight OPTIONS antes de que el POST llegue a esta
+// función — supabase-js lo reporta como "Failed to send a request to the Edge Function"
+// (no como un error HTTP). Mismo fix que arca-emitir-factura/index.ts.
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...corsHeaders },
   })
 }
 
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders })
+  }
+
   const authHeader = req.headers.get('Authorization')
   if (!authHeader) return jsonResponse({ error: 'Falta autenticación' }, 401)
 
