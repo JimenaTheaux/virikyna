@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-bg text-ink font-sans antialiased;
+}
+
+/* Sin flechitas de +/- en los inputs numéricos — solo se cargan tocando el teclado.
+   El bloqueo del scroll del mouse sobre estos inputs vive en JS (ver
+   packages/shared/lib/numberInput.ts, instalado una vez en main.tsx). */
+input[type='number'] {
+  -moz-appearance: textfield;
+}
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}

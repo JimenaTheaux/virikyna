@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Virikyna — Opción 3: Quicksand + DM Sans (Violeta)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=DM+Sans:wght@400;500;600;700;800&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block" rel="stylesheet">
+<style>
+  :root {
+    --accent: #B192C4;
+    --accent-dark: #61506C;
+    --accent-darker: #473A4E;
+    --accent-light: #EFE9F3;
+    --ink: #24242b;
+    --ink-soft: #6b6570;
+    --bg: #f7f6fa;
+    --line: #e6e2ea;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: 'DM Sans', system-ui, sans-serif;
+    height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+  }
+  .compare-badge {
+    background: var(--accent-darker); color: #fff; text-align: center;
+    padding: 10px; font-size: 14px; font-weight: 700; letter-spacing: .2px;
+  }
+  header {
+    height: 76px; flex-shrink: 0; background: #fff; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: space-between; padding: 0 28px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  }
+  .brand { font-family: 'Quicksand', system-ui, sans-serif; font-weight: 700; font-size: 28px; color: var(--accent-darker); }
+  nav { display: flex; gap: 4px; margin-left: 32px; }
+  nav a {
+    display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 12px;
+    text-decoration: none; color: var(--ink-soft); font-weight: 600; font-size: 15px;
+  }
+  nav a.active { background: var(--accent); color: #fff; }
+  .header-left { display: flex; align-items: center; }
+  .user-pill {
+    display: flex; align-items: center; gap: 8px; background: var(--bg);
+    padding: 8px 16px; border-radius: 999px; font-weight: 600; font-size: 14px; color: var(--ink-soft);
+  }
+  main { flex: 1; display: flex; overflow: hidden; }
+  .col-left { flex: 1; display: flex; flex-direction: column; padding: 24px; overflow: hidden; }
+  .row-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px; }
+  .row-head h1 { font-family: 'Quicksand', system-ui, sans-serif; font-size: 30px; margin: 0 0 4px; font-weight: 700; }
+  .row-head p { margin: 0; color: var(--ink-soft); font-size: 14px; text-transform: uppercase; letter-spacing: .04em; }
+  .meta { text-align: right; color: var(--ink-soft); font-size: 13px; line-height: 1.6; }
+  .search { position: relative; margin-bottom: 20px; }
+  .search input {
+    width: 100%; height: 56px; border-radius: 16px; border: 2px solid var(--line);
+    padding: 0 20px 0 52px; font-size: 18px; font-family: 'DM Sans', system-ui, sans-serif; font-weight: 500;
+  }
+  .search input:focus { outline: none; border-color: var(--accent); }
+  .search .material-symbols-outlined { position: absolute; left: 18px; top: 16px; color: var(--ink-soft); }
+  .list { flex: 1; background: #fff; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.05); display: flex; flex-direction: column; overflow: hidden; }
+  .list-head { display: flex; padding: 16px 24px; font-size: 13px; font-weight: 700; color: var(--ink-soft); border-bottom: 1px solid var(--line); background: #fbfafc; }
+  .list-body { flex: 1; overflow: auto; }
+  .item { display: flex; align-items: center; padding: 18px 24px; border-bottom: 1px solid #f1eff3; }
+  .item .code { width: 110px; font-size: 13px; color: var(--ink-soft); font-weight: 600; }
+  .item .desc { flex: 1; }
+  .item .desc p.name { margin: 0; font-size: 18px; font-weight: 500; }
+  .item .desc p.note { margin: 2px 0 0; font-size: 12px; color: var(--ink-soft); }
+  .item .qty { width: 70px; text-align: center; font-size: 20px; font-weight: 700; }
+  .item .amount { width: 140px; text-align: right; font-size: 20px; font-weight: 700; }
+  .list-foot { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-top: 1px solid var(--line); background: #fbfafc; }
+  .list-foot .stat { display: flex; gap: 28px; }
+  .list-foot .stat div span { display: block; }
+  .list-foot .stat .label { font-size: 10px; font-weight: 700; color: var(--ink-soft); text-transform: uppercase; }
+  .list-foot .stat .value { font-size: 20px; font-weight: 700; }
+  .col-right {
+    width: 380px; flex-shrink: 0; background: #fff; border-left: 1px solid var(--line);
+    padding: 24px; display: flex; flex-direction: column;
+  }
+  .total-label { font-size: 13px; font-weight: 700; color: var(--ink-soft); text-align: right; margin-bottom: 4px; }
+  .total-value { font-family: 'Quicksand', system-ui, sans-serif; font-size: 52px; font-weight: 700; color: var(--accent-darker); text-align: right; line-height: 1; margin-bottom: 20px; }
+  .pay-with { margin-bottom: 20px; }
+  .pay-with label { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+  .pay-with .box { margin-top: 6px; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; }
+  .pay-with .box span { font-size: 26px; font-weight: 700; }
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 20px; }
+  .keypad button {
+    height: 52px; border-radius: 12px; border: 1px solid var(--line); background: #fff;
+    font-family: 'DM Sans', system-ui, sans-serif; font-size: 20px; font-weight: 700; color: var(--ink);
+  }
+  .actions-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+  .actions-row button {
+    height: 48px; border-radius: 12px; font-weight: 700; font-size: 13px; border: 1px solid var(--line);
+    background: #fff; color: var(--ink-soft); display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .btn-cobrar {
+    height: 76px; border-radius: 16px; border: none; background: var(--accent);
+    color: #fff; font-family: 'Quicksand', system-ui, sans-serif; font-size: 22px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+  }
+  .swatch-row { margin-top: auto; padding-top: 16px; border-top: 1px dashed var(--line); display: flex; gap: 8px; }
+  .swatch { flex: 1; height: 28px; border-radius: 8px; }
+</style>
+</head>
+<body>
+  <div class="compare-badge">Opción 3 — Título/Total: Quicksand · Texto/UI: DM Sans · Acento: Violeta</div>
+  <header>
+    <div class="header-left">
+      <span class="brand">Virikyna</span>
+      <nav>
+        <a class="active" href="#"><span class="material-symbols-outlined">shopping_cart</span>Ventas</a>
+        <a href="#"><span class="material-symbols-outlined">inventory_2</span>Inventario</a>
+        <a href="#"><span class="material-symbols-outlined">dashboard</span>Dashboard</a>
+        <a href="#"><span class="material-symbols-outlined">group</span>Clientes</a>
+        <a href="#"><span class="material-symbols-outlined">settings</span>Configuración</a>
+      </nav>
+    </div>
+    <div class="user-pill"><span class="material-symbols-outlined">account_circle</span> Terminal #001</div>
+  </header>
+  <main>
+    <section class="col-left">
+      <div class="row-head">
+        <div>
+          <h1>Factura C</h1>
+          <p>Consumidor final</p>
+        </div>
+        <div class="meta">
+          <div>Fecha: 24/10/2023</div>
+          <div>Nro: 0001-00004512</div>
+        </div>
+      </div>
+      <div class="search">
+        <span class="material-symbols-outlined">search</span>
+        <input placeholder="Buscar por código o nombre..." autofocus>
+      </div>
+      <div class="list">
+        <div class="list-head">
+          <span style="width:110px">CÓDIGO</span><span style="flex:1">DESCRIPCIÓN</span>
+          <span style="width:70px;text-align:center">CANT.</span><span style="width:140px;text-align:right">IMPORTE</span>
+        </div>
+        <div class="list-body">
+          <div class="item">
+            <span class="code">TOY-4492</span>
+            <div class="desc"><p class="name">Peluche Oso Gigante 1.2m Café</p><p class="note">Descuento 10% aplicado</p></div>
+            <span class="qty">1</span><span class="amount">$12.500</span>
+          </div>
+          <div class="item">
+            <span class="code">LGO-9921</span>
+            <div class="desc"><p class="name">Lego Star Wars: Millennium Falcon</p></div>
+            <span class="qty">1</span><span class="amount">$85.200</span>
+          </div>
+          <div class="item">
+            <span class="code">MAT-1102</span>
+            <div class="desc"><p class="name">Auto Hot Wheels Pack x5 Collector</p></div>
+            <span class="qty">2</span><span class="amount">$7.400</span>
+          </div>
+        </div>
+        <div class="list-foot">
+          <div class="stat">
+            <div><span class="label">Unidades</span><span class="value">4</span></div>
+            <div><span class="label">Subtotal</span><span class="value">$105.100</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="col-right">
+      <div class="total-label">TOTAL A PAGAR</div>
+      <div class="total-value">$105.100</div>
+      <div class="pay-with">
+        <label>PAGA CON...</label>
+        <div class="box"><span style="font-size:18px">$</span><span>110.000</span></div>
+      </div>
+      <div class="keypad">
+        <button>1</button><button>2</button><button>3</button>
+        <button>4</button><button>5</button><button>6</button>
+        <button>7</button><button>8</button><button>9</button>
+        <button>C</button><button>0</button><button>00</button>
+      </div>
+      <div class="actions-row">
+        <button><span class="material-symbols-outlined" style="font-size:18px">sell</span>DESCUENTO</button>
+        <button style="border-color:#c0392b;color:#c0392b"><span class="material-symbols-outlined" style="font-size:18px">cancel</span>CANCELAR</button>
+      </div>
+      <button class="btn-cobrar"><span class="material-symbols-outlined" style="font-size:28px">payments</span>COBRAR</button>
+      <div class="swatch-row">
+        <div class="swatch" style="background:var(--accent)"></div>
+        <div class="swatch" style="background:var(--accent-dark)"></div>
+        <div class="swatch" style="background:var(--accent-darker)"></div>
+        <div class="swatch" style="background:var(--accent-light);border:1px solid var(--line)"></div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "name": "virikyna-gestion",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Monorepo de Virikyna Gestión — apps y paquetes compartidos.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:local": "npm run dev --workspace apps/virikyna-local",
+    "tauri:local": "npm run tauri --workspace apps/virikyna-local",
+    "dev:inventario": "npm run dev --workspace apps/virikyna-inventario",
+    "build:inventario": "npm run build --workspace apps/virikyna-inventario",
+    "dev:gestion": "npm run dev --workspace apps/virikyna-gestion",
+    "build:gestion": "npm run build --workspace apps/virikyna-gestion"
+  }
+}

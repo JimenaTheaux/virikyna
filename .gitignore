@@ -1,0 +1,29 @@
+node_modules/
+dist/
+dist-ssr/
+*.local
+*.tsbuildinfo
+apps/*/vite.config.js
+apps/*/vite.config.d.ts
+
+# Tauri / Rust
+apps/*/src-tauri/target/
+apps/*/src-tauri/Cargo.lock
+
+# Logs
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Supabase CLI local metadata
+supabase/.temp/
