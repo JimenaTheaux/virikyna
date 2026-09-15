@@ -10,8 +10,8 @@ import {
   calcularTotalesFacturaCompra,
   fechaHoyISO,
   formatCurrency,
-  friendlyError,
   itemsValidosFacturaCompra,
+  mensajeErrorGuardado,
   nuevoItemFacturaCompra,
   type ItemFacturaCompra,
 } from '@virikyna/shared'
@@ -100,7 +100,7 @@ export function CargarFacturaCompraModal({ onClose, onSaved }: Props) {
     }
 
     setSaving(true)
-    const { error: dbError } = await cargarFacturaCompra(supabase, {
+    const { error: dbError, status } = await cargarFacturaCompra(supabase, {
       proveedorId,
       tipoComprobante,
       letra: letra || null,
@@ -114,7 +114,7 @@ export function CargarFacturaCompraModal({ onClose, onSaved }: Props) {
     setSaving(false)
 
     if (dbError) {
-      setError(friendlyError(dbError))
+      setError(mensajeErrorGuardado(dbError, status, 'cargar la factura', 'lo que cargaste sigue acá'))
       return
     }
 

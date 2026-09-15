@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { usePerfil, useAuth } from '../auth/AuthContext'
+import { ConnectionStatus } from '../components/ConnectionStatus'
 import { Footer } from '@virikyna/shared'
 import virikynaWordmark from '@virikyna/shared/src/assets/virikyna-wordmark.png'
 import {
@@ -117,6 +118,7 @@ export function AppShell() {
       </aside>
       <div className="flex flex-1 flex-col overflow-hidden">
         <header className="flex h-[64px] flex-shrink-0 items-center justify-end gap-3 border-b border-line bg-surface px-7 shadow-sm">
+          <ConnectionStatus />
           <div className="flex items-center gap-2 rounded-full bg-bg px-4 py-2 font-sans text-label-bold text-ink-soft">
             Terminal #001
           </div>

@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import type { CategoriaEgreso, FacturaCompraSaldo, FormaPagoEgreso, Proveedor } from '@virikyna/shared'
 import { useAuth } from '../../auth/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
-import { fechaHoyISO, formatCurrency, friendlyError, registrarEgresoGeneral, registrarPagoProveedor } from '@virikyna/shared'
+import { fechaHoyISO, formatCurrency, mensajeErrorGuardado, registrarEgresoGeneral, registrarPagoProveedor } from '@virikyna/shared'
 import { CATEGORIA_EGRESO_LABEL, CATEGORIAS_LOCAL, FORMA_PAGO_EGRESO_LABEL } from '../../lib/caja'
 import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
@@ -101,7 +101,7 @@ export function RegistrarEgresoModal({ onClose, onSaved }: { onClose: () => void
         }
       }
       setSaving(true)
-      const { error: dbError } = await registrarPagoProveedor(supabase, {
+      const { error: dbError, status } = await registrarPagoProveedor(supabase, {
         proveedorId,
         facturaCompraId: facturaCompraId || null,
         monto: montoNum,
@@ -112,7 +112,7 @@ export function RegistrarEgresoModal({ onClose, onSaved }: { onClose: () => void
       })
       setSaving(false)
       if (dbError) {
-        setError(friendlyError(dbError))
+        setError(mensajeErrorGuardado(dbError, status, 'registrar el pago', 'los datos siguen acá'))
         return
       }
       onSaved()
@@ -125,7 +125,7 @@ export function RegistrarEgresoModal({ onClose, onSaved }: { onClose: () => void
     }
 
     setSaving(true)
-    const { error: dbError } = await registrarEgresoGeneral(supabase, {
+    const { error: dbError, status } = await registrarEgresoGeneral(supabase, {
       categoria,
       monto: montoNum,
       descripcion: descripcion.trim(),
@@ -135,7 +135,7 @@ export function RegistrarEgresoModal({ onClose, onSaved }: { onClose: () => void
     setSaving(false)
 
     if (dbError) {
-      setError(friendlyError(dbError))
+      setError(mensajeErrorGuardado(dbError, status, 'registrar el egreso', 'los datos siguen acá'))
       return
     }
     onSaved()

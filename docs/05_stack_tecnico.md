@@ -8,9 +8,9 @@ Tres superficies distintas, un solo backend:
 ┌─────────────────────────┐     ┌─────────────────────────┐
 │   CAJA (Windows)          │     │  INVENTARIO MÓVIL (5.1)  │
 │   Tauri v2 + React/TS     │     │  PWA — Android / iOS     │
-│   SQLite local + sync     │     │  Sin motor local          │
+│   Conexión directa        │     │  Conexión directa         │
 └──────────┬───────────────┘     └──────────┬───────────────┘
-           │  PowerSync (sync bidireccional) │  HTTPS directo
+           │  HTTPS directo                  │  HTTPS directo
            └───────────────┬──────────────────┘
                             ▼
                   ┌──────────────────┐
@@ -26,7 +26,9 @@ Tres superficies distintas, un solo backend:
                   └──────────────────┘
 ```
 
-Una sola caja física para arrancar (Terminal #001). El campo `terminal_id` queda preparado en el schema por si en el futuro se suma una segunda caja — no requiere cambios de arquitectura, solo activar PowerSync en la máquina nueva.
+**Decisión revisada (post-desarrollo):** se evaluó local-first real (SQLite + PowerSync) para la Caja, pero se descartó. Motivos: PowerSync recién sacó SDK oficial para Tauri y está en alpha; además, como casi toda escritura de Virikyna pasa por RPCs (no por tablas directas, a propósito, por integridad de datos), sincronizar de verdad hubiera requerido armar a mano una cola de reintento de RPCs — mucho esfuerzo para un local con una sola caja, donde un corte de internet es esporádico y corto. Se optó por: conexión directa a Supabase + manejo robusto de errores de red (indicador de conexión, mensajes claros, nunca perder lo cargado en un formulario si falla el guardado). Si en el futuro cambian las condiciones (más cajas, conexión reconocidamente mala de forma crónica), esto se puede revisar.
+
+Una sola caja física para arrancar (Terminal #001). El campo `terminal_id` queda preparado en el schema por si en el futuro se suma una segunda caja.
 
 ---
 
@@ -37,10 +39,10 @@ Una sola caja física para arrancar (Terminal #001). El campo `terminal_id` qued
 | UI | React + TypeScript | Consistente con el resto de tu stack (deciDATA) |
 | Runtime desktop | **Tauri v2** | Un solo código, compila nativo para Windows y Mac; liviano, actualizaciones automáticas incluidas (plugin updater) |
 | Estilos | Tailwind + shadcn/ui | Estándar ya definido en `frontend-standards` |
-| Base local | **SQLite embebida** | Lectura/escritura instantánea, funciona sin internet |
-| Sincronización | **PowerSync** | Sincroniza SQLite ↔ Supabase en segundo plano; la app nunca espera a la conexión para operar |
+| Datos | **Conexión directa a Supabase** (sin motor local) | Ver "Decisión revisada" arriba — el costo de un local-first real no se justificaba para este caso |
+| Resiliencia de red | Indicador de conexión + manejo de errores que nunca pierde lo cargado en un formulario | Cubre el caso real (corte esporádico y corto), sin la complejidad de sincronización completa |
 | Backend / DB central | **Supabase (Postgres + Auth)** | Centraliza datos, reportes, backup |
-| Facturación electrónica | ARCA (WSFEv1) vía Edge Function (`@aledj02/afip.js`) — ver `19_integracion_arca.md` | Obtiene el CAE en tiempo real; corre server-side (Supabase Edge Functions), nunca en el cliente |
+| Facturación electrónica | SDK TypeScript para ARCA (WSFEv1) — ej. `afip.js` / `arca-facturacion` | Obtiene el CAE en tiempo real, tipado, mantenido |
 | Código de barras | Lector HID (USB) | Se comporta como teclado — cero drivers ni configuración |
 | Atajos de teclado | Definidos en Ventas (Enter, E, T, Q, C, D, Esc — ver `04_modulos_y_funciones.md`) | Agilidad de cajero, sin depender del mouse |
 
@@ -81,7 +83,7 @@ Una sola caja física para arrancar (Terminal #001). El campo `terminal_id` qued
 ## 4. Infraestructura a preparar (deciDATA)
 
 - Proyecto Supabase (Postgres + Auth) dedicado a Virikyna
-- Proyecto PowerSync conectado a ese Supabase
+- ~~Proyecto PowerSync conectado a ese Supabase~~ — descartado, ver "Decisión revisada" arriba
 - Repositorio de código (monorepo sugerido: `apps/caja`, `apps/inventario-movil`, `apps/dueña`, `packages/shared` para tipos y lógica compartida)
 - Certificado de firma de código para Windows (opcional, evita aviso de SmartScreen)
 - Definir estrategia de firma/notarización para Mac (cuenta Apple Developer USD 99/año, o workaround manual de Gatekeeper — ver conversación previa, a decidir antes de Fase 7)

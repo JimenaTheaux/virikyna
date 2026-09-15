@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormaPagoVenta } from '@virikyna/shared'
 import { supabase } from '../lib/supabaseClient'
-import { friendlyError } from '@virikyna/shared'
+import { mensajeErrorGuardado } from '@virikyna/shared'
 import { formatCurrency } from '@virikyna/shared'
 import type { DatosComprobante } from '../lib/comprobante'
 import { ComprobanteModal } from '../components/ComprobanteModal'
@@ -92,7 +92,7 @@ export function VentasPage() {
     setError(null)
     setSaving(true)
 
-    const { data: ventaId, error: rpcError } = await supabase.rpc('confirmar_venta', {
+    const { data: ventaId, error: rpcError, status } = await supabase.rpc('confirmar_venta', {
       p_cliente_id: cliente?.id ?? null,
       p_forma_pago: formaPago,
       p_items: cart.map((it) => ({
@@ -107,8 +107,7 @@ export function VentasPage() {
 
     if (rpcError || !ventaId) {
       setSaving(false)
-      setConfirmando(false)
-      setError(friendlyError(rpcError))
+      setError(mensajeErrorGuardado(rpcError, status, 'registrar la venta', 'el carrito sigue acá'))
       return
     }
 
@@ -301,6 +300,9 @@ export function VentasPage() {
           <p className="text-center font-sans text-label-bold text-accent-darker">
             ¿Confirmar venta por {formatCurrency(total)}?
           </p>
+          {error && (
+            <p className="mt-stack-sm rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>
+          )}
           <div className="mt-stack-md grid grid-cols-2 gap-2">
             <button
               type="button"

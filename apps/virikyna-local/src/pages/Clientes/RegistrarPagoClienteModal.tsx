@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import type { Cliente, FormaPagoVenta, Venta } from '@virikyna/shared'
-import { formatCurrency, friendlyError } from '@virikyna/shared'
+import { formatCurrency, mensajeErrorGuardado } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
@@ -48,7 +48,7 @@ export function RegistrarPagoClienteModal({ cliente, ventasCuentaCorriente, onCl
     }
 
     setSaving(true)
-    const { error: rpcError } = await supabase.rpc('registrar_pago_cliente', {
+    const { error: rpcError, status } = await supabase.rpc('registrar_pago_cliente', {
       p_cliente_id: cliente.id,
       p_venta_id: ventaId || null,
       p_monto: montoNum,
@@ -57,7 +57,7 @@ export function RegistrarPagoClienteModal({ cliente, ventasCuentaCorriente, onCl
     setSaving(false)
 
     if (rpcError) {
-      setError(friendlyError(rpcError))
+      setError(mensajeErrorGuardado(rpcError, status, 'registrar el cobro', 'los datos siguen acá'))
       return
     }
     onSaved()

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import type { FormaPagoEgreso } from '@virikyna/shared'
-import { fechaHoyISO, formatCurrency, friendlyError, registrarPagoProveedor } from '@virikyna/shared'
+import { fechaHoyISO, formatCurrency, mensajeErrorGuardado, registrarPagoProveedor } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { FORMA_PAGO_EGRESO_LABEL } from '../../lib/caja'
 import { Modal } from '../../components/Modal'
@@ -76,7 +76,7 @@ export function RegistrarPagoProveedorModal({
     }
 
     setSaving(true)
-    const { error: dbError } = await registrarPagoProveedor(supabase, {
+    const { error: dbError, status } = await registrarPagoProveedor(supabase, {
       proveedorId,
       facturaCompraId,
       monto: montoNum,
@@ -88,7 +88,7 @@ export function RegistrarPagoProveedorModal({
     setSaving(false)
 
     if (dbError) {
-      setError(friendlyError(dbError))
+      setError(mensajeErrorGuardado(dbError, status, 'registrar el pago', 'los datos siguen acá'))
       return
     }
     onSaved()

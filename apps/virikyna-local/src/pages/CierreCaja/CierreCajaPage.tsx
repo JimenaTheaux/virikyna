@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Eye } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
-import { friendlyError, nombresPorId } from '@virikyna/shared'
+import { friendlyError, mensajeErrorGuardado, nombresPorId } from '@virikyna/shared'
 import { formatCurrency, formatFechaHora, fechaHoyISO } from '@virikyna/shared'
 import { CATEGORIA_EGRESO_LABEL, diferenciaLabel } from '../../lib/caja'
 import { CierreDetalleModal } from './CierreDetalleModal'
@@ -100,25 +100,25 @@ export function CierreCajaPage() {
     if (haciendoX) return
     setHaciendoX(true)
     setError(null)
-    const { data: cierreId, error: rpcError } = await supabase.rpc('cerrar_caja', {
+    const { data: cierreId, error: rpcError, status } = await supabase.rpc('cerrar_caja', {
       p_tipo: 'x',
       p_efectivo_contado: null,
     })
     setHaciendoX(false)
     if (rpcError || !cierreId) {
-      setError(friendlyError(rpcError))
+      setError(mensajeErrorGuardado(rpcError, status, 'generar el Cierre X', 'podés reintentar'))
       return
     }
     await cargar()
   }
 
   async function realizarCierreZ(efectivoContado: number) {
-    const { error: rpcError } = await supabase.rpc('cerrar_caja', {
+    const { error: rpcError, status } = await supabase.rpc('cerrar_caja', {
       p_tipo: 'z',
       p_efectivo_contado: efectivoContado,
     })
     if (rpcError) {
-      throw new Error(friendlyError(rpcError))
+      throw new Error(mensajeErrorGuardado(rpcError, status, 'cerrar la caja', 'el monto contado sigue cargado'))
     }
     setModalZ(false)
     await cargar()

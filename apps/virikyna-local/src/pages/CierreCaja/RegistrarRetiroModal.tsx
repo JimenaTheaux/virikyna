@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import type { PerfilPublico } from '@virikyna/shared'
 import { useAuth } from '../../auth/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
-import { friendlyError, fechaHoyISO } from '@virikyna/shared'
+import { mensajeErrorGuardado, fechaHoyISO } from '@virikyna/shared'
 import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field, ErrorText, inputClass, selectClass } from '../../components/FormField'
@@ -68,7 +68,7 @@ export function RegistrarRetiroModal({ onClose, onSaved }: { onClose: () => void
     }
 
     setSaving(true)
-    const { error: rpcError } = await supabase.rpc('registrar_retiro_caja', {
+    const { error: rpcError, status } = await supabase.rpc('registrar_retiro_caja', {
       p_monto: montoNum,
       p_admin_id: adminId,
       p_cajero_id: cajeroId,
@@ -77,7 +77,7 @@ export function RegistrarRetiroModal({ onClose, onSaved }: { onClose: () => void
     setSaving(false)
 
     if (rpcError) {
-      setError(friendlyError(rpcError))
+      setError(mensajeErrorGuardado(rpcError, status, 'registrar el retiro', 'los datos siguen acá'))
       return
     }
     onSaved()
