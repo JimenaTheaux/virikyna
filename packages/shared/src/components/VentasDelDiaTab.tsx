@@ -25,6 +25,7 @@ export type DatosComprobante = {
   items: { nombre: string; codigo: string; cantidad: number; precioUnitario: number; importe: number }[]
   subtotal: number
   descuentoPorcentaje: number
+  recargoPorcentaje: number
   total: number
   cae: string | null
 }
@@ -118,6 +119,7 @@ export function VentasDelDiaTab({
       })),
       subtotal: venta.subtotal,
       descuentoPorcentaje: venta.descuento_porcentaje,
+      recargoPorcentaje: venta.recargo_porcentaje,
       total: venta.total,
       cae: venta.factura_c?.cae ?? null,
     }
@@ -153,42 +155,42 @@ export function VentasDelDiaTab({
       )}
 
       <div className="mt-stack-md flex-1 overflow-auto rounded-lg border border-line">
-        <table className="w-full text-left font-sans text-body-md">
+        <table className="w-full text-left font-sans text-body-md leading-5">
           <thead>
             <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-              <th className="px-4 py-3">Fecha</th>
-              <th className="px-4 py-3">Hora</th>
-              <th className="px-4 py-3">Cliente</th>
-              <th className="px-4 py-3">Medio de pago</th>
-              <th className="px-4 py-3">Monto</th>
-              <th className="px-4 py-3"></th>
+              <th className="px-3 py-2">Fecha</th>
+              <th className="px-3 py-2">Hora</th>
+              <th className="px-3 py-2">Cliente</th>
+              <th className="px-3 py-2">Medio de pago</th>
+              <th className="px-3 py-2">Monto</th>
+              <th className="px-3 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td className="px-4 py-6 text-ink-soft" colSpan={6}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={6}>
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && ventas.length === 0 && (
               <tr>
-                <td className="px-4 py-6 text-ink-soft" colSpan={6}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={6}>
                   Todavía no hay ventas hoy.
                 </td>
               </tr>
             )}
             {ventas.map((venta) => (
-              <tr key={venta.id} className="min-h-[56px] border-b border-line last:border-0">
-                <td className="px-4 py-2.5 text-ink-soft">{formatFecha(venta.created_at)}</td>
-                <td className="px-4 py-2.5 text-ink-soft">{formatHora(venta.created_at)}</td>
-                <td className="px-4 py-2.5 text-ink-soft">
+              <tr key={venta.id} className="border-b border-line last:border-0">
+                <td className="px-3 py-1.5 text-ink-soft">{formatFecha(venta.created_at)}</td>
+                <td className="px-3 py-1.5 text-ink-soft">{formatHora(venta.created_at)}</td>
+                <td className="px-3 py-1.5 text-ink-soft">
                   {venta.cliente ? venta.cliente.razon_social ?? venta.cliente.nombre_fantasia : 'Consumidor final'}
                 </td>
-                <td className="px-4 py-2.5 text-ink-soft">{formaPagoLabel[venta.forma_pago]}</td>
-                <td className="px-4 py-2.5 font-sans text-label-bold text-ink">{formatCurrency(venta.total)}</td>
-                <td className="px-4 py-2.5">
+                <td className="px-3 py-1.5 text-ink-soft">{formaPagoLabel[venta.forma_pago]}</td>
+                <td className="px-3 py-1.5 font-sans text-label-bold text-ink">{formatCurrency(venta.total)}</td>
+                <td className="px-3 py-1.5">
                   <div className="flex items-center justify-end gap-2">
                     <button
                       type="button"

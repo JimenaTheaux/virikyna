@@ -102,42 +102,42 @@ export function HistorialEgresosTab() {
       {error && <p className="rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>}
 
       <div className="flex-1 overflow-auto rounded-lg border border-line">
-        <table className="w-full text-left font-sans text-body-md">
+        <table className="w-full text-left font-sans text-body-md leading-5">
           <thead>
             <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-              <th className="min-w-[100px] whitespace-nowrap px-4 py-3">Fecha</th>
-              <th className="px-4 py-3">Categoría</th>
-              <th className="px-4 py-3 text-right">Monto</th>
-              <th className="px-4 py-3">Forma de pago</th>
-              <th className="px-4 py-3">Descripción</th>
-              <th className="px-4 py-3">Origen</th>
-              <th className="px-4 py-3">Usuario</th>
+              <th className="min-w-[100px] whitespace-nowrap px-3 py-2">Fecha</th>
+              <th className="px-3 py-2">Categoría</th>
+              <th className="px-3 py-2 text-right">Monto</th>
+              <th className="px-3 py-2">Forma de pago</th>
+              <th className="px-3 py-2">Descripción</th>
+              <th className="px-3 py-2">Origen</th>
+              <th className="px-3 py-2">Usuario</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td className="px-4 py-6 text-ink-soft" colSpan={7}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={7}>
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && filas.length === 0 && (
               <tr>
-                <td className="px-4 py-6 text-ink-soft" colSpan={7}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={7}>
                   No hay egresos para este filtro.
                 </td>
               </tr>
             )}
             {filas.map((fila) => (
               <tr key={fila.id} className="border-b border-line last:border-0">
-                <td className="whitespace-nowrap px-4 py-2.5 text-ink-soft">{formatFechaCorta(fila.fecha)}</td>
-                <td className="px-4 py-2.5 text-ink">{CATEGORIA_EGRESO_LABEL[fila.categoria]}</td>
-                <td className="px-4 py-2.5 text-right text-error">{formatCurrency(-fila.monto)}</td>
-                <td className="px-4 py-2.5 text-ink-soft">{FORMA_PAGO_EGRESO_LABEL[fila.forma_pago]}</td>
-                <td className="px-4 py-2.5 text-ink-soft">{fila.descripcion ?? '—'}</td>
-                <td className="px-4 py-2.5 text-ink-soft">{ORIGEN_EGRESO_LABEL[fila.origen]}</td>
-                <td className="px-4 py-2.5 text-ink-soft">{fila.usuario?.nombre ?? '—'}</td>
+                <td className="whitespace-nowrap px-3 py-1.5 text-ink-soft">{formatFechaCorta(fila.fecha)}</td>
+                <td className="px-3 py-1.5 text-ink">{CATEGORIA_EGRESO_LABEL[fila.categoria]}</td>
+                <td className="px-3 py-1.5 text-right text-error">{formatCurrency(-fila.monto)}</td>
+                <td className="px-3 py-1.5 text-ink-soft">{FORMA_PAGO_EGRESO_LABEL[fila.forma_pago]}</td>
+                <td className="px-3 py-1.5 text-ink-soft">{fila.descripcion ?? '—'}</td>
+                <td className="px-3 py-1.5 text-ink-soft">{ORIGEN_EGRESO_LABEL[fila.origen]}</td>
+                <td className="px-3 py-1.5 text-ink-soft">{fila.usuario?.nombre ?? '—'}</td>
               </tr>
             ))}
           </tbody>

@@ -203,41 +203,41 @@ export function CierreCajaPage() {
       <section className="flex-1 overflow-auto rounded-lg bg-surface p-card shadow-sm">
         <p className="font-sans text-label-bold text-ink-soft">Egresos de turno de hoy</p>
         <div className="mt-3 overflow-auto rounded-lg border border-line">
-          <table className="w-full text-left font-sans text-body-md">
+          <table className="w-full text-left font-sans text-body-md leading-5">
             <thead>
               <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-                <th className="px-4 py-3">Hora</th>
-                <th className="px-4 py-3">Categoría</th>
-                <th className="px-4 py-3">Descripción</th>
-                <th className="px-4 py-3">Usuario</th>
-                <th className="px-4 py-3 text-right">Monto</th>
+                <th className="px-3 py-2">Hora</th>
+                <th className="px-3 py-2">Categoría</th>
+                <th className="px-3 py-2">Descripción</th>
+                <th className="px-3 py-2">Usuario</th>
+                <th className="px-3 py-2 text-right">Monto</th>
               </tr>
             </thead>
             <tbody>
               {!loading && egresos.length === 0 && (
                 <tr>
-                  <td className="px-4 py-6 text-ink-soft" colSpan={5}>
+                  <td className="px-4 py-4 text-ink-soft" colSpan={5}>
                     Sin egresos registrados hoy.
                   </td>
                 </tr>
               )}
               {egresos.map((egreso) => (
                 <tr key={egreso.id} className="border-b border-line last:border-0">
-                  <td className="px-4 py-2.5 text-ink-soft">{formatFechaHora(egreso.created_at)}</td>
-                  <td className="px-4 py-2.5 text-ink">{CATEGORIA_EGRESO_LABEL[egreso.categoria]}</td>
-                  <td className="px-4 py-2.5 text-ink-soft">{egreso.descripcion ?? '—'}</td>
-                  <td className="px-4 py-2.5 text-ink-soft">{egreso.usuario?.nombre ?? '—'}</td>
-                  <td className="px-4 py-2.5 text-right text-ink">{formatCurrency(egreso.monto)}</td>
+                  <td className="px-3 py-1.5 text-ink-soft">{formatFechaHora(egreso.created_at)}</td>
+                  <td className="px-3 py-1.5 text-ink">{CATEGORIA_EGRESO_LABEL[egreso.categoria]}</td>
+                  <td className="px-3 py-1.5 text-ink-soft">{egreso.descripcion ?? '—'}</td>
+                  <td className="px-3 py-1.5 text-ink-soft">{egreso.usuario?.nombre ?? '—'}</td>
+                  <td className="px-3 py-1.5 text-right text-ink">{formatCurrency(egreso.monto)}</td>
                 </tr>
               ))}
             </tbody>
             {egresos.length > 0 && (
               <tfoot>
                 <tr>
-                  <td className="px-4 py-2.5 font-sans text-label-bold text-ink-soft" colSpan={4}>
+                  <td className="px-3 py-1.5 font-sans text-label-bold text-ink-soft" colSpan={4}>
                     Total egresos
                   </td>
-                  <td className="px-4 py-2.5 text-right font-sans text-label-bold text-ink">
+                  <td className="px-3 py-1.5 text-right font-sans text-label-bold text-ink">
                     {formatCurrency(totalEgresosHoy)}
                   </td>
                 </tr>
@@ -248,39 +248,39 @@ export function CierreCajaPage() {
 
         <p className="mt-stack-md font-sans text-label-bold text-ink-soft">Retiros de caja de hoy</p>
         <div className="mt-3 overflow-auto rounded-lg border border-line">
-          <table className="w-full text-left font-sans text-body-md">
+          <table className="w-full text-left font-sans text-body-md leading-5">
             <thead>
               <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-                <th className="px-4 py-3">Hora</th>
-                <th className="px-4 py-3">Cajero</th>
-                <th className="px-4 py-3">Admin que recibe</th>
-                <th className="px-4 py-3 text-right">Monto</th>
+                <th className="px-3 py-2">Hora</th>
+                <th className="px-3 py-2">Cajero</th>
+                <th className="px-3 py-2">Admin que recibe</th>
+                <th className="px-3 py-2 text-right">Monto</th>
               </tr>
             </thead>
             <tbody>
               {!loading && retiros.length === 0 && (
                 <tr>
-                  <td className="px-4 py-6 text-ink-soft" colSpan={4}>
+                  <td className="px-4 py-4 text-ink-soft" colSpan={4}>
                     Sin retiros registrados hoy.
                   </td>
                 </tr>
               )}
               {retiros.map((retiro) => (
                 <tr key={retiro.id} className="border-b border-line last:border-0">
-                  <td className="px-4 py-2.5 text-ink-soft">{formatFechaHora(retiro.created_at)}</td>
-                  <td className="px-4 py-2.5 text-ink-soft">{retiro.cajero?.nombre ?? '—'}</td>
-                  <td className="px-4 py-2.5 text-ink-soft">{retiro.admin?.nombre ?? '—'}</td>
-                  <td className="px-4 py-2.5 text-right text-ink">{formatCurrency(retiro.monto)}</td>
+                  <td className="px-3 py-1.5 text-ink-soft">{formatFechaHora(retiro.created_at)}</td>
+                  <td className="px-3 py-1.5 text-ink-soft">{retiro.cajero?.nombre ?? '—'}</td>
+                  <td className="px-3 py-1.5 text-ink-soft">{retiro.admin?.nombre ?? '—'}</td>
+                  <td className="px-3 py-1.5 text-right text-ink">{formatCurrency(retiro.monto)}</td>
                 </tr>
               ))}
             </tbody>
             {retiros.length > 0 && (
               <tfoot>
                 <tr>
-                  <td className="px-4 py-2.5 font-sans text-label-bold text-ink-soft" colSpan={3}>
+                  <td className="px-3 py-1.5 font-sans text-label-bold text-ink-soft" colSpan={3}>
                     Total retiros
                   </td>
-                  <td className="px-4 py-2.5 text-right font-sans text-label-bold text-ink">
+                  <td className="px-3 py-1.5 text-right font-sans text-label-bold text-ink">
                     {formatCurrency(totalRetirosHoy)}
                   </td>
                 </tr>
@@ -291,36 +291,36 @@ export function CierreCajaPage() {
 
         <p className="mt-stack-md font-sans text-label-bold text-ink-soft">Cierres X de hoy</p>
         <div className="mt-3 overflow-auto rounded-lg border border-line">
-          <table className="w-full text-left font-sans text-body-md">
+          <table className="w-full text-left font-sans text-body-md leading-5">
             <thead>
               <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-                <th className="px-4 py-3">Hora</th>
-                <th className="px-4 py-3">Usuario</th>
-                <th className="px-4 py-3 text-right">Efectivo esperado</th>
-                <th className="px-4 py-3"></th>
+                <th className="px-3 py-2">Hora</th>
+                <th className="px-3 py-2">Usuario</th>
+                <th className="px-3 py-2 text-right">Efectivo esperado</th>
+                <th className="px-3 py-2"></th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td className="px-4 py-6 text-ink-soft" colSpan={4}>
+                  <td className="px-4 py-4 text-ink-soft" colSpan={4}>
                     Cargando...
                   </td>
                 </tr>
               )}
               {!loading && cierresX.length === 0 && (
                 <tr>
-                  <td className="px-4 py-6 text-ink-soft" colSpan={4}>
+                  <td className="px-4 py-4 text-ink-soft" colSpan={4}>
                     Todavía no se hizo ningún Cierre X hoy.
                   </td>
                 </tr>
               )}
               {cierresX.map((cierre) => (
                 <tr key={cierre.id} className="border-b border-line last:border-0">
-                  <td className="px-4 py-2.5 text-ink-soft">{formatFechaHora(cierre.created_at)}</td>
-                  <td className="px-4 py-2.5 text-ink-soft">{cierre.usuario?.nombre ?? '—'}</td>
-                  <td className="px-4 py-2.5 text-right text-ink">{formatCurrency(cierre.efectivo_esperado)}</td>
-                  <td className="px-4 py-2.5 text-right">
+                  <td className="px-3 py-1.5 text-ink-soft">{formatFechaHora(cierre.created_at)}</td>
+                  <td className="px-3 py-1.5 text-ink-soft">{cierre.usuario?.nombre ?? '—'}</td>
+                  <td className="px-3 py-1.5 text-right text-ink">{formatCurrency(cierre.efectivo_esperado)}</td>
+                  <td className="px-3 py-1.5 text-right">
                     <button
                       type="button"
                       onClick={() => setVerDetalle(cierre)}

@@ -25,7 +25,7 @@ export function ProveedoresPage() {
             type="button"
             onClick={() => setTab(t.id)}
             className={[
-              'rounded-t px-4 py-3 font-sans text-label-bold',
+              'rounded-t px-4 py-2 font-sans text-label-bold',
               tab === t.id
                 ? 'border-b-2 border-accent text-accent-darker'
                 : 'text-ink-soft hover:text-accent-darker',

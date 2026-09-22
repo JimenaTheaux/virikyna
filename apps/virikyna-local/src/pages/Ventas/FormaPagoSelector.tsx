@@ -20,7 +20,7 @@ export function FormaPagoSelector({ value, disponibleCuentaCorriente, onChange }
   return (
     <div>
       <p className="font-sans text-label-bold text-ink-soft">Forma de pago</p>
-      <div className="mt-2 grid grid-cols-2 gap-2">
+      <div className="mt-2 grid grid-cols-2 gap-1.5">
         {OPCIONES.map((opt) => {
           const deshabilitado = opt.value === 'cuenta_corriente' && !disponibleCuentaCorriente
           const activo = value === opt.value
@@ -32,7 +32,7 @@ export function FormaPagoSelector({ value, disponibleCuentaCorriente, onChange }
               onClick={() => onChange(opt.value)}
               title={deshabilitado ? 'Elegí un cliente para vender a cuenta corriente.' : undefined}
               className={[
-                'flex items-center justify-between rounded-lg border px-4 py-3 font-sans text-label-bold transition',
+                'flex items-center justify-between rounded-lg border px-3 py-2.5 font-sans text-label-bold transition',
                 activo ? 'border-accent bg-accent text-white' : 'border-line bg-surface text-ink-soft hover:border-accent',
                 deshabilitado ? 'cursor-not-allowed opacity-50' : '',
               ].join(' ')}

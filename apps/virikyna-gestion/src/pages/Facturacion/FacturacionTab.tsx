@@ -129,6 +129,7 @@ export function FacturacionTab() {
       })),
       subtotal: venta.subtotal,
       descuentoPorcentaje: venta.descuento_porcentaje,
+      recargoPorcentaje: venta.recargo_porcentaje,
       total: venta.total,
       cae: venta.factura_c?.cae ?? null,
     })
@@ -210,37 +211,37 @@ export function FacturacionTab() {
       )}
 
       <div className="mt-stack-md flex-1 overflow-auto rounded-lg border border-line">
-        <table className="w-full text-left font-sans text-body-md">
+        <table className="w-full text-left font-sans text-body-md leading-5">
           <thead>
             <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-              <th className="px-4 py-3"></th>
-              <th className="px-4 py-3">N°</th>
-              <th className="min-w-[120px] whitespace-nowrap px-4 py-3">Fecha</th>
-              <th className="px-4 py-3">Cliente</th>
-              <th className="px-4 py-3">Medio de pago</th>
-              <th className="px-4 py-3">Total</th>
-              <th className="px-4 py-3">Estado</th>
-              <th className="px-4 py-3"></th>
+              <th className="px-3 py-2"></th>
+              <th className="px-3 py-2">N°</th>
+              <th className="min-w-[120px] whitespace-nowrap px-3 py-2">Fecha</th>
+              <th className="px-3 py-2">Cliente</th>
+              <th className="px-3 py-2">Medio de pago</th>
+              <th className="px-3 py-2">Total</th>
+              <th className="px-3 py-2">Estado</th>
+              <th className="px-3 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td className="px-4 py-6 text-ink-soft" colSpan={8}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={8}>
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && ventas.length === 0 && (
               <tr>
-                <td className="px-4 py-6 text-ink-soft" colSpan={8}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={8}>
                   No hay comprobantes para este filtro.
                 </td>
               </tr>
             )}
             {ventas.map((venta) => (
-              <tr key={venta.id} className="min-h-[56px] border-b border-line last:border-0">
-                <td className="px-4 py-2.5">
+              <tr key={venta.id} className="border-b border-line last:border-0">
+                <td className="px-3 py-1.5">
                   {venta.estado === 'sin_facturar' && (
                     <input
                       type="checkbox"
@@ -250,19 +251,19 @@ export function FacturacionTab() {
                     />
                   )}
                 </td>
-                <td className="px-4 py-2.5 text-ink">{venta.numero}</td>
-                <td className="whitespace-nowrap px-4 py-2.5 text-ink-soft">{formatFechaHora(venta.created_at)}</td>
-                <td className="px-4 py-2.5 text-ink-soft">
+                <td className="px-3 py-1.5 text-ink">{venta.numero}</td>
+                <td className="whitespace-nowrap px-3 py-1.5 text-ink-soft">{formatFechaHora(venta.created_at)}</td>
+                <td className="px-3 py-1.5 text-ink-soft">
                   {venta.cliente ? venta.cliente.razon_social ?? venta.cliente.nombre_fantasia : 'Consumidor final'}
                 </td>
-                <td className="px-4 py-2.5 text-ink-soft">{FORMA_PAGO_LABEL[venta.forma_pago]}</td>
-                <td className="px-4 py-2.5 font-sans text-label-bold text-ink">{formatCurrency(venta.total)}</td>
-                <td className="px-4 py-2.5">
+                <td className="px-3 py-1.5 text-ink-soft">{FORMA_PAGO_LABEL[venta.forma_pago]}</td>
+                <td className="px-3 py-1.5 font-sans text-label-bold text-ink">{formatCurrency(venta.total)}</td>
+                <td className="px-3 py-1.5">
                   <span className={venta.estado === 'facturado' ? 'text-success' : 'text-ink-soft'}>
                     {ESTADO_LABEL[venta.estado === 'facturado' ? 'facturado' : 'sin_facturar']}
                   </span>
                 </td>
-                <td className="px-4 py-2.5 text-right">
+                <td className="px-3 py-1.5 text-right">
                   <button
                     type="button"
                     onClick={() => verDetalle(venta)}

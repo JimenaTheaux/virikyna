@@ -98,29 +98,29 @@ export function TableroTab() {
       {error && <p className="rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>}
 
       <div className="overflow-auto rounded-lg border border-line">
-        <table className="w-full text-left font-sans text-body-md">
+        <table className="w-full text-left font-sans text-body-md leading-5">
           <thead>
             <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-              <th className="px-4 py-3">Tipo</th>
-              <th className="px-4 py-3">Hora</th>
-              <th className="px-4 py-3">Usuario</th>
-              <th className="px-4 py-3 text-right">Efectivo esperado</th>
-              <th className="px-4 py-3">Diferencia</th>
-              <th className="px-4 py-3">Estado</th>
-              <th className="px-4 py-3"></th>
+              <th className="px-3 py-2">Tipo</th>
+              <th className="px-3 py-2">Hora</th>
+              <th className="px-3 py-2">Usuario</th>
+              <th className="px-3 py-2 text-right">Efectivo esperado</th>
+              <th className="px-3 py-2">Diferencia</th>
+              <th className="px-3 py-2">Estado</th>
+              <th className="px-3 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td className="px-4 py-6 text-ink-soft" colSpan={7}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={7}>
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && cierres.length === 0 && (
               <tr>
-                <td className="px-4 py-6 text-ink-soft" colSpan={7}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={7}>
                   No hay cierres registrados en este rango de fechas.
                 </td>
               </tr>
@@ -129,7 +129,7 @@ export function TableroTab() {
               const diferencia = diferenciaLabel(cierre.diferencia)
               return (
                 <tr key={cierre.id} className="border-b border-line last:border-0">
-                  <td className="px-4 py-2.5">
+                  <td className="px-3 py-1.5">
                     <span
                       className={
                         cierre.tipo === 'z'
@@ -140,20 +140,20 @@ export function TableroTab() {
                       {cierre.tipo === 'z' ? 'Cierre Z' : 'Cierre X'}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 text-ink-soft">{formatFechaHora(cierre.created_at)}</td>
-                  <td className="px-4 py-2.5 text-ink-soft">{cierre.usuario?.nombre ?? '—'}</td>
-                  <td className="px-4 py-2.5 text-right text-ink">{formatCurrency(cierre.efectivo_esperado)}</td>
-                  <td className={`px-4 py-2.5 font-sans text-label-bold ${diferencia.className}`}>
+                  <td className="px-3 py-1.5 text-ink-soft">{formatFechaHora(cierre.created_at)}</td>
+                  <td className="px-3 py-1.5 text-ink-soft">{cierre.usuario?.nombre ?? '—'}</td>
+                  <td className="px-3 py-1.5 text-right text-ink">{formatCurrency(cierre.efectivo_esperado)}</td>
+                  <td className={`px-3 py-1.5 font-sans text-label-bold ${diferencia.className}`}>
                     {diferencia.texto}
                   </td>
-                  <td className="px-4 py-2.5 text-ink-soft">
+                  <td className="px-3 py-1.5 text-ink-soft">
                     {cierre.tipo === 'z'
                       ? cierre.estado_validacion === 'validado'
                         ? 'Validado'
                         : 'Pendiente de validación'
                       : '—'}
                   </td>
-                  <td className="px-4 py-2.5 text-right">
+                  <td className="px-3 py-1.5 text-right">
                     <div className="flex justify-end gap-2">
                       {cierre.tipo === 'z' && cierre.estado_validacion === 'pendiente_validacion' && (
                         <button

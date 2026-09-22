@@ -53,34 +53,34 @@ export function PendienteCobroModal({ onClose, onChanged }: Props) {
         {error && <p className="rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>}
 
         <div className="max-h-[420px] overflow-auto rounded-lg border border-line">
-          <table className="w-full text-left font-sans text-body-md">
+          <table className="w-full text-left font-sans text-body-md leading-5">
             <thead>
               <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-                <th className="px-4 py-3">Cliente</th>
-                <th className="px-4 py-3 text-right">Saldo</th>
-                <th className="px-4 py-3"></th>
+                <th className="px-3 py-2">Cliente</th>
+                <th className="px-3 py-2 text-right">Saldo</th>
+                <th className="px-3 py-2"></th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td className="px-4 py-6 text-ink-soft" colSpan={3}>
+                  <td className="px-4 py-4 text-ink-soft" colSpan={3}>
                     Cargando...
                   </td>
                 </tr>
               )}
               {!loading && clientes.length === 0 && (
                 <tr>
-                  <td className="px-4 py-6 text-ink-soft" colSpan={3}>
+                  <td className="px-4 py-4 text-ink-soft" colSpan={3}>
                     No hay cuentas corrientes pendientes.
                   </td>
                 </tr>
               )}
               {clientes.map((c) => (
                 <tr key={c.id} className="border-b border-line last:border-0">
-                  <td className="px-4 py-3 text-ink">{c.razon_social ?? c.nombre_fantasia}</td>
-                  <td className="px-4 py-3 text-right text-error">{formatCurrency(c.saldo_actual)}</td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-3 py-2 text-ink">{c.razon_social ?? c.nombre_fantasia}</td>
+                  <td className="px-3 py-2 text-right text-error">{formatCurrency(c.saldo_actual)}</td>
+                  <td className="px-3 py-2 text-right">
                     <button
                       type="button"
                       onClick={() => setDetalle(c)}

@@ -107,12 +107,12 @@ export function CargaInicialTab() {
         <div>
           <p className="font-sans text-label-bold text-ink-soft">Saldos iniciales por cuenta</p>
           <div className="mt-2 overflow-auto rounded-lg border border-line">
-            <table className="w-full text-left font-sans text-body-md">
+            <table className="w-full text-left font-sans text-body-md leading-5">
               <tbody>
                 {movimientosIniciales.map((m, i) => (
                   <tr key={i} className="border-b border-line last:border-0">
-                    <td className="px-4 py-3 text-ink">{m.cuenta?.nombre ?? '—'}</td>
-                    <td className="px-4 py-3 text-right text-ink">{formatCurrency(m.monto)}</td>
+                    <td className="px-3 py-2 text-ink">{m.cuenta?.nombre ?? '—'}</td>
+                    <td className="px-3 py-2 text-right text-ink">{formatCurrency(m.monto)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -123,19 +123,19 @@ export function CargaInicialTab() {
         <div>
           <p className="font-sans text-label-bold text-ink-soft">Deuda inicial con proveedores</p>
           <div className="mt-2 overflow-auto rounded-lg border border-line">
-            <table className="w-full text-left font-sans text-body-md">
+            <table className="w-full text-left font-sans text-body-md leading-5">
               <tbody>
                 {proveedores.filter((p) => p.saldo_inicial !== 0).length === 0 && (
                   <tr>
-                    <td className="px-4 py-3 text-ink-soft">Sin deuda inicial cargada.</td>
+                    <td className="px-3 py-2 text-ink-soft">Sin deuda inicial cargada.</td>
                   </tr>
                 )}
                 {proveedores
                   .filter((p) => p.saldo_inicial !== 0)
                   .map((p) => (
                     <tr key={p.id} className="border-b border-line last:border-0">
-                      <td className="px-4 py-3 text-ink">{p.razon_social}</td>
-                      <td className="px-4 py-3 text-right text-ink">{formatCurrency(p.saldo_inicial)}</td>
+                      <td className="px-3 py-2 text-ink">{p.razon_social}</td>
+                      <td className="px-3 py-2 text-right text-ink">{formatCurrency(p.saldo_inicial)}</td>
                     </tr>
                   ))}
               </tbody>
@@ -146,19 +146,19 @@ export function CargaInicialTab() {
         <div>
           <p className="font-sans text-label-bold text-ink-soft">Saldo inicial de cuenta corriente de clientes</p>
           <div className="mt-2 overflow-auto rounded-lg border border-line">
-            <table className="w-full text-left font-sans text-body-md">
+            <table className="w-full text-left font-sans text-body-md leading-5">
               <tbody>
                 {clientes.filter((c) => c.saldo_inicial !== 0).length === 0 && (
                   <tr>
-                    <td className="px-4 py-3 text-ink-soft">Sin saldo inicial cargado.</td>
+                    <td className="px-3 py-2 text-ink-soft">Sin saldo inicial cargado.</td>
                   </tr>
                 )}
                 {clientes
                   .filter((c) => c.saldo_inicial !== 0)
                   .map((c) => (
                     <tr key={c.id} className="border-b border-line last:border-0">
-                      <td className="px-4 py-3 text-ink">{c.razon_social ?? c.nombre_fantasia}</td>
-                      <td className="px-4 py-3 text-right text-ink">{formatCurrency(c.saldo_inicial)}</td>
+                      <td className="px-3 py-2 text-ink">{c.razon_social ?? c.nombre_fantasia}</td>
+                      <td className="px-3 py-2 text-right text-ink">{formatCurrency(c.saldo_inicial)}</td>
                     </tr>
                   ))}
               </tbody>
@@ -198,17 +198,17 @@ export function CargaInicialTab() {
       <div>
         <p className="font-sans text-label-bold text-ink-soft">Deuda inicial con proveedores</p>
         <div className="mt-2 max-h-[240px] overflow-auto rounded-lg border border-line">
-          <table className="w-full text-left font-sans text-body-md">
+          <table className="w-full text-left font-sans text-body-md leading-5">
             <tbody>
               {proveedores.length === 0 && (
                 <tr>
-                  <td className="px-4 py-3 text-ink-soft">No hay proveedores cargados todavía.</td>
+                  <td className="px-3 py-2 text-ink-soft">No hay proveedores cargados todavía.</td>
                 </tr>
               )}
               {proveedores.map((p) => (
                 <tr key={p.id} className="border-b border-line last:border-0">
-                  <td className="px-4 py-3 text-ink">{p.razon_social}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2 text-ink">{p.razon_social}</td>
+                  <td className="px-3 py-2">
                     <input
                       type="number"
                       step="0.01"
@@ -227,17 +227,17 @@ export function CargaInicialTab() {
       <div>
         <p className="font-sans text-label-bold text-ink-soft">Saldo inicial de cuenta corriente de clientes</p>
         <div className="mt-2 max-h-[240px] overflow-auto rounded-lg border border-line">
-          <table className="w-full text-left font-sans text-body-md">
+          <table className="w-full text-left font-sans text-body-md leading-5">
             <tbody>
               {clientes.length === 0 && (
                 <tr>
-                  <td className="px-4 py-3 text-ink-soft">No hay clientes cargados todavía.</td>
+                  <td className="px-3 py-2 text-ink-soft">No hay clientes cargados todavía.</td>
                 </tr>
               )}
               {clientes.map((c) => (
                 <tr key={c.id} className="border-b border-line last:border-0">
-                  <td className="px-4 py-3 text-ink">{c.razon_social ?? c.nombre_fantasia}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2 text-ink">{c.razon_social ?? c.nombre_fantasia}</td>
+                  <td className="px-3 py-2">
                     <input
                       type="number"
                       step="0.01"

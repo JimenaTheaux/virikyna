@@ -108,55 +108,55 @@ export function ClientesPage() {
       )}
 
       <div className="mt-stack-md flex-1 overflow-auto rounded-lg border border-line">
-        <table className="w-full text-left font-sans text-body-md">
+        <table className="w-full text-left font-sans text-body-md leading-5">
           <thead>
             <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-              <th className="px-4 py-3">Nombre</th>
-              <th className="px-4 py-3">CUIT</th>
-              <th className="px-4 py-3">Celular</th>
-              <th className="px-4 py-3 text-right">Saldo cta. cte.</th>
-              <th className="px-4 py-3">Estado</th>
-              <th className="px-4 py-3"></th>
+              <th className="px-3 py-2">Nombre</th>
+              <th className="px-3 py-2">CUIT</th>
+              <th className="px-3 py-2">Celular</th>
+              <th className="px-3 py-2 text-right">Saldo cta. cte.</th>
+              <th className="px-3 py-2">Estado</th>
+              <th className="px-3 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td className="px-4 py-6 text-ink-soft" colSpan={6}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={6}>
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && clientes.length > 0 && clientesFiltrados.length === 0 && (
               <tr>
-                <td className="px-4 py-6 text-ink-soft" colSpan={6}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={6}>
                   Sin resultados para "{busqueda}".
                 </td>
               </tr>
             )}
             {!loading && clientes.length === 0 && (
               <tr>
-                <td className="px-4 py-6 text-ink-soft" colSpan={6}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={6}>
                   No hay clientes cargados todavía.
                 </td>
               </tr>
             )}
             {clientesFiltrados.map((cliente) => (
               <tr key={cliente.id} className="border-b border-line last:border-0">
-                <td className="px-4 py-2.5 text-ink">{cliente.razon_social ?? cliente.nombre_fantasia}</td>
-                <td className="px-4 py-2.5 text-ink-soft">{cliente.cuit ?? '—'}</td>
-                <td className="px-4 py-2.5 text-ink-soft">{cliente.celular ?? '—'}</td>
+                <td className="px-3 py-1.5 text-ink">{cliente.razon_social ?? cliente.nombre_fantasia}</td>
+                <td className="px-3 py-1.5 text-ink-soft">{cliente.cuit ?? '—'}</td>
+                <td className="px-3 py-1.5 text-ink-soft">{cliente.celular ?? '—'}</td>
                 <td
-                  className={`px-4 py-2.5 text-right ${cliente.saldo_actual > 0 ? 'text-error' : 'text-ink-soft'}`}
+                  className={`px-3 py-1.5 text-right ${cliente.saldo_actual > 0 ? 'text-error' : 'text-ink-soft'}`}
                 >
                   {formatCurrency(cliente.saldo_actual)}
                 </td>
-                <td className="px-4 py-2.5">
+                <td className="px-3 py-1.5">
                   <span className={cliente.activo ? 'text-success' : 'text-ink-soft'}>
                     {cliente.activo ? 'Activo' : 'Inactivo'}
                   </span>
                 </td>
-                <td className="px-4 py-2.5 text-right">
+                <td className="px-3 py-1.5 text-right">
                   <button
                     type="button"
                     onClick={() => setVerDetalle(cliente)}

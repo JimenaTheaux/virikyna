@@ -13,7 +13,7 @@ export function CarritoTabla({ items, onCantidadChange, onQuitar }: Props) {
 
   return (
     <div className="mt-stack-md flex flex-1 flex-col overflow-hidden rounded-lg border border-line">
-      <div className="flex border-b border-line bg-bg px-4 py-3 font-sans text-label-bold text-ink-soft">
+      <div className="flex border-b border-line bg-bg px-4 py-2 font-sans text-label-bold text-ink-soft">
         <span className="w-28">Código</span>
         <span className="flex-1">Producto</span>
         <span className="w-28 text-center">Cant.</span>
@@ -22,14 +22,14 @@ export function CarritoTabla({ items, onCantidadChange, onQuitar }: Props) {
       </div>
       <div className="flex-1 overflow-auto">
         {items.length === 0 && (
-          <p className="px-4 py-8 text-center font-sans text-body-md text-ink-soft">
+          <p className="px-4 py-6 text-center font-sans text-body-md text-ink-soft">
             El carrito está vacío. Buscá un producto para empezar.
           </p>
         )}
         {items.map((item) => (
           <div
             key={item.productoId}
-            className="flex min-h-[56px] items-center border-b border-line px-4 py-2 last:border-0"
+            className="flex min-h-[44px] items-center border-b border-line px-4 py-1.5 last:border-0"
           >
             <span className="w-28 truncate font-sans text-label-md text-ink-soft">{item.codigo || '—'}</span>
             <span className="flex-1 font-sans text-body-lg text-ink">{item.nombre}</span>
@@ -71,7 +71,7 @@ export function CarritoTabla({ items, onCantidadChange, onQuitar }: Props) {
           </div>
         ))}
       </div>
-      <div className="flex justify-between border-t border-line bg-bg px-4 py-3 font-sans text-body-md text-ink-soft">
+      <div className="flex justify-between border-t border-line bg-bg px-4 py-2 font-sans text-body-md text-ink-soft">
         <span>
           Unidades: <strong className="text-ink">{unidades}</strong>
         </span>

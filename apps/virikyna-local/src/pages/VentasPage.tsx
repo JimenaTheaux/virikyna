@@ -235,7 +235,7 @@ export function VentasPage() {
         <CarritoTabla items={cart} onCantidadChange={cambiarCantidad} onQuitar={quitarItem} />
       </section>
 
-      <aside className="flex w-[380px] flex-shrink-0 flex-col overflow-y-auto rounded-lg bg-surface p-card shadow-sm">
+      <aside className="flex w-[340px] flex-shrink-0 flex-col overflow-y-auto rounded-lg bg-surface p-card-sm shadow-sm">
         <p className="text-right font-sans text-label-bold text-ink-soft">TOTAL A PAGAR</p>
         <p className="text-right font-display text-display-total text-accent-darker">{formatCurrency(total)}</p>
         {descuentoPorcentaje > 0 && (
@@ -244,7 +244,7 @@ export function VentasPage() {
           </p>
         )}
 
-        <div className="mt-stack-lg">
+        <div className="mt-stack-md">
           <FormaPagoSelector
             value={formaPago}
             disponibleCuentaCorriente={cliente !== null}
@@ -252,34 +252,34 @@ export function VentasPage() {
           />
         </div>
 
-        <div className="mt-stack-md">
-          <label className="flex flex-col gap-2">
+        <div className="mt-stack-sm">
+          <label className="flex flex-col gap-1">
             <span className="font-sans text-label-bold text-ink-soft">Nota (opcional)</span>
             <input
               value={nota}
               onChange={(e) => setNota(e.target.value)}
-              className="rounded border border-line bg-surface px-4 py-2.5 font-sans text-body-md text-ink outline-none focus:border-accent"
+              className="rounded border border-line bg-surface px-3 py-2 font-sans text-body-md text-ink outline-none focus:border-accent"
             />
           </label>
         </div>
 
         {error && (
-          <p className="mt-stack-md rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>
+          <p className="mt-stack-sm rounded bg-error/10 px-4 py-2 font-sans text-body-md text-error">{error}</p>
         )}
 
-        <div className="mt-stack-md grid grid-cols-2 gap-2">
+        <div className="mt-stack-sm grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={() => setDescuentoModalOpen(true)}
             disabled={confirmando}
-            className="rounded-lg border border-line px-4 py-3 font-sans text-label-bold text-ink-soft hover:border-accent disabled:opacity-50"
+            className="rounded-lg border border-line px-4 py-2.5 font-sans text-label-bold text-ink-soft hover:border-accent disabled:opacity-50"
           >
             Descuento (D)
           </button>
           <button
             type="button"
             onClick={resetVenta}
-            className="rounded-lg border border-error px-4 py-3 font-sans text-label-bold text-error hover:bg-error/10"
+            className="rounded-lg border border-error px-4 py-2.5 font-sans text-label-bold text-error hover:bg-error/10"
           >
             Cancelar (Esc)
           </button>
@@ -289,7 +289,7 @@ export function VentasPage() {
           type="button"
           onClick={iniciarCobro}
           disabled={cart.length === 0 || !formaPago || confirmando}
-          className="mt-stack-md flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-5 font-display text-headline-md text-white transition hover:bg-accent-dark disabled:opacity-50"
+          className="mt-stack-sm flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-4 font-display text-headline-md text-white transition hover:bg-accent-dark disabled:opacity-50"
         >
           COBRAR (Enter)
         </button>

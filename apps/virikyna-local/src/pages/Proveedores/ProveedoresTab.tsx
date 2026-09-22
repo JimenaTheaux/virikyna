@@ -61,49 +61,49 @@ export function ProveedoresTab() {
       )}
 
       <div className="mt-stack-md flex-1 overflow-auto rounded-lg border border-line">
-        <table className="w-full text-left font-sans text-body-md">
+        <table className="w-full text-left font-sans text-body-md leading-5">
           <thead>
             <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-              <th className="px-4 py-3">Razón social</th>
-              <th className="px-4 py-3">CUIT</th>
-              <th className="px-4 py-3">Teléfono</th>
-              <th className="px-4 py-3 text-right">Saldo</th>
-              <th className="px-4 py-3"></th>
+              <th className="px-3 py-2">Razón social</th>
+              <th className="px-3 py-2">CUIT</th>
+              <th className="px-3 py-2">Teléfono</th>
+              <th className="px-3 py-2 text-right">Saldo</th>
+              <th className="px-3 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td className="px-4 py-6 text-ink-soft" colSpan={5}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={5}>
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && proveedores.length > 0 && proveedoresFiltrados.length === 0 && (
               <tr>
-                <td className="px-4 py-6 text-ink-soft" colSpan={5}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={5}>
                   Sin resultados para "{busqueda}".
                 </td>
               </tr>
             )}
             {!loading && proveedores.length === 0 && (
               <tr>
-                <td className="px-4 py-6 text-ink-soft" colSpan={5}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={5}>
                   No hay proveedores cargados todavía.
                 </td>
               </tr>
             )}
             {proveedoresFiltrados.map((proveedor) => (
               <tr key={proveedor.id} className="border-b border-line last:border-0">
-                <td className="px-4 py-2.5 text-ink">{proveedor.razon_social}</td>
-                <td className="px-4 py-2.5 text-ink-soft">{proveedor.cuit ?? '—'}</td>
-                <td className="px-4 py-2.5 text-ink-soft">{proveedor.telefono ?? '—'}</td>
+                <td className="px-3 py-1.5 text-ink">{proveedor.razon_social}</td>
+                <td className="px-3 py-1.5 text-ink-soft">{proveedor.cuit ?? '—'}</td>
+                <td className="px-3 py-1.5 text-ink-soft">{proveedor.telefono ?? '—'}</td>
                 <td
-                  className={`px-4 py-2.5 text-right ${proveedor.saldo_actual > 0 ? 'text-error' : 'text-ink-soft'}`}
+                  className={`px-3 py-1.5 text-right ${proveedor.saldo_actual > 0 ? 'text-error' : 'text-ink-soft'}`}
                 >
                   {formatCurrency(proveedor.saldo_actual)}
                 </td>
-                <td className="px-4 py-2.5 text-right">
+                <td className="px-3 py-1.5 text-right">
                   <button
                     type="button"
                     onClick={() => setModal(proveedor)}

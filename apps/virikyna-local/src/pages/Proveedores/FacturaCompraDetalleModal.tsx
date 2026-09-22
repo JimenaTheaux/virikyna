@@ -108,7 +108,7 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
         <div>
           <p className="font-sans text-label-bold text-ink-soft">Ítems</p>
           <div className="mt-2 overflow-auto rounded-lg border border-line">
-            <table className="w-full text-left font-sans text-body-md">
+            <table className="w-full text-left font-sans text-body-md leading-5">
               <thead>
                 <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
                   <th className="px-4 py-2">Descripción</th>
@@ -168,7 +168,7 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
         <div>
           <p className="font-sans text-label-bold text-ink-soft">Historial de pagos</p>
           <div className="mt-2 overflow-auto rounded-lg border border-line">
-            <table className="w-full text-left font-sans text-body-md">
+            <table className="w-full text-left font-sans text-body-md leading-5">
               <thead>
                 <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
                   <th className="min-w-[120px] whitespace-nowrap px-4 py-2">Fecha</th>

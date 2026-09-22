@@ -49,38 +49,38 @@ export function ChequesEmitidosModal({ onClose }: Props) {
         {error && <p className="rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>}
 
         <div className="max-h-[420px] overflow-auto rounded-lg border border-line">
-          <table className="w-full text-left font-sans text-body-md">
+          <table className="w-full text-left font-sans text-body-md leading-5">
             <thead>
               <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-                <th className="px-4 py-3">Vencimiento</th>
-                <th className="px-4 py-3">Nro.</th>
-                <th className="px-4 py-3">Proveedor</th>
-                <th className="px-4 py-3 text-right">Importe</th>
+                <th className="px-3 py-2">Vencimiento</th>
+                <th className="px-3 py-2">Nro.</th>
+                <th className="px-3 py-2">Proveedor</th>
+                <th className="px-3 py-2 text-right">Importe</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td className="px-4 py-6 text-ink-soft" colSpan={4}>
+                  <td className="px-4 py-4 text-ink-soft" colSpan={4}>
                     Cargando...
                   </td>
                 </tr>
               )}
               {!loading && cheques.length === 0 && (
                 <tr>
-                  <td className="px-4 py-6 text-ink-soft" colSpan={4}>
+                  <td className="px-4 py-4 text-ink-soft" colSpan={4}>
                     Todavía no se emitió ningún cheque.
                   </td>
                 </tr>
               )}
               {cheques.map((c) => (
                 <tr key={c.id} className="border-b border-line last:border-0">
-                  <td className="px-4 py-3 text-ink">
+                  <td className="px-3 py-2 text-ink">
                     {c.cheque_fecha_vencimiento ? formatFechaCorta(c.cheque_fecha_vencimiento) : '—'}
                   </td>
-                  <td className="px-4 py-3 text-ink">{c.cheque_numero ?? '—'}</td>
-                  <td className="px-4 py-3 text-ink">{c.proveedor?.razon_social ?? '—'}</td>
-                  <td className="px-4 py-3 text-right text-ink">{formatCurrency(c.monto)}</td>
+                  <td className="px-3 py-2 text-ink">{c.cheque_numero ?? '—'}</td>
+                  <td className="px-3 py-2 text-ink">{c.proveedor?.razon_social ?? '—'}</td>
+                  <td className="px-3 py-2 text-right text-ink">{formatCurrency(c.monto)}</td>
                 </tr>
               ))}
             </tbody>

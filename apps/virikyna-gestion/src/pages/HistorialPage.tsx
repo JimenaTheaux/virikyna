@@ -189,27 +189,27 @@ export function HistorialPage() {
       )}
 
       <div className="mt-stack-md flex-1 overflow-auto rounded-lg border border-line">
-        <table className="w-full text-left font-sans text-body-md">
+        <table className="w-full text-left font-sans text-body-md leading-5">
           <thead>
             <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-              <th className="min-w-[120px] whitespace-nowrap px-4 py-3">Fecha</th>
-              <th className="px-4 py-3">Usuario</th>
-              <th className="px-4 py-3">Módulo</th>
-              <th className="px-4 py-3">Acción</th>
-              <th className="px-4 py-3"></th>
+              <th className="min-w-[120px] whitespace-nowrap px-3 py-2">Fecha</th>
+              <th className="px-3 py-2">Usuario</th>
+              <th className="px-3 py-2">Módulo</th>
+              <th className="px-3 py-2">Acción</th>
+              <th className="px-3 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td className="px-4 py-6 text-ink-soft" colSpan={5}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={5}>
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && filas.length === 0 && (
               <tr>
-                <td className="px-4 py-6 text-ink-soft" colSpan={5}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={5}>
                   No hay acciones para este filtro.
                 </td>
               </tr>
@@ -219,10 +219,10 @@ export function HistorialPage() {
               const revertible = accionRevertible(fila, ventaEstado)
               return (
                 <tr key={fila.id} className="border-b border-line last:border-0">
-                  <td className="whitespace-nowrap px-4 py-2.5 text-ink-soft">{formatFechaHora(fila.created_at)}</td>
-                  <td className="px-4 py-2.5 text-ink-soft">{fila.usuario?.nombre ?? '—'}</td>
-                  <td className="px-4 py-2.5 text-ink">{tablaLabel(fila.tabla_afectada)}</td>
-                  <td className="px-4 py-2.5">
+                  <td className="whitespace-nowrap px-3 py-1.5 text-ink-soft">{formatFechaHora(fila.created_at)}</td>
+                  <td className="px-3 py-1.5 text-ink-soft">{fila.usuario?.nombre ?? '—'}</td>
+                  <td className="px-3 py-1.5 text-ink">{tablaLabel(fila.tabla_afectada)}</td>
+                  <td className="px-3 py-1.5">
                     <span
                       className={
                         fila.accion === 'reversion'
@@ -235,7 +235,7 @@ export function HistorialPage() {
                       {ACCION_LABEL[fila.accion]}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 text-right">
+                  <td className="px-3 py-1.5 text-right">
                     <button
                       type="button"
                       onClick={() => setVerDetalle(fila)}

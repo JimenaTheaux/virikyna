@@ -85,9 +85,27 @@ Esquinas redondeadas de forma consistente en toda la app — coherente con el es
 - **Botón primario** (teal sólido): una sola acción protagonista por pantalla (ej. "Cobrar"). Nunca dos botones teal sólido compitiendo en la misma vista.
 - **Botón destructivo** (borde/texto `error`, fondo blanco): "Cancelar", "Eliminar" — nunca del mismo peso visual que el botón primario, para que un click apurado no los confunda.
 - **Atajos de teclado**: siempre visibles junto a su acción (no ocultos), en `label-md`, mismo patrón en toda la app.
-- **Tablas/listados**: filas altas (mínimo 56px), texto en `body-lg`, nunca `body-md` para el dato principal de una fila.
+- **Tablas/listados** (revisado — ver "Densidad de tablas" más abajo): filas compactas (~36px, `px-3 py-1.5`), texto en `body-md` con `leading-5` (nunca por debajo de `body-md`/16px). El carrito de Ventas es la excepción — sigue en `body-lg` por ser la lista que el cajero lee mientras cobra.
 - **Tarjetas de dashboard**: número protagonista en `headline-md` o `display-card` según jerarquía, la etiqueta que lo describe en `label-bold` uppercase, discreta.
 - **Confirmaciones destructivas**: modal con el mismo patrón siempre — botón de cancelar a la izquierda, acción destructiva a la derecha en `error`, nunca al revés entre pantallas.
+
+## 5.1 Densidad de tablas (revisión — resolución responsive)
+
+Ajuste posterior al punto anterior, pedido explícitamente para que las tablas de Facturación e
+Inventario entren sin scroll vertical en resoluciones desktop estándar (1366×768 en adelante):
+
+| Elemento | Antes | Ahora |
+|---|---|---|
+| Encabezado (`th`) | `px-4 py-3` | `px-3 py-2` |
+| Celda (`td`) | `px-4 py-2.5` | `px-3 py-1.5` |
+| Interlineado del cuerpo | `body-md` (24px) | `body-md leading-5` (20px) |
+| Altura de fila resultante | ~56px mínimo forzado | ~36px, sin piso forzado |
+
+El tamaño de fuente **no baja de `body-md` (16px)** — la densidad se gana achicando padding e
+interlineado, no el tamaño de letra, para no perder legibilidad a la distancia real de lectura del
+mostrador. El contenedor de la tabla sigue con su propio `overflow-auto`: con datos masivos el
+scroll interno de la tabla es esperable y correcto, lo que se elimina es el scroll innecesario con
+una cantidad normal de filas.
 
 ## 6. Accesibilidad y contexto de uso (resumen — detalle en skill `pos-ux-ui-design`)
 

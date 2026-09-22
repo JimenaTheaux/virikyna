@@ -113,19 +113,19 @@ export function ClienteDetalleModal({ cliente, onClose, onChanged }: Props) {
             <div>
               <p className="font-sans text-label-bold text-ink-soft">Ventas a cuenta corriente</p>
               <div className="mt-2 max-h-[220px] overflow-auto rounded-lg border border-line">
-                <table className="w-full text-left font-sans text-body-md">
+                <table className="w-full text-left font-sans text-body-md leading-5">
                   <tbody>
                     {ventas.length === 0 && (
                       <tr>
-                        <td className="px-4 py-3 text-ink-soft">Sin ventas a cuenta corriente todavía.</td>
+                        <td className="px-3 py-2 text-ink-soft">Sin ventas a cuenta corriente todavía.</td>
                       </tr>
                     )}
                     {ventas.map((v) => (
                       <tr key={v.id} className="border-b border-line last:border-0">
-                        <td className="whitespace-nowrap px-4 py-3 text-ink-soft">{formatFechaHora(v.created_at)}</td>
-                        <td className="px-4 py-3 text-ink">N° {v.numero}</td>
-                        <td className="px-4 py-3 text-ink-soft">{ESTADO_VENTA_LABEL[v.estado]}</td>
-                        <td className="px-4 py-3 text-right text-ink">{formatCurrency(v.total)}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-ink-soft">{formatFechaHora(v.created_at)}</td>
+                        <td className="px-3 py-2 text-ink">N° {v.numero}</td>
+                        <td className="px-3 py-2 text-ink-soft">{ESTADO_VENTA_LABEL[v.estado]}</td>
+                        <td className="px-3 py-2 text-right text-ink">{formatCurrency(v.total)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -136,21 +136,21 @@ export function ClienteDetalleModal({ cliente, onClose, onChanged }: Props) {
             <div>
               <p className="font-sans text-label-bold text-ink-soft">Pagos recibidos</p>
               <div className="mt-2 max-h-[220px] overflow-auto rounded-lg border border-line">
-                <table className="w-full text-left font-sans text-body-md">
+                <table className="w-full text-left font-sans text-body-md leading-5">
                   <tbody>
                     {pagos.length === 0 && (
                       <tr>
-                        <td className="px-4 py-3 text-ink-soft">Sin pagos registrados todavía.</td>
+                        <td className="px-3 py-2 text-ink-soft">Sin pagos registrados todavía.</td>
                       </tr>
                     )}
                     {pagos.map((p) => (
                       <tr key={p.id} className="border-b border-line last:border-0">
-                        <td className="whitespace-nowrap px-4 py-3 text-ink-soft">{formatFechaHora(p.created_at)}</td>
-                        <td className="px-4 py-3 text-ink-soft">
+                        <td className="whitespace-nowrap px-3 py-2 text-ink-soft">{formatFechaHora(p.created_at)}</td>
+                        <td className="px-3 py-2 text-ink-soft">
                           {p.venta_id ? `Venta N° ${numeroVentaPorId.get(p.venta_id) ?? '—'}` : 'Cuenta general'}
                         </td>
-                        <td className="px-4 py-3 text-ink-soft">{p.usuario?.nombre ?? '—'}</td>
-                        <td className="px-4 py-3 text-right text-success">{formatCurrency(p.monto)}</td>
+                        <td className="px-3 py-2 text-ink-soft">{p.usuario?.nombre ?? '—'}</td>
+                        <td className="px-3 py-2 text-right text-success">{formatCurrency(p.monto)}</td>
                       </tr>
                     ))}
                   </tbody>

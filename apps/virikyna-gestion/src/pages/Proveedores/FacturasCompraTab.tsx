@@ -76,28 +76,28 @@ export function FacturasCompraTab() {
       )}
 
       <div className="mt-stack-md flex-1 overflow-auto rounded-lg border border-line">
-        <table className="w-full text-left font-sans text-body-md">
+        <table className="w-full text-left font-sans text-body-md leading-5">
           <thead>
             <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-              <th className="min-w-[180px] whitespace-nowrap px-4 py-3">Fecha</th>
-              <th className="px-4 py-3">Proveedor</th>
-              <th className="px-4 py-3">Comprobante</th>
-              <th className="px-4 py-3 text-right">Total</th>
-              <th className="px-4 py-3 text-right">Saldo pendiente</th>
-              <th className="px-4 py-3"></th>
+              <th className="min-w-[180px] whitespace-nowrap px-3 py-2">Fecha</th>
+              <th className="px-3 py-2">Proveedor</th>
+              <th className="px-3 py-2">Comprobante</th>
+              <th className="px-3 py-2 text-right">Total</th>
+              <th className="px-3 py-2 text-right">Saldo pendiente</th>
+              <th className="px-3 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td className="px-4 py-6 text-ink-soft" colSpan={6}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={6}>
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && facturas.length === 0 && (
               <tr>
-                <td className="px-4 py-6 text-ink-soft" colSpan={6}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={6}>
                   No hay facturas de compra cargadas todavía.
                 </td>
               </tr>
@@ -110,22 +110,22 @@ export function FacturasCompraTab() {
                   f.anulada ? 'text-ink-soft line-through' : ''
                 }`}
               >
-                <td className="whitespace-nowrap px-4 py-2.5 text-ink-soft">{formatFecha(f.fecha_comprobante)}</td>
-                <td className={`px-4 py-2.5 ${f.anulada ? '' : 'text-ink'}`}>{f.proveedor?.razon_social ?? '—'}</td>
-                <td className="px-4 py-2.5 text-ink-soft">
+                <td className="whitespace-nowrap px-3 py-1.5 text-ink-soft">{formatFecha(f.fecha_comprobante)}</td>
+                <td className={`px-3 py-1.5 ${f.anulada ? '' : 'text-ink'}`}>{f.proveedor?.razon_social ?? '—'}</td>
+                <td className="px-3 py-1.5 text-ink-soft">
                   {TIPO_LABEL[f.tipo_comprobante] ?? f.tipo_comprobante}
                   {f.letra ? ` ${f.letra}` : ''}
                   {f.numero_comprobante ? ` · ${f.numero_comprobante}` : ''}
                 </td>
-                <td className={`px-4 py-2.5 text-right ${f.anulada ? '' : 'text-ink'}`}>{formatCurrency(f.total)}</td>
+                <td className={`px-3 py-1.5 text-right ${f.anulada ? '' : 'text-ink'}`}>{formatCurrency(f.total)}</td>
                 <td
-                  className={`px-4 py-2.5 text-right ${
+                  className={`px-3 py-1.5 text-right ${
                     f.anulada ? '' : f.saldo_pendiente > 0 ? 'text-error' : 'text-success'
                   }`}
                 >
                   {formatCurrency(f.saldo_pendiente)}
                 </td>
-                <td className="px-4 py-2.5 text-right">
+                <td className="px-3 py-1.5 text-right">
                   {f.anulada && (
                     <span className="rounded-full bg-error/10 px-2 py-1 font-sans text-label-md text-error no-underline">
                       Anulada
