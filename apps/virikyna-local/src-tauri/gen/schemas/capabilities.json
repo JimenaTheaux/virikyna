@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"Capacidades por defecto de la ventana principal — sin permisos de más.","local":true,"windows":["main"],"permissions":["core:default","updater:default","process:default"]}}
+{"default":{"identifier":"default","description":"Capacidades por defecto de la ventana principal — sin permisos de más.","local":true,"windows":["main"],"permissions":["core:default","updater:default","process:default","shell:allow-open"]}}

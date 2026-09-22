@@ -4,6 +4,7 @@ import { HashRouter } from 'react-router-dom'
 import { disableNumberInputScroll } from '@virikyna/shared'
 import App from './App'
 import { AuthProvider } from './auth/AuthContext'
+import { Toaster } from './components/Toaster'
 import { checkForUpdates } from './lib/updater'
 import './index.css'
 
@@ -16,6 +17,7 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
       <AuthProvider>
         <App />
       </AuthProvider>
+      <Toaster />
     </HashRouter>
   </React.StrictMode>,
 )

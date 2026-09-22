@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { open as abrirEnNavegador } from '@tauri-apps/plugin-shell'
 import { Modal } from './Modal'
 import { Field, inputClass } from './FormField'
 import { formatCurrency } from '@virikyna/shared'
@@ -11,6 +12,7 @@ import {
 } from '../lib/comprobante'
 import { generarPdfComprobante, nombreArchivoPdf } from '../lib/pdf'
 import { generarJpgComprobante, nombreArchivoJpg } from '../lib/imagen'
+import { showToast } from '../lib/toast'
 
 type Props = {
   datos: DatosComprobante
@@ -30,6 +32,7 @@ export function ComprobanteModal({ datos, onClose, footer }: Props) {
   async function descargarPdf() {
     const doc = await generarPdfComprobante(datos)
     doc.save(nombreArchivoPdf(datos))
+    showToast('Se descargó el PDF')
   }
 
   function descargarBlob(blob: Blob, nombreArchivo: string) {
@@ -44,22 +47,25 @@ export function ComprobanteModal({ datos, onClose, footer }: Props) {
   async function descargarJpg() {
     const blob = await generarJpgComprobante(datos)
     descargarBlob(blob, nombreArchivoJpg(datos))
+    showToast('Se descargó la imagen')
   }
 
   // Gmail y wa.me no permiten adjuntar un archivo local por URL (restricción de seguridad de
   // ambas plataformas) — por eso acá se descarga automáticamente el formato que corresponde a
   // cada canal (PDF para mail, JPG para WhatsApp) antes de abrir la ventana de envío, para que
-  // el usuario solo tenga que adjuntarlo.
+  // el usuario solo tenga que adjuntarlo. La apertura usa el plugin `shell` de Tauri (no
+  // window.open): dentro del WebView, window.open no dispara el navegador/apps del sistema
+  // operativo, así que el link nunca llegaba a abrirse en la build instalada.
   async function enviarPorGmail() {
     if (!mail.trim()) return
     await descargarPdf()
-    window.open(linkGmail(mail.trim(), asunto, mensajeEnvio(datos)), '_blank')
+    await abrirEnNavegador(linkGmail(mail.trim(), asunto, mensajeEnvio(datos)))
   }
 
   async function enviarPorWhatsApp() {
     if (!celular.replace(/\D/g, '')) return
     await descargarJpg()
-    window.open(linkWhatsApp(celular, mensajeEnvio(datos)), '_blank')
+    await abrirEnNavegador(linkWhatsApp(celular, mensajeEnvio(datos)))
   }
 
   return (
