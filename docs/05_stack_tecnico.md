@@ -124,3 +124,31 @@ También 100% en la capa de Supabase, sin tecnología nueva: se agregan `cuentas
 4. La app chequea ese manifest al abrir (o periódicamente); si hay versión nueva, la descarga, valida la firma, y se reinicia con la actualización aplicada — sin intervención del cajero.
 
 Este mecanismo se arma una sola vez en Fase 8 y después es transparente para siempre.
+
+### 8.1. Estado actual (implementado)
+
+- Plugin `updater` configurado en `apps/virikyna-local/src-tauri/tauri.conf.json` (pubkey propia + endpoint `https://github.com/JimenaTheaux/virikyna/releases/latest/download/latest.json`).
+- Pipeline de CI: `.github/workflows/release-virikyna-local.yml`, dispara con `tauri-apps/tauri-action` al pushear un tag `virikyna-local-v*`. Compila el `.msi`/`.exe` firmado, genera `latest.json` y publica ambos en GitHub Releases.
+- La app chequea updates solo una vez al arrancar (`src/main.tsx` → `checkForUpdates()` en `src/lib/updater.ts`), en silencio (descarga e instala sola, sin pedirle nada al cajero).
+- Botón manual **"Buscar actualizaciones"** en Configuración (solo admin) — muestra versión instalada y el estado del chequeo (buscando / al día / descargando / error).
+- `checkForUpdates` siempre deja en la consola de DevTools (`console.log` / `console.error`) la versión actual vs. la última disponible — es la forma de confirmar, instalación por instalación, que el update se aplicó de verdad.
+
+### 8.2. Cómo publicar una actualización nueva — paso a paso
+
+**El error más común: pushear el código a `main` no alcanza.** El pipeline de release solo se dispara con un **tag**, y el updater solo detecta una versión "nueva" si el número de versión cambió. Si se olvida cualquiera de los dos pasos, la app instalada se queda como estaba, aunque el código en GitHub ya tenga el cambio.
+
+1. Subir la versión en **los tres lugares** (deben quedar iguales):
+   - `apps/virikyna-local/package.json` → `"version"`
+   - `apps/virikyna-local/src-tauri/tauri.conf.json` → `"version"`
+   - `apps/virikyna-local/src-tauri/Cargo.toml` → `[package] version`
+2. Commitear ese bump de versión (junto con el resto de los cambios si todavía no se commitearon).
+3. Pushear a `main` (`git push`).
+4. Crear y pushear el tag correspondiente — **este paso es el que realmente dispara el build y la publicación**:
+   ```
+   git tag virikyna-local-vX.Y.Z
+   git push origin virikyna-local-vX.Y.Z
+   ```
+5. Verificar en GitHub → Actions que el workflow "Release Virikyna Local (Windows)" terminó en verde, y en GitHub → Releases que aparecen el instalador y `latest.json` de esa versión.
+6. Para confirmar que una instalación puntual ya recibió el cambio: abrir la app, ir a Configuración → tocar "Buscar actualizaciones" (o mirar la consola de DevTools al arrancar) y chequear que la versión mostrada sea la nueva.
+
+**Requisitos de secrets en GitHub** (ya cargados, solo como referencia si hay que rotarlos): `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
