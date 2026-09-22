@@ -1,6 +1,12 @@
-import { lazy, Suspense, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import type { Producto, Proveedor, RolUsuario, UbicacionStock } from '@virikyna/shared'
-import { formatCurrency, totalItemFacturaCompra, type ItemFacturaCompra } from '@virikyna/shared'
+import {
+  formatCurrency,
+  totalItemFacturaCompra,
+  armarFiltroBusquedaProducto,
+  useDebouncedValue,
+  type ItemFacturaCompra,
+} from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { buscarProductoPorCodigoBarras } from '../../lib/productos'
 import { Field, inputClass, selectClass } from '../../components/FormField'
@@ -33,7 +39,7 @@ export function ItemFacturaRow({ item, index, puedeEliminar, proveedores, rol, o
   const [codigoBarrasParaCrear, setCodigoBarrasParaCrear] = useState<string | undefined>(undefined)
   const [escaneando, setEscaneando] = useState(false)
   const [errorEscaneo, setErrorEscaneo] = useState<string | null>(null)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const queryDebounced = useDebouncedValue(query, 200)
 
   function seleccionarProducto(p: ProductoBusquedaItem) {
     onChange({ productoId: p.id, descripcion: p.nombre, precioUnitarioSinIva: String(p.costo) })
@@ -44,33 +50,39 @@ export function ItemFacturaRow({ item, index, puedeEliminar, proveedores, rol, o
   function cambiarDescripcion(texto: string) {
     onChange({ descripcion: texto, productoId: null })
     setQuery(texto)
+  }
 
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    const q = texto.trim()
+  useEffect(() => {
+    const q = queryDebounced.trim()
     if (q.length < 2) {
       setResultados([])
       return
     }
-    debounceRef.current = setTimeout(async () => {
-      const qEscaped = q.replace(/[%,]/g, '')
-      const { data } = await supabase
-        .from('productos')
-        .select('id, nombre, costo, codigo_barras')
-        .eq('estado', 'activo')
-        .or(`nombre.ilike.%${qEscaped}%,codigo_barras.ilike.%${qEscaped}%`)
-        .order('nombre')
-        .limit(6)
-      const encontrados = (data ?? []) as ProductoBusquedaItem[]
+    let cancelado = false
+    supabase
+      .from('productos')
+      .select('id, nombre, costo, codigo_barras')
+      .eq('estado', 'activo')
+      .or(armarFiltroBusquedaProducto(q))
+      .order('nombre')
+      .limit(6)
+      .then(({ data }) => {
+        if (cancelado) return
+        const encontrados = (data ?? []) as ProductoBusquedaItem[]
 
-      const matchExacto = encontrados.find((p) => p.codigo_barras === q)
-      if (matchExacto && encontrados.length === 1) {
-        seleccionarProducto(matchExacto)
-        return
-      }
+        const matchExacto = encontrados.find((p) => p.codigo_barras === q)
+        if (matchExacto && encontrados.length === 1) {
+          seleccionarProducto(matchExacto)
+          return
+        }
 
-      setResultados(encontrados)
-    }, 200)
-  }
+        setResultados(encontrados)
+      })
+    return () => {
+      cancelado = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryDebounced])
 
   async function handleEscaneo(codigo: string) {
     setEscaneando(false)
@@ -135,7 +147,7 @@ export function ItemFacturaRow({ item, index, puedeEliminar, proveedores, rol, o
             hint={
               item.productoId
                 ? 'Vinculado a un producto del catálogo'
-                : 'Ítem libre — escribí el nombre / código de barras, o escaneá con la cámara'
+                : 'Ítem libre — escribí el nombre, marca o código de barras, o escaneá con la cámara'
             }
           >
             <input

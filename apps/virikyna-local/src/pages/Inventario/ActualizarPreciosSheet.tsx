@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import type { Proveedor } from '@virikyna/shared'
 import { friendlyError } from '@virikyna/shared'
+import { coincideBusquedaProducto } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field, ErrorText, inputClass, selectClass } from '../../components/FormField'
@@ -43,7 +44,7 @@ export function ActualizarPreciosSheet({ productos, proveedores, seleccionInicia
     const q = busqueda.trim().toLowerCase()
     if (!q) return productos
     return productos.filter(
-      (p) => p.nombre.toLowerCase().includes(q) || (p.proveedor?.razon_social ?? '').toLowerCase().includes(q),
+      (p) => coincideBusquedaProducto(p, q) || (p.proveedor?.razon_social ?? '').toLowerCase().includes(q),
     )
   }, [productos, busqueda])
 

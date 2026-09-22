@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import type { Proveedor } from '@virikyna/shared'
-import { formatCurrency, friendlyError } from '@virikyna/shared'
+import { formatCurrency, friendlyError, coincideBusquedaProducto } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { usePerfil } from '../../auth/AuthContext'
 import { buscarProductoPorCodigoBarras } from '../../lib/productos'
@@ -61,11 +61,7 @@ export function InventarioPage() {
   const productosFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
     if (!q) return productos
-    return productos.filter((p) =>
-      [p.nombre, p.marca, p.codigo_barras, p.codigo_interno].some((campo) =>
-        campo?.toLowerCase().includes(q),
-      ),
-    )
+    return productos.filter((p) => coincideBusquedaProducto(p, q))
   }, [productos, busqueda])
 
   async function handleEscaneo(codigo: string) {

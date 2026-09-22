@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
+import { useEffect, useState, type KeyboardEvent, type RefObject } from 'react'
 import type { Producto } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
-import { formatCurrency } from '@virikyna/shared'
+import { formatCurrency, armarFiltroBusquedaProducto, useDebouncedValue } from '@virikyna/shared'
 import type { CartItem } from './types'
 
 type ProductoBusquedaItem = Pick<Producto, 'id' | 'nombre' | 'codigo_barras' | 'codigo_interno' | 'precio_venta'>
@@ -18,32 +18,39 @@ export function ProductoBusqueda({ inputRef, onAgregar }: Props) {
   const [resultados, setResultados] = useState<ProductoBusquedaItem[]>([])
   const [highlighted, setHighlighted] = useState(0)
   const [buscando, setBuscando] = useState(false)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const textoDebounced = useDebouncedValue(texto, 200)
+
+  // "Buscando..." aparece apenas se tipea (sin esperar el debounce) para que el buscador no se
+  // quede mostrando resultados obsoletos mientras el usuario sigue escribiendo.
+  useEffect(() => {
+    if (texto.trim()) setBuscando(true)
+  }, [texto])
 
   useEffect(() => {
-    const q = texto.trim()
-    if (debounceRef.current) clearTimeout(debounceRef.current)
+    const q = textoDebounced.trim()
     if (!q) {
       setResultados([])
       setBuscando(false)
       return
     }
-    setBuscando(true)
-    debounceRef.current = setTimeout(async () => {
-      const qEscaped = q.replace(/[%,]/g, '')
-      const { data } = await supabase
-        .from('productos')
-        .select('id, nombre, codigo_barras, codigo_interno, precio_venta')
-        .eq('estado', 'activo')
-        .or(`nombre.ilike.%${qEscaped}%,codigo_barras.ilike.%${qEscaped}%,codigo_interno.ilike.%${qEscaped}%`)
-        .order('nombre')
-        .limit(8)
-      setResultados((data ?? []) as ProductoBusquedaItem[])
-      setHighlighted(0)
-      setBuscando(false)
-    }, 200)
-    return () => clearTimeout(debounceRef.current)
-  }, [texto])
+    let cancelado = false
+    supabase
+      .from('productos')
+      .select('id, nombre, codigo_barras, codigo_interno, precio_venta')
+      .eq('estado', 'activo')
+      .or(armarFiltroBusquedaProducto(q))
+      .order('nombre')
+      .limit(8)
+      .then(({ data }) => {
+        if (cancelado) return
+        setResultados((data ?? []) as ProductoBusquedaItem[])
+        setHighlighted(0)
+        setBuscando(false)
+      })
+    return () => {
+      cancelado = true
+    }
+  }, [textoDebounced])
 
   function agregar(p: ProductoBusquedaItem) {
     onAgregar({
@@ -95,7 +102,7 @@ export function ProductoBusqueda({ inputRef, onAgregar }: Props) {
         value={texto}
         onChange={(e) => setTexto(e.target.value)}
         onKeyDown={onKeyDown}
-        placeholder="Buscar por código de barras o nombre..."
+        placeholder="Buscar por nombre, marca o código de barras..."
         className="w-full rounded-lg border-2 border-line bg-surface px-5 py-4 font-sans text-body-lg text-ink outline-none focus:border-accent"
       />
       {texto.trim() && (
