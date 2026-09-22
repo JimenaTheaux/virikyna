@@ -40,10 +40,27 @@ export function CierreDetalleModal({ cierre, onClose }: { cierre: CierreCajaConU
         <Fila label="Cuenta corriente" valor={formatCurrency(cierre.total_cuenta_corriente)} />
         <Fila label="Total vendido" valor={formatCurrency(totalVentas)} destacado />
 
+        {cierre.apertura && (
+          <>
+            <p className="mt-stack-md font-sans text-label-bold text-ink-soft">Apertura del período</p>
+            <Fila label="Abierta por" valor={cierre.apertura.usuarioNombre ?? '—'} />
+            <Fila label="Abierta el" valor={formatFechaHora(cierre.apertura.abierta_at)} />
+            <Fila label="Monto esperado" valor={formatCurrency(cierre.apertura.monto_esperado)} />
+            <Fila label="Monto real de apertura" valor={formatCurrency(cierre.apertura.monto_real)} />
+            {cierre.apertura.diferencia !== 0 && (
+              <Fila
+                label="Diferencia de apertura"
+                valor={diferenciaLabel(cierre.apertura.diferencia).texto}
+                destacado
+              />
+            )}
+          </>
+        )}
+
         <p className="mt-stack-md font-sans text-label-bold text-ink-soft">Efectivo</p>
         <Fila label="Egresos del día" valor={formatCurrency(cierre.total_egresos)} />
         <Fila label="Retiros de efectivo" valor={`- ${formatCurrency(cierre.total_retiros)}`} />
-        <Fila label="Efectivo esperado" valor={formatCurrency(cierre.efectivo_esperado)} destacado />
+        <Fila label="Efectivo esperado (incluye el monto de apertura)" valor={formatCurrency(cierre.efectivo_esperado)} destacado />
         {cierre.efectivo_contado !== null && (
           <>
             <Fila label="Efectivo contado" valor={formatCurrency(cierre.efectivo_contado)} />

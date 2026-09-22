@@ -5,6 +5,7 @@ import { fechaISO, formatCurrency } from '@virikyna/shared'
 import { friendlyError } from '@virikyna/shared'
 import { fetchProductosStockBajo, fetchVentasUltimosDias } from './queries'
 import { WeeklySalesChart } from './WeeklySalesChart'
+import { AbrirCajaCard } from './AbrirCajaCard'
 import type { ProductoStockBajo, VentaDelDia } from './types'
 
 const ACCESOS_RAPIDOS = [
@@ -52,6 +53,8 @@ export function AdminDashboard() {
       </div>
 
       {error && <p className="rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>}
+
+      <AbrirCajaCard />
 
       <div className="grid grid-cols-4 gap-gutter-grid">
         <div className="col-span-2 rounded-lg bg-surface p-card shadow-sm">

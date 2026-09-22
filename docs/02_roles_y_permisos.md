@@ -27,12 +27,13 @@ Fuente de verdad detallada en `04_modulos_y_funciones.md` — esta tabla es el r
 | Login | Blanquear contraseña / crear usuario | ✅ | ❌ |
 | Dashboard | Ver panel completo (Admin) | ✅ | — |
 | Dashboard | Ver grid simplificado (Cajero) | — | ✅ |
-| Ventas | Todas las acciones de venta (agregar, editar, cobrar, cancelar, descuento) | ✅ | ✅ |
+| Ventas | Todas las acciones de venta (agregar, editar, cobrar, cancelar, descuento, recargo) | ✅ | ✅ |
 | Facturación | Ver, filtrar, seleccionar, emitir Factura C, enviar comprobante | ✅ | ✅ |
 | Inventario y Stock | Ver, alta, editar, eliminar, inactivar/reactivar, actualización masiva de precios | ✅ | ✅ |
 | Inventario y Stock | **Ajustar stock manualmente** | ✅ | ❌ |
 | Inventario desde celular (5.1) | Mismas acciones que Inventario, mismas excepciones | ✅ | ✅ |
 | Proveedores | Todas las acciones (alta, editar, asociar productos, cargar factura, registrar pago, ver cta. cte., eliminar) | ✅ | ✅ |
+| Inicio de Caja (6.5) | Abrir caja (confirmar o modificar el monto de apertura) | ✅ | ✅ |
 | Cierre de Caja | Cierre X, Cierre Z, registrar egreso, ingresar efectivo contado, ver historial | ✅ | ✅ |
 | Caja Gestión (7.1) | Validar Cierre Z, registrar egresos generales, carga inicial, movimientos manuales de caja | ✅ | ❌ (módulo exclusivo de Virikyna Gestión) |
 | Clientes | Todas las acciones (alta, editar, ver cta. cte., registrar pago, eliminar) | ✅ | ✅ |

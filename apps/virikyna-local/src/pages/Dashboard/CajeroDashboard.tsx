@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { IconCierreCaja, IconFacturacion, IconInventario, IconVentas } from '../../components/icons'
 import { fechaISO, formatCurrency } from '@virikyna/shared'
 import { fetchProductosStockBajo, fetchVentasUltimosDias } from './queries'
+import { AbrirCajaCard } from './AbrirCajaCard'
 
 export function CajeroDashboard() {
   const [loading, setLoading] = useState(true)
@@ -26,6 +27,8 @@ export function CajeroDashboard() {
         <h1 className="font-display text-headline-lg text-accent-darker">Dashboard</h1>
         <p className="mt-1 font-sans text-body-md text-ink-soft">Accesos rápidos del día.</p>
       </div>
+
+      <AbrirCajaCard />
 
       <div className="grid flex-1 grid-cols-3 grid-rows-2 gap-stack-sm">
         <Link

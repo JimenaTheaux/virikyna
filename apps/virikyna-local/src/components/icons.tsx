@@ -125,6 +125,16 @@ export function IconCierreCaja({ className, filled }: IconProps) {
   )
 }
 
+export function IconAbrirCaja({ className, filled }: IconProps) {
+  return (
+    <svg {...iconAttrs(filled)} className={className}>
+      <rect x="3" y="10" width="18" height="10" rx="1.5" />
+      <path d="M3 10V7a1.5 1.5 0 0 1 1.5-1.5h5L12 8h7.5A1.5 1.5 0 0 1 21 9.5V10" />
+      <path d="M12 13.5v3M10.3 15.2h3.4" />
+    </svg>
+  )
+}
+
 export function IconNotas({ className, filled }: IconProps) {
   return (
     <svg {...iconAttrs(filled)} className={className}>

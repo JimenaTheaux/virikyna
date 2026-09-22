@@ -23,6 +23,10 @@ Roles del sistema: **Admin** (Alicia, Ana Julia) y **Cajero** (Jose, Ale, Belu).
 
 **Vista Cajero** — grid de botones grandes: ventas del día (monto simple), alertas de stock bajo, accesos directos (Nueva venta / Inventario / Facturación / Cierre de caja).
 
+**Recuadro "Abrir caja" (docs/21_apertura_caja.sql, ambas vistas de Virikyna Local):** cuando no hay una caja abierta, aparece arriba del grid mostrando el monto esperado de apertura (= efectivo contado del último Cierre Z) y quién hizo ese Cierre Z (usuario y fecha/hora) — o el aviso de que todavía no hay ningún Cierre Z si es la primera apertura del sistema. El cajero elige **Confirmar** (abre con ese mismo monto) o **Modificar monto** (ingresa el monto real que tiene y abre con ese valor). Mientras la caja sigue abierta, el recuadro muestra el estado en su lugar (monto real y desde cuándo) — no se puede volver a abrir hasta el próximo Cierre Z.
+
+**Alerta de diferencia de apertura (dashboard de Virikyna Gestión, exclusivo Admin):** si un cajero abrió la caja con un monto distinto al esperado, aparece un aviso "⚠ Apertura de caja con diferencia de $X (sobró/faltó) — usuario, fecha/hora" apenas la dueña entra al dashboard. El detalle completo (quién abrió, cuándo, monto esperado, monto real) queda accesible desde el historial de caja: al ver el detalle de cualquier Cierre X o Z (Cierre de Caja en Local, Tablero de Cierres en Gestión) se muestra la sección "Apertura del período" con esos datos.
+
 ---
 
 ## 3. VENTAS
@@ -37,6 +41,7 @@ Roles del sistema: **Admin** (Alicia, Ana Julia) y **Cajero** (Jose, Ale, Belu).
 | Q | Pago con QR (Galicia) |
 | C | Tarjeta débito/crédito (Galicia) |
 | D | Aplicar descuento |
+| R | Aplicar recargo |
 | Esc | Cancelar venta en curso |
 
 | Acción | Admin | Cajero |
@@ -45,17 +50,26 @@ Roles del sistema: **Admin** (Alicia, Ana Julia) y **Cajero** (Jose, Ale, Belu).
 | Editar cantidad de un ítem | ✅ | ✅ |
 | Eliminar ítem del carrito | ✅ | ✅ |
 | Aplicar descuento | ✅ | ✅ |
+| Aplicar recargo | ✅ | ✅ |
 | Cambiar cliente (consumidor final / cta. cte.) | ✅ | ✅ |
 | Cancelar venta en curso | ✅ | ✅ |
 | Agregar nota a la venta | ✅ | ✅ |
 | Seleccionar forma de pago | ✅ | ✅ |
 | Cobrar (confirmar venta) | ✅ | ✅ |
+| Manejar tickets en espera (crear, cambiar, eliminar, cobrar) | ✅ | ✅ |
 
 **Reglas:**
 - Aunque el comprobante esté avanzado, se puede cambiar cliente y forma de pago sin arrancar de cero.
 - **Cobrar registra la venta y el pago, y genera un Comprobante X** — no dispara automáticamente la Factura C.
 - El Comprobante X se puede descargar en PDF, o enviar por Gmail y/o WhatsApp (con +54 pre-cargado, pidiendo mail o celular al enviar).
 - No se contempla nota de crédito de venta en Fase 1.
+
+**Tickets en espera:**
+- Barra de tabs arriba de la pantalla de Ventas — un ticket por cliente/venta en curso, hasta 5 simultáneos. Cada uno guarda su propio carrito, cliente, descuento/recargo y nota, sin pisar a los demás.
+- El botón "+ Nuevo ticket" se deshabilita al llegar a 5, con aviso de que hay que cerrar o eliminar uno para abrir otro.
+- Por ticket: click para continuar, menú "⋮" con "Cerrar / Cobrar" (arranca el flujo de cobro para ese ticket puntual) y "Eliminar" (pide confirmación — se pierden los productos cargados).
+- Al confirmarse una venta, ese ticket se cierra y desaparece de la barra. Si era el único abierto, se crea uno nuevo vacío automáticamente — la pantalla de Ventas nunca queda sin ningún ticket.
+- Los tickets abiertos se guardan localmente (localStorage) y se recuperan al reabrir la app o después de un corte de luz.
 
 ---
 
@@ -171,11 +185,29 @@ Ambos caminos ejecutan la misma función del sistema — no son dos flujos disti
 
 ---
 
+## 6.5 INICIO DE CAJA (APERTURA)
+
+**Qué resuelve:** hasta docs/20, `cerrar_caja` calculaba el efectivo esperado asumiendo que el cajón arrancaba en $0 — no había ningún registro de con cuánto efectivo físico empezaba cada turno. La apertura de caja (docs/21_apertura_caja.sql) cubre ese hueco: al empezar el turno, el cajero confirma o corrige el monto real con el que arranca, y ese monto pasa a ser la base del efectivo esperado durante todo el período, hasta el próximo Cierre Z.
+
+**Flujo:** ver el recuadro "Abrir caja" del dashboard (módulo 2). El cajero elige Confirmar (coincide con lo que tiene físicamente) o Modificar (ingresa el monto real). Si modifica, el sistema guarda automáticamente `monto_esperado` (el del Cierre Z anterior), `monto_real_apertura` (el ingresado) y la `diferencia` — visible como alerta en el dashboard de la dueña y como detalle en el historial de caja.
+
+**Una sola apertura por período:** no se puede abrir la caja de nuevo mientras ya hay una abierta — queda abierta desde ese momento hasta el próximo Cierre Z, que la cierra automáticamente.
+
+**Impacto en los cálculos de caja:** todos los cierres (X y Z) y retiros de efectivo del período usan `monto_real_apertura` como base del efectivo esperado — **no** el monto esperado. Es decir: `efectivo_esperado = monto_real_apertura + ventas en efectivo − egresos en efectivo − retiros de efectivo`, el mismo criterio que ya usaban egresos y retiros (docs/17), ahora con la apertura como punto de partida en vez de $0.
+
+| Acción | Admin | Cajero |
+|---|---|---|
+| Abrir caja (confirmar o modificar monto) | ✅ | ✅ |
+| Ver alerta de diferencia de apertura (dashboard) | ✅ (Gestión) | ❌ |
+| Ver detalle de apertura de un cierre (historial) | ✅ | ✅ |
+
+---
+
 ## 7. CIERRE DE CAJA
 
-**Qué debe ver:** total vendido desglosado por medio de pago (efectivo / cuenta Mercado Pago / cuenta Galicia / cta. cte.), total de egresos del día (pagos a proveedores, otros gastos, retiros), monto esperado en caja (efectivo) según el sistema, campo para ingresar el efectivo contado, diferencia (coincide / sobra / falta y por cuánto), usuario que hizo el cierre.
+**Qué debe ver:** total vendido desglosado por medio de pago (efectivo / cuenta Mercado Pago / cuenta Galicia / cta. cte.), total de egresos del día (pagos a proveedores, otros gastos, retiros), monto esperado en caja (efectivo) según el sistema — incluye el monto real de apertura del período (módulo 6.5) como base —, campo para ingresar el efectivo contado, diferencia (coincide / sobra / falta y por cuánto), usuario que hizo el cierre.
 
-**Regla de cálculo (corregida en QA):** el "efectivo esperado" es ventas en efectivo menos **solo los egresos pagados en efectivo** — un egreso pagado por transferencia, cheque o echeq no debe descontarse del cajón físico, aunque sí forma parte del total general de egresos que se muestra como referencia.
+**Regla de cálculo (corregida en QA):** el "efectivo esperado" es el monto real de apertura del período más ventas en efectivo menos **solo los egresos pagados en efectivo** — un egreso pagado por transferencia, cheque o echeq no debe descontarse del cajón físico, aunque sí forma parte del total general de egresos que se muestra como referencia.
 
 **Regla de impacto en cuentas (corregida en QA — evita un doble conteo real que hubo):** cada egreso descuenta su cuenta **en el momento en que se registra** (vía `registrar_pago_proveedor` o `registrar_egreso_general`), nunca de nuevo al validar el Cierre Z. `validar_cierre_z` solo vuelca **transferencia, QR y tarjeta** del día a las cuentas — los egresos ya impactaron antes.
 

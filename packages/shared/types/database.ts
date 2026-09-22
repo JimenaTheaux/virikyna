@@ -16,6 +16,7 @@ export type FormaPagoVenta =
   | 'tarjeta_debito'
   | 'tarjeta_credito'
   | 'cuenta_corriente'
+  | 'combinado'
 export type EstadoComprobante = 'sin_facturar' | 'facturado' | 'anulada'
 export type TipoComprobanteCompra = 'factura' | 'remito' | 'cupon' | 'nota_credito' | 'nota_debito'
 export type LetraComprobanteCompra = 'A' | 'B' | 'R' | 'X'
@@ -180,9 +181,10 @@ export type Venta = {
   id: string
   numero: number
   cliente_id: string | null // null = consumidor final
-  forma_pago: FormaPagoVenta
+  forma_pago: FormaPagoVenta // 'combinado' = ver detalle en VentaPago (venta_pagos)
   subtotal: number
   descuento_porcentaje: number
+  recargo_porcentaje: number
   total: number
   estado: EstadoComprobante
   nota: string | null
@@ -199,6 +201,15 @@ export type VentaItem = {
   precio_unitario: number // snapshot del precio al momento de vender
   descuento_porcentaje: number
   importe: number
+}
+
+export type VentaPago = {
+  id: string
+  venta_id: string
+  forma_pago: FormaPagoVenta // nunca 'cuenta_corriente' ni 'combinado' acá
+  monto: number
+  usuario_id: string
+  created_at: string
 }
 
 export type FacturaC = {
@@ -288,6 +299,26 @@ export type CierreCaja = {
   validado_por: string | null
   validado_at: string | null
   usuario_id: string
+  apertura_id: string | null // docs/21: apertura de caja vigente al momento de este cierre (X o Z)
+  created_at: string
+}
+
+// Apertura de caja (docs/21_apertura_caja.sql) — arranca cada período de caja hasta el próximo
+// Cierre Z. monto_esperado sale del efectivo_contado del último Cierre Z (0 si todavía no hubo
+// ninguno); monto_real es lo que el cajero confirmó o corrigió que tiene físicamente. Ese
+// monto_real pasa a ser la base de efectivo_esperado en cerrar_caja. Solo puede existir una fila
+// con cierre_z_id null a la vez (índice único parcial) — no se puede reabrir mientras hay una
+// caja abierta. Se "cierra" (cierre_z_id dejar de ser null) automáticamente al hacer el próximo
+// Cierre Z, dentro de la misma transacción de cerrar_caja.
+export type AperturaCaja = {
+  id: string
+  cierre_z_previo_id: string | null // Cierre Z del que sale monto_esperado; null en la primera apertura del sistema
+  monto_esperado: number
+  monto_real: number
+  diferencia: number // monto_real - monto_esperado
+  cierre_z_id: string | null // null mientras la caja sigue abierta
+  usuario_id: string // quien abrió
+  abierta_at: string
   created_at: string
 }
 

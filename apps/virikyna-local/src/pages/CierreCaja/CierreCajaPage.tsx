@@ -8,7 +8,7 @@ import { CierreDetalleModal } from './CierreDetalleModal'
 import { RegistrarEgresoModal } from './RegistrarEgresoModal'
 import { RegistrarRetiroModal } from './RegistrarRetiroModal'
 import { ConfirmarCierreZModal } from './ConfirmarCierreZModal'
-import type { CierreCaja, Egreso, RetiroCaja } from '@virikyna/shared'
+import type { AperturaCaja, CierreCaja, Egreso, RetiroCaja } from '@virikyna/shared'
 import type { CierreCajaConUsuario, EgresoConUsuario, RetiroConNombres } from './types'
 
 export function CierreCajaPage() {
@@ -45,24 +45,42 @@ export function CierreCajaPage() {
     const egresosSinUsuario = (egresosRes.data ?? []) as unknown as Egreso[]
     const retirosSinNombres = (retirosRes.data ?? []) as unknown as RetiroCaja[]
 
+    const aperturaIds = Array.from(
+      new Set(cierresSinUsuario.map((c) => c.apertura_id).filter((id): id is string => Boolean(id))),
+    )
+    const aperturasRes =
+      aperturaIds.length > 0
+        ? await supabase.from('aperturas_caja').select('*').in('id', aperturaIds)
+        : { data: [] as AperturaCaja[], error: null }
+    const aperturaPorId = new Map(
+      ((aperturasRes.data ?? []) as unknown as AperturaCaja[]).map((a) => [a.id, a]),
+    )
+
     const nombrePorUsuario = await nombresPorId(supabase, [
       ...cierresSinUsuario.flatMap((c) => [c.usuario_id, c.validado_por]),
       ...egresosSinUsuario.map((e) => e.usuario_id),
       ...retirosSinNombres.flatMap((r) => [r.cajero_id, r.admin_receptor_id]),
+      ...Array.from(aperturaPorId.values()).map((a) => a.usuario_id),
     ])
 
     if (cierresRes.error) {
       setError(friendlyError(cierresRes.error))
     } else {
       setCierres(
-        cierresSinUsuario.map((c) => ({
-          ...c,
-          usuario: nombrePorUsuario.has(c.usuario_id) ? { nombre: nombrePorUsuario.get(c.usuario_id)! } : null,
-          validador:
-            c.validado_por && nombrePorUsuario.has(c.validado_por)
-              ? { nombre: nombrePorUsuario.get(c.validado_por)! }
+        cierresSinUsuario.map((c) => {
+          const apertura = c.apertura_id ? aperturaPorId.get(c.apertura_id) ?? null : null
+          return {
+            ...c,
+            usuario: nombrePorUsuario.has(c.usuario_id) ? { nombre: nombrePorUsuario.get(c.usuario_id)! } : null,
+            validador:
+              c.validado_por && nombrePorUsuario.has(c.validado_por)
+                ? { nombre: nombrePorUsuario.get(c.validado_por)! }
+                : null,
+            apertura: apertura
+              ? { ...apertura, usuarioNombre: nombrePorUsuario.get(apertura.usuario_id) ?? null }
               : null,
-        })),
+          }
+        }),
       )
     }
     if (!egresosRes.error) {

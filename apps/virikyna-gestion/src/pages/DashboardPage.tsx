@@ -4,6 +4,7 @@ import { IconCajaGestion, IconInventario, IconProveedores } from '../components/
 import { fechaISO, formatCurrency, friendlyError } from '@virikyna/shared'
 import { fetchProductosStockBajo, fetchVentasUltimosDias } from './Dashboard/queries'
 import { WeeklySalesChart } from './Dashboard/WeeklySalesChart'
+import { AperturasAlerta } from './Dashboard/AperturasAlerta'
 import type { ProductoStockBajo, VentaDelDia } from './Dashboard/types'
 
 const ACCESOS_RAPIDOS = [
@@ -55,6 +56,8 @@ export function DashboardPage() {
       </div>
 
       {error && <p className="rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>}
+
+      <AperturasAlerta />
 
       <div className="grid grid-cols-4 gap-gutter-grid">
         <div className="col-span-2 rounded-lg bg-surface p-card shadow-sm">
