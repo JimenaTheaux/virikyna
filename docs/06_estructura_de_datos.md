@@ -26,7 +26,9 @@ CREATE TYPE estado_producto AS ENUM ('activo', 'inactivo');
 
 CREATE TYPE ubicacion_stock AS ENUM ('local', 'deposito');
 
-CREATE TYPE forma_pago_venta AS ENUM ('efectivo', 'transferencia', 'qr', 'tarjeta_debito', 'tarjeta_credito', 'cuenta_corriente');
+CREATE TYPE forma_pago_venta AS ENUM ('efectivo', 'transferencia', 'qr', 'tarjeta_debito', 'tarjeta_credito', 'cuenta_corriente', 'combinado');
+-- 'combinado': la venta se pagó con hasta 2 medios distintos — el detalle de cuánto fue a cada
+-- uno vive en venta_pagos (ver tabla más abajo), nunca en cuenta corriente (docs/22).
 
 CREATE TYPE estado_comprobante AS ENUM ('sin_facturar', 'facturado', 'anulada');
 
@@ -225,6 +227,7 @@ CREATE TABLE ventas (
   forma_pago forma_pago_venta NOT NULL,
   subtotal NUMERIC(12,2) NOT NULL,
   descuento_porcentaje NUMERIC(5,2) NOT NULL DEFAULT 0,
+  recargo_porcentaje NUMERIC(5,2) NOT NULL DEFAULT 0,
   total NUMERIC(12,2) NOT NULL,
   estado estado_comprobante NOT NULL DEFAULT 'sin_facturar',
   nota TEXT,
@@ -246,6 +249,21 @@ CREATE TABLE venta_items (
   descuento_porcentaje NUMERIC(5,2) NOT NULL DEFAULT 0,
   importe NUMERIC(12,2) NOT NULL
 );
+
+-- Detalle de pagos combinados (docs/22) — 1 fila = 1 medio de pago de la venta. Se puebla para
+-- TODA venta que no sea cuenta corriente: 1 fila si es pago simple (el total completo), 2 si es
+-- combinado. Cuenta corriente queda afuera — sigue sin combinarse con otro medio.
+CREATE TABLE venta_pagos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  venta_id UUID NOT NULL REFERENCES ventas(id) ON DELETE CASCADE,
+  forma_pago forma_pago_venta NOT NULL,
+  monto NUMERIC(12,2) NOT NULL,
+  usuario_id UUID NOT NULL REFERENCES perfiles(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE venta_pagos ADD CONSTRAINT chk_venta_pagos_no_cta_cte
+  CHECK (forma_pago NOT IN ('cuenta_corriente', 'combinado'));
+ALTER TABLE venta_pagos ADD CONSTRAINT chk_venta_pagos_monto_positivo CHECK (monto > 0);
 
 -- Factura C — 1:1 con la venta
 CREATE TABLE facturas_c (
@@ -331,7 +349,7 @@ CREATE TABLE pagos_cliente (
   usuario_id UUID NOT NULL REFERENCES perfiles(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-ALTER TABLE pagos_cliente ADD CONSTRAINT chk_pago_cliente_forma_pago CHECK (forma_pago <> 'cuenta_corriente');
+ALTER TABLE pagos_cliente ADD CONSTRAINT chk_pago_cliente_forma_pago CHECK (forma_pago NOT IN ('cuenta_corriente', 'combinado'));
 -- No tiene sentido "pagar la cuenta corriente... con cuenta corriente" — siempre es plata real entrando.
 
 -- Cierres de caja (X y Z)
@@ -345,6 +363,7 @@ CREATE TABLE cierres_caja (
   total_tarjeta NUMERIC(12,2) NOT NULL DEFAULT 0,
   total_cuenta_corriente NUMERIC(12,2) NOT NULL DEFAULT 0,
   total_egresos NUMERIC(12,2) NOT NULL DEFAULT 0,
+  total_retiros NUMERIC(12,2) NOT NULL DEFAULT 0,  -- docs/17: retiros de efectivo del día
   efectivo_esperado NUMERIC(12,2) NOT NULL DEFAULT 0,
   efectivo_contado NUMERIC(12,2),
   diferencia NUMERIC(12,2),
@@ -380,6 +399,7 @@ CREATE INDEX idx_productos_estado ON productos(estado);
 CREATE INDEX idx_ventas_estado ON ventas(estado);
 CREATE INDEX idx_ventas_created_at ON ventas(created_at);
 CREATE INDEX idx_ventas_cliente ON ventas(cliente_id);
+CREATE INDEX idx_venta_pagos_venta ON venta_pagos(venta_id);
 CREATE INDEX idx_movimientos_stock_producto ON movimientos_stock(producto_id);
 CREATE INDEX idx_facturas_compra_proveedor ON facturas_compra(proveedor_id);
 CREATE INDEX idx_cierres_caja_fecha ON cierres_caja(turno_fecha, tipo);
@@ -404,6 +424,11 @@ GRANT SELECT ON perfiles_publico TO authenticated;
 -- Tablas operativas: admin y cajero acceden por igual salvo excepciones puntuales
 ALTER TABLE ventas ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "ventas_todos" ON ventas FOR ALL USING (
+  EXISTS (SELECT 1 FROM perfiles WHERE id = auth.uid() AND activo = true)
+);
+
+ALTER TABLE venta_pagos ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "venta_pagos_todos" ON venta_pagos FOR ALL USING (
   EXISTS (SELECT 1 FROM perfiles WHERE id = auth.uid() AND activo = true)
 );
 
@@ -575,30 +600,34 @@ ALTER TYPE estado_comprobante ADD VALUE IF NOT EXISTS 'anulada';
 
 -- ============================================================
 -- 1. confirmar_venta
+-- Descuento y recargo (docs/20) son porcentajes multiplicativos sobre el mismo subtotal.
+-- p_pagos (docs/22) es opcional: sin él, pago simple por p_forma_pago de siempre. Con él (hasta
+-- 2 medios, sin cuenta corriente, suma exacta al total), la venta queda forma_pago='combinado'
+-- y el detalle por medio se guarda en venta_pagos.
 -- ============================================================
 CREATE OR REPLACE FUNCTION confirmar_venta(
   p_cliente_id UUID,
   p_forma_pago forma_pago_venta,
   p_items JSONB,  -- [{"producto_id":"...", "cantidad":1, "precio_unitario":12500, "descuento_porcentaje":0}]
   p_descuento_porcentaje NUMERIC DEFAULT 0,
-  p_nota TEXT DEFAULT NULL
+  p_nota TEXT DEFAULT NULL,
+  p_recargo_porcentaje NUMERIC DEFAULT 0,
+  p_pagos JSONB DEFAULT NULL  -- [{"forma_pago":"efectivo","monto":500},{"forma_pago":"tarjeta_credito","monto":1000}]
 ) RETURNS UUID
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
 DECLARE
   v_venta_id UUID;
   v_item JSONB;
+  v_pago JSONB;
   v_subtotal NUMERIC := 0;
   v_total NUMERIC;
   v_importe NUMERIC;
+  v_forma_pago_final forma_pago_venta;
+  v_suma_pagos NUMERIC;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM perfiles WHERE id = auth.uid() AND activo = true) THEN
     RAISE EXCEPTION 'Usuario no autorizado';
-  END IF;
-
-  -- Corregido en QA: mensaje claro antes de chocar con el CHECK del schema
-  IF p_forma_pago = 'cuenta_corriente' AND p_cliente_id IS NULL THEN
-    RAISE EXCEPTION 'Una venta a cuenta corriente necesita un cliente asignado';
   END IF;
 
   SELECT COALESCE(SUM((i->>'cantidad')::NUMERIC * (i->>'precio_unitario')::NUMERIC
@@ -606,11 +635,52 @@ BEGIN
   INTO v_subtotal
   FROM jsonb_array_elements(p_items) AS i;
 
-  v_total := ROUND(v_subtotal * (1 - COALESCE(p_descuento_porcentaje,0)/100.0), 2);
+  v_total := ROUND(v_subtotal * (1 - COALESCE(p_descuento_porcentaje,0)/100.0)
+                    * (1 + COALESCE(p_recargo_porcentaje,0)/100.0), 2);
 
-  INSERT INTO ventas (cliente_id, forma_pago, subtotal, descuento_porcentaje, total, nota, usuario_id)
-  VALUES (p_cliente_id, p_forma_pago, v_subtotal, COALESCE(p_descuento_porcentaje,0), v_total, p_nota, auth.uid())
+  IF p_pagos IS NOT NULL AND jsonb_array_length(p_pagos) > 0 THEN
+    IF jsonb_array_length(p_pagos) > 2 THEN
+      RAISE EXCEPTION 'Un pago combinado admite hasta 2 medios de pago';
+    END IF;
+    IF EXISTS (
+      SELECT 1 FROM jsonb_array_elements(p_pagos) AS p
+      WHERE (p->>'forma_pago') IN ('cuenta_corriente', 'combinado')
+    ) THEN
+      RAISE EXCEPTION 'La cuenta corriente no puede combinarse con otro medio de pago';
+    END IF;
+    SELECT COALESCE(SUM((p->>'monto')::NUMERIC), 0) INTO v_suma_pagos FROM jsonb_array_elements(p_pagos) AS p;
+    IF ROUND(v_suma_pagos, 2) <> v_total THEN
+      RAISE EXCEPTION 'La suma de los pagos (%) no coincide con el total de la venta (%)', v_suma_pagos, v_total;
+    END IF;
+    v_forma_pago_final := CASE WHEN jsonb_array_length(p_pagos) = 1
+      THEN (p_pagos->0->>'forma_pago')::forma_pago_venta
+      ELSE 'combinado'::forma_pago_venta END;
+  ELSE
+    v_forma_pago_final := p_forma_pago;
+  END IF;
+
+  -- Corregido en QA: mensaje claro antes de chocar con el CHECK del schema
+  IF v_forma_pago_final = 'cuenta_corriente' AND p_cliente_id IS NULL THEN
+    RAISE EXCEPTION 'Una venta a cuenta corriente necesita un cliente asignado';
+  END IF;
+
+  INSERT INTO ventas (cliente_id, forma_pago, subtotal, descuento_porcentaje, recargo_porcentaje, total, nota, usuario_id)
+  VALUES (p_cliente_id, v_forma_pago_final, v_subtotal, COALESCE(p_descuento_porcentaje,0),
+          COALESCE(p_recargo_porcentaje,0), v_total, p_nota, auth.uid())
   RETURNING id INTO v_venta_id;
+
+  IF v_forma_pago_final <> 'cuenta_corriente' THEN
+    IF p_pagos IS NOT NULL AND jsonb_array_length(p_pagos) > 0 THEN
+      FOR v_pago IN SELECT * FROM jsonb_array_elements(p_pagos)
+      LOOP
+        INSERT INTO venta_pagos (venta_id, forma_pago, monto, usuario_id)
+        VALUES (v_venta_id, (v_pago->>'forma_pago')::forma_pago_venta, (v_pago->>'monto')::NUMERIC, auth.uid());
+      END LOOP;
+    ELSE
+      INSERT INTO venta_pagos (venta_id, forma_pago, monto, usuario_id)
+      VALUES (v_venta_id, v_forma_pago_final, v_total, auth.uid());
+    END IF;
+  END IF;
 
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
   LOOP
@@ -871,6 +941,7 @@ DECLARE
   v_total_cuenta_corriente NUMERIC;
   v_total_egresos NUMERIC;          -- total general, todas las formas, para mostrar en el resumen
   v_total_egresos_efectivo NUMERIC; -- corregido en QA: solo esto resta del cajón físico
+  v_total_retiros NUMERIC;          -- docs/17: retiros de efectivo del día — también salen del cajón físico
   v_efectivo_esperado NUMERIC;
   v_diferencia NUMERIC;
 BEGIN
@@ -878,14 +949,21 @@ BEGIN
     RAISE EXCEPTION 'Usuario no autorizado';
   END IF;
 
-  SELECT COALESCE(SUM(total) FILTER (WHERE forma_pago = 'efectivo'), 0),
-         COALESCE(SUM(total) FILTER (WHERE forma_pago = 'transferencia'), 0),
-         COALESCE(SUM(total) FILTER (WHERE forma_pago = 'qr'), 0),
-         COALESCE(SUM(total) FILTER (WHERE forma_pago IN ('tarjeta_debito','tarjeta_credito')), 0),
-         COALESCE(SUM(total) FILTER (WHERE forma_pago = 'cuenta_corriente'), 0)
-  INTO v_total_efectivo, v_total_transferencia, v_total_qr, v_total_tarjeta, v_total_cuenta_corriente
+  -- Efectivo/transferencia/QR/tarjeta salen del detalle por parte (venta_pagos, docs/22) — no de
+  -- ventas.total, que en una venta combinada no pertenece a un solo medio.
+  SELECT COALESCE(SUM(vp.monto) FILTER (WHERE vp.forma_pago = 'efectivo'), 0),
+         COALESCE(SUM(vp.monto) FILTER (WHERE vp.forma_pago = 'transferencia'), 0),
+         COALESCE(SUM(vp.monto) FILTER (WHERE vp.forma_pago = 'qr'), 0),
+         COALESCE(SUM(vp.monto) FILTER (WHERE vp.forma_pago IN ('tarjeta_debito','tarjeta_credito')), 0)
+  INTO v_total_efectivo, v_total_transferencia, v_total_qr, v_total_tarjeta
+  FROM venta_pagos vp
+  JOIN ventas v ON v.id = vp.venta_id
+  WHERE v.created_at::date = current_date AND v.estado <> 'anulada';
+
+  -- Cuenta corriente sigue sin combinarse — se sigue leyendo directo de ventas.total
+  SELECT COALESCE(SUM(total), 0) INTO v_total_cuenta_corriente
   FROM ventas
-  WHERE created_at::date = current_date AND estado <> 'anulada';
+  WHERE created_at::date = current_date AND estado <> 'anulada' AND forma_pago = 'cuenta_corriente';
 
   SELECT COALESCE(SUM(monto), 0) INTO v_total_egresos
   FROM egresos WHERE created_at::date = current_date;
@@ -893,14 +971,17 @@ BEGIN
   SELECT COALESCE(SUM(monto), 0) INTO v_total_egresos_efectivo
   FROM egresos WHERE created_at::date = current_date AND forma_pago = 'efectivo';
 
-  v_efectivo_esperado := v_total_efectivo - v_total_egresos_efectivo;
+  SELECT COALESCE(SUM(monto), 0) INTO v_total_retiros
+  FROM retiros_caja WHERE fecha = current_date;
+
+  v_efectivo_esperado := v_total_efectivo - v_total_egresos_efectivo - v_total_retiros;
   v_diferencia := CASE WHEN p_efectivo_contado IS NOT NULL THEN p_efectivo_contado - v_efectivo_esperado ELSE NULL END;
 
   INSERT INTO cierres_caja (tipo, turno_fecha, total_efectivo, total_transferencia, total_qr, total_tarjeta,
-         total_cuenta_corriente, total_egresos, efectivo_esperado, efectivo_contado, diferencia,
+         total_cuenta_corriente, total_egresos, total_retiros, efectivo_esperado, efectivo_contado, diferencia,
          estado_validacion, usuario_id)
   VALUES (p_tipo, current_date, v_total_efectivo, v_total_transferencia, v_total_qr, v_total_tarjeta,
-         v_total_cuenta_corriente, v_total_egresos, v_efectivo_esperado, p_efectivo_contado, v_diferencia,
+         v_total_cuenta_corriente, v_total_egresos, v_total_retiros, v_efectivo_esperado, p_efectivo_contado, v_diferencia,
          CASE WHEN p_tipo = 'z' THEN 'pendiente_validacion'::estado_cierre_z ELSE NULL END, auth.uid())
   RETURNING id INTO v_cierre_id;
 
@@ -1347,7 +1428,7 @@ Ambas vistas heredan el RLS de las tablas que consultan — no hace falta polít
 export type RolUsuario = 'admin' | 'cajero'
 export type EstadoProducto = 'activo' | 'inactivo'
 export type UbicacionStock = 'local' | 'deposito'
-export type FormaPagoVenta = 'efectivo' | 'transferencia' | 'qr' | 'tarjeta_debito' | 'tarjeta_credito' | 'cuenta_corriente'
+export type FormaPagoVenta = 'efectivo' | 'transferencia' | 'qr' | 'tarjeta_debito' | 'tarjeta_credito' | 'cuenta_corriente' | 'combinado'
 export type EstadoComprobante = 'sin_facturar' | 'facturado' | 'anulada'
 
 export type Producto = {
@@ -1380,13 +1461,23 @@ export type Venta = {
   id: string
   numero: number
   cliente_id: string | null   // null = consumidor final
-  forma_pago: FormaPagoVenta
+  forma_pago: FormaPagoVenta  // 'combinado' = ver detalle en VentaPago (venta_pagos)
   subtotal: number
   descuento_porcentaje: number
+  recargo_porcentaje: number
   total: number
   estado: EstadoComprobante
   nota: string | null
   terminal_id: string
+  usuario_id: string
+  created_at: string
+}
+
+export type VentaPago = {
+  id: string
+  venta_id: string
+  forma_pago: FormaPagoVenta  // nunca 'cuenta_corriente' ni 'combinado' acá
+  monto: number
   usuario_id: string
   created_at: string
 }

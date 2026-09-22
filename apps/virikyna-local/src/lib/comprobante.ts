@@ -19,9 +19,11 @@ export type DatosComprobante = {
   clienteMail: string | null
   clienteCelular: string | null
   formaPago: FormaPagoVenta
+  pagos?: { formaPago: FormaPagoVenta; monto: number }[] // solo con más de 1 elemento = pago combinado
   items: ItemComprobante[]
   subtotal: number
   descuentoPorcentaje: number
+  recargoPorcentaje: number
   total: number
   cae: string | null
 }
@@ -33,6 +35,19 @@ export const FORMA_PAGO_LABEL: Record<FormaPagoVenta, string> = {
   tarjeta_debito: 'Tarjeta débito',
   tarjeta_credito: 'Tarjeta crédito',
   cuenta_corriente: 'Cuenta corriente',
+  combinado: 'Pago combinado',
+}
+
+// Una línea si es pago simple ("Forma de pago: Efectivo"), o el encabezado + una línea por
+// cada parte si es combinado — usado por pantalla, PDF e imagen del comprobante.
+export function lineasFormaPago(datos: DatosComprobante): string[] {
+  if (datos.pagos && datos.pagos.length > 1) {
+    return [
+      `Forma de pago: ${FORMA_PAGO_LABEL[datos.formaPago]}`,
+      ...datos.pagos.map((p) => `  ${FORMA_PAGO_LABEL[p.formaPago]}: ${formatCurrency(p.monto)}`),
+    ]
+  }
+  return [`Forma de pago: ${FORMA_PAGO_LABEL[datos.formaPago]}`]
 }
 
 // wa.me exige solo dígitos con código de país, sin "+" — Argentina es 54.

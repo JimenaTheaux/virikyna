@@ -1,6 +1,6 @@
 import { cargarImagen, formatCurrency } from '@virikyna/shared'
 import virikynaWordmark from '@virikyna/shared/src/assets/virikyna-wordmark.png'
-import { FORMA_PAGO_LABEL, type DatosComprobante } from './comprobante'
+import { lineasFormaPago, type DatosComprobante } from './comprobante'
 
 // Mismo layout tipo ticket que el PDF (ver pdf.ts), pero dibujado en un canvas 2D y exportado
 // como JPG — para WhatsApp el comprobante se manda como imagen, no como PDF, así que se genera
@@ -16,7 +16,8 @@ function mm(valor: number): number {
 }
 
 export async function generarJpgComprobante(datos: DatosComprobante): Promise<Blob> {
-  const altoMm = 62 + datos.items.length * 5 + 25
+  const lineasPago = lineasFormaPago(datos)
+  const altoMm = 62 + datos.items.length * 5 + 29 + (lineasPago.length - 1) * 4
   const canvas = document.createElement('canvas')
   canvas.width = ANCHO_PX
   canvas.height = mm(altoMm)
@@ -50,8 +51,10 @@ export async function generarJpgComprobante(datos: DatosComprobante): Promise<Bl
   y += mm(4)
   ctx.fillText(`Cliente: ${datos.clienteNombre}`, MARGEN_PX, y)
   y += mm(4)
-  ctx.fillText(`Forma de pago: ${FORMA_PAGO_LABEL[datos.formaPago]}`, MARGEN_PX, y)
-  y += mm(4)
+  for (const linea of lineasPago) {
+    ctx.fillText(linea, MARGEN_PX, y)
+    y += mm(4)
+  }
   if (datos.tipo === 'factura_c' && datos.cae) {
     ctx.fillText(`CAE: ${datos.cae}`, MARGEN_PX, y)
     y += mm(4)
@@ -88,6 +91,10 @@ export async function generarJpgComprobante(datos: DatosComprobante): Promise<Bl
   y += mm(4)
   if (datos.descuentoPorcentaje > 0) {
     ctx.fillText(`Descuento: ${datos.descuentoPorcentaje}%`, ANCHO_PX - MARGEN_PX, y)
+    y += mm(4)
+  }
+  if (datos.recargoPorcentaje > 0) {
+    ctx.fillText(`Recargo: ${datos.recargoPorcentaje}%`, ANCHO_PX - MARGEN_PX, y)
     y += mm(4)
   }
   ctx.font = `bold ${mm(3.5)}px helvetica, sans-serif`

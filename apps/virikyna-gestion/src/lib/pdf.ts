@@ -1,6 +1,6 @@
 import { cargarImagen, formatCurrency } from '@virikyna/shared'
 import virikynaWordmark from '@virikyna/shared/src/assets/virikyna-wordmark.png'
-import { FORMA_PAGO_LABEL, type DatosComprobante } from './comprobante'
+import { lineasFormaPago, type DatosComprobante } from './comprobante'
 
 const ANCHO_MM = 80
 const MARGEN = 5
@@ -9,7 +9,8 @@ const MARGEN = 5
 // ~400kb al bundle — se carga solo cuando hace falta un PDF, no en el chunk principal de la app.
 export async function generarPdfComprobante(datos: DatosComprobante) {
   const { jsPDF } = await import('jspdf')
-  const alto = 62 + datos.items.length * 5 + 25
+  const lineasPago = lineasFormaPago(datos)
+  const alto = 62 + datos.items.length * 5 + 29 + (lineasPago.length - 1) * 4
   const doc = new jsPDF({ unit: 'mm', format: [ANCHO_MM, alto] })
   const centro = ANCHO_MM / 2
   let y = 4
@@ -33,8 +34,10 @@ export async function generarPdfComprobante(datos: DatosComprobante) {
   y += 4
   doc.text(`Cliente: ${datos.clienteNombre}`, MARGEN, y)
   y += 4
-  doc.text(`Forma de pago: ${FORMA_PAGO_LABEL[datos.formaPago]}`, MARGEN, y)
-  y += 4
+  for (const linea of lineasPago) {
+    doc.text(linea, MARGEN, y)
+    y += 4
+  }
   if (datos.tipo === 'factura_c' && datos.cae) {
     doc.text(`CAE: ${datos.cae}`, MARGEN, y)
     y += 4
@@ -66,6 +69,10 @@ export async function generarPdfComprobante(datos: DatosComprobante) {
   y += 4
   if (datos.descuentoPorcentaje > 0) {
     doc.text(`Descuento: ${datos.descuentoPorcentaje}%`, ANCHO_MM - MARGEN, y, { align: 'right' })
+    y += 4
+  }
+  if (datos.recargoPorcentaje > 0) {
+    doc.text(`Recargo: ${datos.recargoPorcentaje}%`, ANCHO_MM - MARGEN, y, { align: 'right' })
     y += 4
   }
   doc.setFont('helvetica', 'bold')

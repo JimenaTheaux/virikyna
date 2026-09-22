@@ -3,7 +3,7 @@ import { Modal } from './Modal'
 import { Field, inputClass } from './FormField'
 import { formatCurrency } from '@virikyna/shared'
 import {
-  FORMA_PAGO_LABEL,
+  lineasFormaPago,
   linkGmail,
   linkWhatsApp,
   mensajeEnvio,
@@ -69,7 +69,9 @@ export function ComprobanteModal({ datos, onClose, footer }: Props) {
           <div>
             <p>N°: {datos.numero}</p>
             <p>Cliente: {datos.clienteNombre}</p>
-            <p>Forma de pago: {FORMA_PAGO_LABEL[datos.formaPago]}</p>
+            {lineasFormaPago(datos).map((linea, i) => (
+              <p key={i}>{linea}</p>
+            ))}
             {datos.tipo === 'factura_c' && datos.cae && <p>CAE: {datos.cae}</p>}
           </div>
           <p>{new Date(datos.fecha).toLocaleString('es-AR')}</p>
@@ -99,6 +101,7 @@ export function ComprobanteModal({ datos, onClose, footer }: Props) {
         <div className="flex flex-col items-end gap-1 font-sans text-body-md text-ink-soft">
           <p>Subtotal: {formatCurrency(datos.subtotal)}</p>
           {datos.descuentoPorcentaje > 0 && <p>Descuento: {datos.descuentoPorcentaje}%</p>}
+          {datos.recargoPorcentaje > 0 && <p>Recargo: {datos.recargoPorcentaje}%</p>}
           <p className="font-display text-headline-md text-accent-darker">Total: {formatCurrency(datos.total)}</p>
         </div>
 

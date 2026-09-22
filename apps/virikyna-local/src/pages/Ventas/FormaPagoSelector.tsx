@@ -14,9 +14,10 @@ type Props = {
   value: FormaPagoVenta | null
   disponibleCuentaCorriente: boolean
   onChange: (value: FormaPagoVenta) => void
+  onCombinado: () => void
 }
 
-export function FormaPagoSelector({ value, disponibleCuentaCorriente, onChange }: Props) {
+export function FormaPagoSelector({ value, disponibleCuentaCorriente, onChange, onCombinado }: Props) {
   return (
     <div>
       <p className="font-sans text-label-bold text-ink-soft">Forma de pago</p>
@@ -42,6 +43,16 @@ export function FormaPagoSelector({ value, disponibleCuentaCorriente, onChange }
             </button>
           )
         })}
+        <button
+          type="button"
+          onClick={onCombinado}
+          className={[
+            'col-span-2 flex items-center justify-center rounded-lg border px-3 py-2.5 font-sans text-label-bold transition',
+            value === 'combinado' ? 'border-accent bg-accent text-white' : 'border-line bg-surface text-ink-soft hover:border-accent',
+          ].join(' ')}
+        >
+          Pago combinado
+        </button>
       </div>
     </div>
   )

@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { friendlyError } from '../../lib/supabaseErrors'
 import { formatCurrency, fechaHoyISO } from '../../lib/format'
 import { emitirFacturaCReal } from '../../lib/arcaFacturacion'
-import type { Cliente, FacturaC, FormaPagoVenta, Producto, Venta, VentaItem } from '../../types/database'
+import type { Cliente, FacturaC, FormaPagoVenta, Producto, Venta, VentaItem, VentaPago } from '../../types/database'
 
 export type VentaConFactura = Venta & {
   factura_c: FacturaC | null
@@ -22,6 +22,7 @@ export type DatosComprobante = {
   clienteMail: string | null
   clienteCelular: string | null
   formaPago: FormaPagoVenta
+  pagos?: { formaPago: FormaPagoVenta; monto: number }[] // solo con más de 1 elemento = pago combinado
   items: { nombre: string; codigo: string; cantidad: number; precioUnitario: number; importe: number }[]
   subtotal: number
   descuentoPorcentaje: number
@@ -96,6 +97,18 @@ export function VentasDelDiaTab({
       .eq('venta_id', venta.id)
     const items = (itemsData ?? []) as unknown as VentaItemConProducto[]
 
+    let pagos: { formaPago: FormaPagoVenta; monto: number }[] | undefined
+    if (venta.forma_pago === 'combinado') {
+      const { data: pagosData } = await supabase
+        .from('venta_pagos')
+        .select('forma_pago, monto')
+        .eq('venta_id', venta.id)
+      pagos = ((pagosData ?? []) as unknown as Pick<VentaPago, 'forma_pago' | 'monto'>[]).map((p) => ({
+        formaPago: p.forma_pago,
+        monto: p.monto,
+      }))
+    }
+
     const clienteNombre = venta.cliente
       ? venta.cliente.razon_social ?? venta.cliente.nombre_fantasia ?? 'Cliente'
       : 'Consumidor final'
@@ -110,6 +123,7 @@ export function VentasDelDiaTab({
       clienteMail: venta.cliente?.mail ?? null,
       clienteCelular: venta.cliente?.celular ?? null,
       formaPago: venta.forma_pago,
+      pagos,
       items: items.map((it) => ({
         nombre: it.producto?.nombre ?? 'Producto',
         codigo: it.producto?.codigo_barras ?? it.producto?.codigo_interno ?? '',

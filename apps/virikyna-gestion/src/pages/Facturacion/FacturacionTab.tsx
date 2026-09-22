@@ -106,6 +106,15 @@ export function FacturacionTab() {
       .eq('venta_id', venta.id)
     const items = (itemsData ?? []) as unknown as VentaItemConProducto[]
 
+    let pagos: { formaPago: FormaPagoVenta; monto: number }[] | undefined
+    if (venta.forma_pago === 'combinado') {
+      const { data: pagosData } = await supabase
+        .from('venta_pagos')
+        .select('forma_pago, monto')
+        .eq('venta_id', venta.id)
+      pagos = (pagosData ?? []).map((p) => ({ formaPago: p.forma_pago as FormaPagoVenta, monto: p.monto as number }))
+    }
+
     const clienteNombre = venta.cliente
       ? venta.cliente.razon_social ?? venta.cliente.nombre_fantasia ?? 'Cliente'
       : 'Consumidor final'
@@ -120,6 +129,7 @@ export function FacturacionTab() {
       clienteMail: venta.cliente?.mail ?? null,
       clienteCelular: venta.cliente?.celular ?? null,
       formaPago: venta.forma_pago,
+      pagos,
       items: items.map((it) => ({
         nombre: it.producto?.nombre ?? 'Producto',
         codigo: it.producto?.codigo_barras ?? it.producto?.codigo_interno ?? '',

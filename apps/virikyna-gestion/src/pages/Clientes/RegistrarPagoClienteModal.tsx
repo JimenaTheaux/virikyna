@@ -14,10 +14,10 @@ type Props = {
   onSaved: () => void
 }
 
-// Cobro de cuenta corriente: siempre es plata real entrando, nunca "cuenta_corriente" como
-// forma de pago (docs/06_estructura_de_datos.md, constraint chk_pago_cliente_forma_pago).
+// Cobro de cuenta corriente: siempre es plata real entrando por un solo medio, nunca
+// "cuenta_corriente" ni "combinado" (docs/06_estructura_de_datos.md, constraint chk_pago_cliente_forma_pago).
 const FORMAS_PAGO_COBRO = (Object.keys(FORMA_PAGO_LABEL) as FormaPagoVenta[]).filter(
-  (fp) => fp !== 'cuenta_corriente',
+  (fp) => fp !== 'cuenta_corriente' && fp !== 'combinado',
 )
 
 export function RegistrarPagoClienteModal({ cliente, ventasCuentaCorriente, onClose, onSaved }: Props) {

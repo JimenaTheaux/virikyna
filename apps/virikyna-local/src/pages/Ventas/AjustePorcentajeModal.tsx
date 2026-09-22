@@ -4,12 +4,17 @@ import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field, ErrorText, inputClass } from '../../components/FormField'
 
 type Props = {
+  titulo: string
+  etiqueta: string
   valorActual: number
+  max: number
   onClose: () => void
   onAplicar: (porcentaje: number) => void
 }
 
-export function DescuentoModal({ valorActual, onClose, onAplicar }: Props) {
+// Modal genérico de porcentaje sobre el total de la venta — usado tanto por Descuento (D) como
+// por Recargo (R), que son simétricos salvo el título, la etiqueta y el tope de validación.
+export function AjustePorcentajeModal({ titulo, etiqueta, valorActual, max, onClose, onAplicar }: Props) {
   const [valor, setValor] = useState(valorActual ? String(valorActual) : '')
   const [error, setError] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
@@ -26,8 +31,8 @@ export function DescuentoModal({ valorActual, onClose, onAplicar }: Props) {
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
     const num = Number(valor) || 0
-    if (num < 0 || num > 100) {
-      setError('El descuento debe estar entre 0% y 100%.')
+    if (num < 0 || num > max) {
+      setError(`Debe estar entre 0% y ${max}%.`)
       return
     }
     onAplicar(num)
@@ -35,14 +40,14 @@ export function DescuentoModal({ valorActual, onClose, onAplicar }: Props) {
   }
 
   return (
-    <Modal title="Aplicar descuento" onClose={pedirCierre} widthClassName="max-w-[360px]">
+    <Modal title={titulo} onClose={pedirCierre} widthClassName="max-w-[360px]">
       <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
-        <Field label="Descuento sobre el total (%)">
+        <Field label={etiqueta}>
           <input
             autoFocus
             type="number"
             min="0"
-            max="100"
+            max={max}
             step="0.01"
             value={valor}
             onChange={(e) => setValor(e.target.value)}
