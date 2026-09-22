@@ -1,11 +1,6 @@
-import type { Producto, StockUbicacion } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { fechaISO, fechaLocalDeISO } from '@virikyna/shared'
-import type { ProductoStockBajo, VentaDelDia } from './types'
-
-type ProductoConStock = Pick<Producto, 'id' | 'nombre' | 'stock_minimo'> & {
-  stock_ubicaciones: Pick<StockUbicacion, 'cantidad'>[]
-}
+import type { VentaDelDia } from './types'
 
 // Una sola consulta cubre "hoy" y "ayer" (variación) y los últimos 7 días (gráfico semanal),
 // agrupando por día local en el cliente.
@@ -31,26 +26,4 @@ export async function fetchVentasUltimosDias(dias: number) {
     porDia.set(fecha, actual)
   }
   return { porDia, error: null }
-}
-
-// Stock bajo = suma de stock en todas las ubicaciones <= stock_minimo del producto (solo activos).
-export async function fetchProductosStockBajo(): Promise<{ data: ProductoStockBajo[]; error: unknown }> {
-  const { data, error } = await supabase
-    .from('productos')
-    .select('id, nombre, stock_minimo, stock_ubicaciones(cantidad)')
-    .eq('estado', 'activo')
-
-  if (error || !data) return { data: [], error }
-
-  const bajos = (data as unknown as ProductoConStock[])
-    .map((producto) => ({
-      id: producto.id,
-      nombre: producto.nombre,
-      stockMinimo: producto.stock_minimo,
-      stockTotal: producto.stock_ubicaciones.reduce((acc, s) => acc + s.cantidad, 0),
-    }))
-    .filter((producto) => producto.stockTotal <= producto.stockMinimo)
-    .sort((a, b) => a.stockTotal - a.stockMinimo - (b.stockTotal - b.stockMinimo))
-
-  return { data: bajos, error: null }
 }

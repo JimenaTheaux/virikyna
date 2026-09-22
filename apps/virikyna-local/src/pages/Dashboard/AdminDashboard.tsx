@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { IconCierreCaja, IconConfiguracion, IconInventario, IconProveedores } from '../../components/icons'
-import { fechaISO, formatCurrency } from '@virikyna/shared'
+import { fechaISO, formatCurrency, StockBajoCard } from '@virikyna/shared'
 import { friendlyError } from '@virikyna/shared'
-import { fetchProductosStockBajo, fetchVentasUltimosDias } from './queries'
+import { fetchVentasUltimosDias } from './queries'
 import { WeeklySalesChart } from './WeeklySalesChart'
 import { AbrirCajaCard } from './AbrirCajaCard'
-import type { ProductoStockBajo, VentaDelDia } from './types'
+import { supabase } from '../../lib/supabaseClient'
+import type { VentaDelDia } from './types'
 
 const ACCESOS_RAPIDOS = [
   { to: '/inventario', label: 'Inventario', Icon: IconInventario },
@@ -19,16 +20,14 @@ export function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [porDia, setPorDia] = useState<Map<string, VentaDelDia>>(new Map())
-  const [stockBajo, setStockBajo] = useState<ProductoStockBajo[]>([])
 
   useEffect(() => {
     async function cargar() {
       setLoading(true)
       setError(null)
-      const [ventasRes, stockRes] = await Promise.all([fetchVentasUltimosDias(7), fetchProductosStockBajo()])
+      const ventasRes = await fetchVentasUltimosDias(7)
       if (ventasRes.error) setError(friendlyError(ventasRes.error as never))
       setPorDia(ventasRes.porDia)
-      setStockBajo(stockRes.data)
       setLoading(false)
     }
     cargar()
@@ -85,27 +84,7 @@ export function AdminDashboard() {
           <WeeklySalesChart porDia={porDia} />
         </div>
 
-        <Link
-          to="/inventario"
-          className={`flex flex-col rounded-lg p-card shadow-sm transition ${
-            stockBajo.length > 0 ? 'border border-amarillo bg-amarillo/20 hover:bg-amarillo/30' : 'bg-surface hover:bg-accent-light'
-          }`}
-        >
-          <p className="font-sans text-label-bold uppercase text-ink-soft">Stock bajo</p>
-          <p className="mt-2 font-display text-headline-md text-accent-darker">
-            {loading ? '—' : stockBajo.length === 0 ? 'Todo en orden' : `${stockBajo.length} producto${stockBajo.length === 1 ? '' : 's'}`}
-          </p>
-          <ul className="mt-3 flex-1 space-y-1 overflow-hidden">
-            {stockBajo.slice(0, 4).map((producto) => (
-              <li key={producto.id} className="font-sans text-label-md text-ink-soft">
-                {producto.nombre} ({producto.stockTotal}/{producto.stockMinimo})
-              </li>
-            ))}
-          </ul>
-          {stockBajo.length > 4 && (
-            <p className="mt-1 font-sans text-label-md text-accent-dark">+{stockBajo.length - 4} más — ver Inventario</p>
-          )}
-        </Link>
+        <StockBajoCard supabase={supabase} />
       </div>
 
       <div className="grid grid-cols-4 gap-stack-sm">
