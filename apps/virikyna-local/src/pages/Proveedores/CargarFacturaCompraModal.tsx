@@ -30,15 +30,15 @@ const TIPOS: { value: TipoComprobanteCompra; label: string }[] = [
 const LETRAS: LetraComprobanteCompra[] = ['A', 'B', 'R', 'X']
 
 const COLUMNAS_ITEMS = [
-  { label: 'Cód. barras', align: 'left', width: '11%' },
+  { label: 'Cód. barras', align: 'left', width: '15%' },
   { label: 'Producto', align: 'left', width: '22%' },
-  { label: 'Marca', align: 'left', width: '13%' },
-  { label: 'Cant.', align: 'right', width: '8%' },
-  { label: 'P. unitario', align: 'right', width: '11%' },
-  { label: 'Desc. %', align: 'right', width: '7%' },
+  { label: 'Marca', align: 'left', width: '15%' },
+  { label: 'Cant.', align: 'right', width: '7%' },
+  { label: 'P. unitario', align: 'right', width: '10%' },
+  { label: 'Desc. %', align: 'right', width: '6%' },
   { label: 'Depósito', align: 'left', width: '10%' },
-  { label: 'Subtotal', align: 'right', width: '12%' },
-  { label: '', align: 'center', width: '6%' },
+  { label: 'Subtotal', align: 'right', width: '11%' },
+  { label: '', align: 'center', width: '4%' },
 ] as const
 
 type Props = {
@@ -93,6 +93,15 @@ export function CargarFacturaCompraModal({ onClose, onSaved }: Props) {
   }
 
   const { subtotalSinIva: subtotalPreview, iva: ivaPreview, total: totalPreview } = calcularTotalesFacturaCompra(items)
+  // Descuento = lo que restan los % de descuento por ítem (informativo, ya está descontado del
+  // Subtotal). Saldo pendiente: al cargar la factura todavía no hay pagos (el RPC no registra
+  // ninguno, ni siquiera en contado), así que es igual al Total.
+  const brutoPreview = itemsValidosFacturaCompra(items).reduce(
+    (acc, it) => acc + (Number(it.cantidad) || 0) * (Number(it.precioUnitarioSinIva) || 0),
+    0,
+  )
+  const descuentoPreview = Math.max(0, Math.round((brutoPreview - subtotalPreview) * 100) / 100)
+  const saldoPendientePreview = totalPreview
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -154,8 +163,16 @@ export function CargarFacturaCompraModal({ onClose, onSaved }: Props) {
                 <p className="font-sans text-body-md text-ink">{formatCurrency(subtotalPreview)}</p>
               </div>
               <div>
+                <p className="font-sans text-label-md text-ink-soft">Descuento</p>
+                <p className="font-sans text-body-md text-ink">{formatCurrency(descuentoPreview)}</p>
+              </div>
+              <div>
                 <p className="font-sans text-label-md text-ink-soft">IVA (21%)</p>
                 <p className="font-sans text-body-md text-ink">{formatCurrency(ivaPreview)}</p>
+              </div>
+              <div>
+                <p className="font-sans text-label-md text-ink-soft">Saldo pendiente</p>
+                <p className="font-sans text-body-md text-ink">{formatCurrency(saldoPendientePreview)}</p>
               </div>
             </div>
             <div className="text-right">
@@ -193,8 +210,11 @@ export function CargarFacturaCompraModal({ onClose, onSaved }: Props) {
         className="flex flex-col gap-stack-md"
       >
         {/* Franja superior — datos del comprobante en una sola fila compacta */}
-        <div className="grid grid-cols-12 gap-stack-sm">
-          <div className="col-span-3">
+        <div
+          className="grid gap-stack-sm [&_label>span]:whitespace-nowrap"
+          style={{ gridTemplateColumns: 'minmax(0,2.4fr) minmax(0,1.6fr) minmax(0,0.8fr) minmax(0,1.3fr) minmax(0,1.5fr) minmax(0,1.6fr) minmax(0,1.4fr)' }}
+        >
+          <div>
             <Field label="Proveedor">
               <select value={proveedorId} onChange={(e) => setProveedorId(e.target.value)} className={selectClass}>
                 <option value="">Elegí un proveedor</option>
@@ -206,7 +226,7 @@ export function CargarFacturaCompraModal({ onClose, onSaved }: Props) {
               </select>
             </Field>
           </div>
-          <div className="col-span-2">
+          <div>
             <Field label="Tipo de comprobante">
               <select
                 value={tipoComprobante}
@@ -221,7 +241,7 @@ export function CargarFacturaCompraModal({ onClose, onSaved }: Props) {
               </select>
             </Field>
           </div>
-          <div className="col-span-1">
+          <div>
             <Field label="Letra">
               <select
                 value={letra}
@@ -237,12 +257,12 @@ export function CargarFacturaCompraModal({ onClose, onSaved }: Props) {
               </select>
             </Field>
           </div>
-          <div className="col-span-1">
+          <div>
             <Field label="Punto de venta">
               <input value={puntoVenta} onChange={(e) => setPuntoVenta(e.target.value)} className={inputClass} />
             </Field>
           </div>
-          <div className="col-span-2">
+          <div>
             <Field label="Número">
               <input
                 value={numeroComprobante}
@@ -251,7 +271,7 @@ export function CargarFacturaCompraModal({ onClose, onSaved }: Props) {
               />
             </Field>
           </div>
-          <div className="col-span-2">
+          <div>
             <Field label="Fecha comprobante">
               <input
                 type="date"
@@ -261,10 +281,11 @@ export function CargarFacturaCompraModal({ onClose, onSaved }: Props) {
               />
             </Field>
           </div>
-          <div className="col-span-1">
+          <div>
             <Field label="Forma de pago">
               <select
                 value={formaPago}
+                title={formaPago === 'contado' ? 'Contado' : 'Cuenta corriente'}
                 onChange={(e) => setFormaPago(e.target.value as FormaPagoCompra)}
                 className={selectClass}
               >

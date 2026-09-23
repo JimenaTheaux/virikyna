@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { createPortal } from 'react-dom'
 import type { Producto, Proveedor, UbicacionStock } from '@virikyna/shared'
 import {
   formatCurrency,
@@ -42,6 +43,50 @@ const cellInputClass =
 const cellInputRightClass = `${cellInputClass} text-right`
 const cellSelectClass = `${selectClass} !rounded !border-transparent !bg-transparent !px-2 !py-1.5 focus:!border-accent focus:!bg-surface`
 
+// Dropdown de sugerencias en un portal con position:fixed calculado desde el input: el modal tiene
+// overflow-y-auto y un dropdown "absolute" adentro queda recortado o tapado por el footer. Se
+// reposiciona en scroll/resize y se abre hacia arriba si abajo no hay lugar.
+function DropdownFlotante({ anchorRef, children }: { anchorRef: RefObject<HTMLElement>; children: ReactNode }) {
+  const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number; maxHeight: number } | null>(null)
+
+  useLayoutEffect(() => {
+    function calcular() {
+      const el = anchorRef.current
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      const left = Math.max(8, Math.min(r.left, window.innerWidth - 264))
+      const espacioAbajo = window.innerHeight - r.bottom - 8
+      const abajo = espacioAbajo >= 220 || espacioAbajo >= r.top
+      setPos(
+        abajo
+          ? { left, top: r.bottom + 4, maxHeight: Math.max(espacioAbajo, 120) }
+          : { left, bottom: window.innerHeight - r.top + 4, maxHeight: Math.max(r.top - 8, 120) },
+      )
+    }
+    calcular()
+    window.addEventListener('scroll', calcular, true)
+    window.addEventListener('resize', calcular)
+    return () => {
+      window.removeEventListener('scroll', calcular, true)
+      window.removeEventListener('resize', calcular)
+    }
+  }, [anchorRef])
+
+  if (!pos) return null
+  return createPortal(
+    // mousedown sin default: el click en una sugerencia no le quita el foco al input (si no, el
+    // blur cerraría el dropdown antes de que el click llegue a dispararse).
+    <div
+      className="fixed z-[60] w-64 overflow-y-auto rounded-lg border border-line bg-surface shadow-sm"
+      style={pos}
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      {children}
+    </div>,
+    document.body,
+  )
+}
+
 // Fila de ítem de una factura de compra, en formato planilla (una <tr>, celdas editables inline).
 // La búsqueda de producto puede dispararse desde la celda "Cód. barras" (pensada para un lector
 // USB/Bluetooth que "tipea" el código y Enter) o desde la celda "Producto" (nombre/marca) — ambas
@@ -55,6 +100,8 @@ export function ItemFacturaRow({ item, index, puedeEliminar, proveedores, onChan
   const [campoActivo, setCampoActivo] = useState<'codigo' | 'producto' | null>(null)
   const [creandoProducto, setCreandoProducto] = useState(false)
   const queryDebounced = useDebouncedValue(query, 200)
+  const codigoRef = useRef<HTMLInputElement>(null)
+  const productoRef = useRef<HTMLInputElement>(null)
 
   function seleccionarProducto(p: ProductoBusquedaItem) {
     onChange({
@@ -120,9 +167,9 @@ export function ItemFacturaRow({ item, index, puedeEliminar, proveedores, onChan
   const mostrarDropdownCodigo = campoActivo === 'codigo' && (resultados.length > 0 || query.trim().length >= 2)
   const mostrarDropdownProducto = campoActivo === 'producto' && (resultados.length > 0 || query.trim().length >= 2)
 
-  function Sugerencias() {
+  function sugerencias(anchorRef: RefObject<HTMLElement>) {
     return (
-      <div className="absolute left-0 z-10 mt-1 w-64 overflow-hidden rounded-lg border border-line bg-surface shadow-sm">
+      <DropdownFlotante anchorRef={anchorRef}>
         {resultados.map((p) => (
           <button
             key={p.id}
@@ -138,12 +185,15 @@ export function ItemFacturaRow({ item, index, puedeEliminar, proveedores, onChan
         ))}
         <button
           type="button"
-          onClick={() => setCreandoProducto(true)}
+          onClick={() => {
+            setCreandoProducto(true)
+            setCampoActivo(null)
+          }}
           className="flex w-full items-center px-3 py-2 text-left font-sans text-label-md text-accent-dark hover:bg-accent-light"
         >
           + Crear producto nuevo{nombreNuevoProducto ? ` "${nombreNuevoProducto}"` : ''}
         </button>
-      </div>
+      </DropdownFlotante>
     )
   }
 
@@ -151,27 +201,36 @@ export function ItemFacturaRow({ item, index, puedeEliminar, proveedores, onChan
     <tr className="border-b border-line last:border-b-0 hover:bg-bg/60">
       <td className="relative px-2 py-1.5 align-top">
         <input
+          ref={codigoRef}
           value={item.codigoBarras}
+          title={item.codigoBarras}
           onChange={(e) => buscarPorCodigo(e.target.value)}
           onFocus={() => setCampoActivo('codigo')}
+          onBlur={() => setCampoActivo(null)}
+          onKeyDown={(e) => e.key === 'Escape' && setCampoActivo(null)}
           placeholder="Escaneá o tipeá"
           className={cellInputClass}
         />
-        {mostrarDropdownCodigo && <Sugerencias />}
+        {mostrarDropdownCodigo && sugerencias(codigoRef)}
       </td>
       <td className="relative px-2 py-1.5 align-top">
         <input
+          ref={productoRef}
           value={item.descripcion}
+          title={item.descripcion}
           onChange={(e) => buscarPorProducto(e.target.value)}
           onFocus={() => setCampoActivo('producto')}
+          onBlur={() => setCampoActivo(null)}
+          onKeyDown={(e) => e.key === 'Escape' && setCampoActivo(null)}
           placeholder="Buscar por código, nombre o marca..."
           className={cellInputClass}
         />
-        {mostrarDropdownProducto && <Sugerencias />}
+        {mostrarDropdownProducto && sugerencias(productoRef)}
       </td>
       <td className="px-2 py-1.5 align-top">
         <input
           value={item.marca}
+          title={item.marca}
           onChange={(e) => onChange({ marca: e.target.value })}
           placeholder="—"
           className={cellInputClass}
@@ -214,6 +273,7 @@ export function ItemFacturaRow({ item, index, puedeEliminar, proveedores, onChan
       <td className="px-2 py-1.5 align-top">
         <select
           value={item.ubicacion}
+          title={item.ubicacion === 'deposito' ? 'Depósito' : 'Local'}
           onChange={(e) => onChange({ ubicacion: e.target.value as UbicacionStock })}
           className={cellSelectClass}
         >
