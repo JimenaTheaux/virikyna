@@ -1,7 +1,7 @@
 {
   "name": "virikyna-local",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.4",
   "type": "module",
   "description": "Virikyna Local — app de caja (Tauri v2 + React + TypeScript).",
   "scripts": {
