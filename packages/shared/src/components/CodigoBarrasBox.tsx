@@ -54,7 +54,7 @@ export function CodigoBarrasBox({
 
   return (
     <div
-      className={`rounded-lg border-2 bg-accent-light/40 px-3 py-2 ${duplicado ? 'border-error' : 'border-accent'}`}
+      className={`rounded-lg border-2 bg-accent-light/40 px-3 py-1.5 ${duplicado ? 'border-error' : 'border-accent'}`}
     >
       <label className="flex flex-col gap-1">
         <span className="font-sans text-label-bold text-ink">Código de barras</span>
@@ -68,7 +68,7 @@ export function CodigoBarrasBox({
               if (e.key === 'Enter') e.preventDefault()
             }}
             placeholder="Escaneá con el lector o tipeá el código…"
-            className="h-10 min-w-0 flex-1 rounded border border-line bg-surface px-3 font-sans text-body-md text-ink outline-none focus:border-accent"
+            className="h-9 min-w-0 flex-1 rounded border border-line bg-surface px-3 font-sans text-body-md text-ink outline-none focus:border-accent"
           />
           <ScanButton onDetect={onChange} onFocusCampo={() => inputRef.current?.focus()} />
         </div>
@@ -91,8 +91,7 @@ export function CodigoBarrasBox({
         </div>
       ) : (
         <p className="mt-1 font-sans text-label-md text-accent-darker">
-          Si el código ya existe en el catálogo, se avisa antes de continuar. Vacío = se genera código interno
-          automático.
+          Si ya existe en el catálogo se avisa antes de continuar. Vacío = código interno automático.
         </p>
       )}
     </div>

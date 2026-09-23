@@ -5,9 +5,19 @@ export const inputClass =
 
 export const selectClass = inputClass
 
-export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
+export function Field({
+  label,
+  children,
+  hint,
+  compact,
+}: {
+  label: string
+  children: ReactNode
+  hint?: string
+  compact?: boolean
+}) {
   return (
-    <label className="flex flex-col gap-2">
+    <label className={`flex flex-col ${compact ? 'gap-1' : 'gap-2'}`}>
       <span className="font-sans text-label-md text-ink">{label}</span>
       {children}
       {hint && <span className="font-sans text-label-md text-ink-soft">{hint}</span>}

@@ -95,7 +95,7 @@ export function ScanButton({ onDetect, onFocusCampo, className }: Props) {
         aria-label="Escanear código de barras"
         className={
           className ??
-          'flex h-10 w-10 flex-shrink-0 items-center justify-center rounded border border-accent/40 bg-accent-light text-accent-darker transition hover:bg-accent hover:text-white'
+          'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded border border-accent/40 bg-accent-light text-accent-darker transition hover:bg-accent hover:text-white'
         }
       >
         {tactil ? <IconCamaraScan className="h-5 w-5" /> : <IconCodigoBarras className="h-5 w-5" />}

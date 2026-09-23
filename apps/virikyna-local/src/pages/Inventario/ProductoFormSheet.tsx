@@ -29,7 +29,7 @@ import type { ProductoConRelaciones } from './types'
 const IVA_DEFAULT = 21
 
 // Input compacto para que el formulario completo entre en una sola pantalla sin scroll interno.
-const inputCompacto = inputClass.replace('py-2.5', 'py-2')
+const inputCompacto = inputClass.replace('px-4 py-2.5', 'px-3 py-1.5').replace('text-body-md', 'text-[15px]')
 
 type ProductoCreado = { id: string; nombre: string; costo: number; marca: string | null; codigo_barras: string | null }
 
@@ -213,7 +213,7 @@ export function ProductoFormSheet({
       widthClassName="max-w-[960px]"
       footer={
         tab === 'datos' || !producto || !esAdmin ? (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1.5">
             {error && <ErrorText>{error}</ErrorText>}
             <div className="flex justify-end gap-2">
               <button
@@ -272,7 +272,7 @@ export function ProductoFormSheet({
         onChangeCapture={() => setDirty(true)}
         className="grid grid-cols-[minmax(0,1fr)_240px] gap-stack-md"
       >
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1.5">
           <CodigoBarrasBox
             value={codigoBarras}
             onChange={(v) => {
@@ -284,8 +284,8 @@ export function ProductoFormSheet({
             onEditarExistente={onEditarExistente}
           />
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Nombre">
+          <div className="grid grid-cols-2 gap-2">
+            <Field compact label="Nombre">
               <input
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
@@ -293,7 +293,7 @@ export function ProductoFormSheet({
                 className={inputCompacto}
               />
             </Field>
-            <Field label="Marca">
+            <Field compact label="Marca">
               <input
                 value={marca}
                 onChange={(e) => setMarca(e.target.value)}
@@ -303,25 +303,49 @@ export function ProductoFormSheet({
             </Field>
           </div>
 
-          <Field label="Descripción (opcional)">
+          <Field compact label="Descripción (opcional)">
             <input value={descripcion} onChange={(e) => setDescripcion(e.target.value)} className={inputCompacto} />
           </Field>
 
-          <Field label="Proveedor">
-            <select value={proveedorId} onChange={(e) => setProveedorId(e.target.value)} className={inputCompacto}>
-              <option value="">Sin proveedor</option>
-              {proveedores.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.razon_social}
-                </option>
-              ))}
-            </select>
-          </Field>
+          <div className={`grid gap-2 ${producto ? 'grid-cols-[2fr_1fr_1fr]' : 'grid-cols-[2fr_1fr]'}`}>
+            <Field compact label="Proveedor">
+              <select value={proveedorId} onChange={(e) => setProveedorId(e.target.value)} className={inputCompacto}>
+                <option value="">Sin proveedor</option>
+                {proveedores.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.razon_social}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field compact label="Stock mínimo">
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={stockMinimo}
+                onChange={(e) => setStockMinimo(e.target.value)}
+                className={inputCompacto}
+              />
+            </Field>
+            {producto && (
+              <Field compact label="Estado">
+                <select
+                  value={estado}
+                  onChange={(e) => setEstado(e.target.value as EstadoProducto)}
+                  className={inputCompacto}
+                >
+                  <option value="activo">Activo</option>
+                  <option value="inactivo">Inactivo</option>
+                </select>
+              </Field>
+            )}
+          </div>
 
-          <div className="rounded-lg border border-line p-3">
-            <p className="mb-2 font-sans text-label-bold text-ink">Precio</p>
-            <div className="grid grid-cols-3 gap-3">
-              <Field label="Costo">
+          <div className="rounded-lg border border-line px-3 py-2">
+            <p className="mb-1 font-sans text-label-bold text-ink">Precio</p>
+            <div className="grid grid-cols-3 gap-2">
+              <Field compact label="Costo">
                 <input
                   type="number"
                   min="0"
@@ -332,7 +356,7 @@ export function ProductoFormSheet({
                   className={inputCompacto}
                 />
               </Field>
-              <Field label="Margen 1 (%)">
+              <Field compact label="Margen 1 (%)">
                 <input
                   type="number"
                   step="0.01"
@@ -345,7 +369,7 @@ export function ProductoFormSheet({
                   className={inputCompacto}
                 />
               </Field>
-              <Field label="Margen 2 (%)">
+              <Field compact label="Margen 2 (%)">
                 <input
                   type="number"
                   step="0.01"
@@ -364,11 +388,10 @@ export function ProductoFormSheet({
                 El margen lo define un administrador. Como cajero, solo cargás el costo.
               </p>
             )}
-            <div className="mt-2 flex items-center justify-between rounded bg-accent-light/50 px-3 py-2">
-              <div>
-                <p className="font-sans text-label-md text-ink-soft">Precio de venta</p>
-                <p className="font-sans text-label-md text-ink-soft">Costo × margen 1 × margen 2 × IVA 21%</p>
-              </div>
+            <div className="mt-2 flex items-center justify-between rounded bg-accent-light/50 px-3 py-1">
+              <p className="font-sans text-label-md text-ink-soft">
+                Precio de venta <span className="text-ink-soft/80">· Costo × margen 1 × margen 2 × IVA 21%</span>
+              </p>
               <p className="font-display text-headline-md text-accent-darker">{formatCurrency(precioVenta)}</p>
             </div>
             {producto && esAdmin && cambiosMargen.length > 0 && (
@@ -380,34 +403,9 @@ export function ProductoFormSheet({
               </p>
             )}
           </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Stock mínimo">
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={stockMinimo}
-                onChange={(e) => setStockMinimo(e.target.value)}
-                className={inputCompacto}
-              />
-            </Field>
-            {producto && (
-              <Field label="Estado">
-                <select
-                  value={estado}
-                  onChange={(e) => setEstado(e.target.value as EstadoProducto)}
-                  className={inputCompacto}
-                >
-                  <option value="activo">Activo</option>
-                  <option value="inactivo">Inactivo</option>
-                </select>
-              </Field>
-            )}
-          </div>
         </div>
 
-        <aside className="flex flex-col gap-3">
+        <aside className="flex flex-col gap-2">
           <div>
             <p className="mb-1.5 font-sans text-label-md text-ink-soft">Vista previa</p>
             <div className="rounded-lg border border-line bg-surface p-3">
