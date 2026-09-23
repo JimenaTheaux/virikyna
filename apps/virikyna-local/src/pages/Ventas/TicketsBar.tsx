@@ -27,6 +27,11 @@ function TicketMenu({ pos, onCerrar, onCobrar, onEliminar }: {
 }) {
   return createPortal(
     <div
+      // Frena el mousedown acá a propósito: el menú es un portal, así que vive fuera del árbol
+      // DOM de `barRef` — sin esto, el listener de "click afuera" (más abajo) lo confundía con un
+      // click afuera y cerraba el menú en el mousedown, antes de que el click del botón llegara a
+      // disparar. Resultado: el menú se veía pero ninguna acción hacía nada (bug reportado).
+      onMouseDown={(e) => e.stopPropagation()}
       style={{ position: 'fixed', top: pos.top, left: pos.left }}
       className="z-50 w-44 overflow-hidden rounded-lg border border-line bg-surface shadow-lg"
     >
