@@ -228,7 +228,9 @@ CREATE TABLE ventas (
   subtotal NUMERIC(12,2) NOT NULL,
   descuento_porcentaje NUMERIC(5,2) NOT NULL DEFAULT 0,
   recargo_porcentaje NUMERIC(5,2) NOT NULL DEFAULT 0,
-  total NUMERIC(12,2) NOT NULL,
+  total NUMERIC(12,2) NOT NULL,  -- = precio_cobrado (docs/23) — todo lo que ya lee "total" (comprobante, Factura C/ARCA, saldo de cta. cte.) sigue reflejando lo realmente cobrado sin tocarse
+  precio_oficial NUMERIC(12,2) NOT NULL,  -- docs/23: precio calculado por el sistema (subtotal con descuento/recargo), antes del redondeo manual del cajero
+  precio_cobrado NUMERIC(12,2) NOT NULL,  -- docs/23: precio confirmado/editado por el cajero al cerrar la venta — puede ser igual a precio_oficial
   estado estado_comprobante NOT NULL DEFAULT 'sin_facturar',
   nota TEXT,
   terminal_id TEXT NOT NULL DEFAULT 'POS001',  -- preparado para multi-caja futura, sin uso real en Fase 1
@@ -239,6 +241,7 @@ CREATE TABLE ventas (
 -- protegido a nivel schema, no solo en el RPC, para que ni un INSERT directo lo salte.
 ALTER TABLE ventas ADD CONSTRAINT chk_venta_cta_cte_requiere_cliente
   CHECK (NOT (forma_pago = 'cuenta_corriente' AND cliente_id IS NULL));
+ALTER TABLE ventas ADD CONSTRAINT chk_ventas_precio_cobrado_positivo CHECK (precio_cobrado > 0);
 
 CREATE TABLE venta_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -602,8 +605,12 @@ ALTER TYPE estado_comprobante ADD VALUE IF NOT EXISTS 'anulada';
 -- 1. confirmar_venta
 -- Descuento y recargo (docs/20) son porcentajes multiplicativos sobre el mismo subtotal.
 -- p_pagos (docs/22) es opcional: sin él, pago simple por p_forma_pago de siempre. Con él (hasta
--- 2 medios, sin cuenta corriente, suma exacta al total), la venta queda forma_pago='combinado'
--- y el detalle por medio se guarda en venta_pagos.
+-- 2 medios, sin cuenta corriente, suma exacta al precio oficial), la venta queda
+-- forma_pago='combinado' y el detalle por medio se guarda en venta_pagos.
+-- p_precio_cobrado (docs/23) es opcional: sin él (o NULL), precio_cobrado = precio_oficial. Con
+-- él, es el precio final que el cajero confirmó en la ventanita de confirmación de venta — puede
+-- ser distinto al oficial (redondeo manual, sin restricción de monto). ventas.total pasa a
+-- significar precio_cobrado de acá en más.
 -- ============================================================
 CREATE OR REPLACE FUNCTION confirmar_venta(
   p_cliente_id UUID,
@@ -612,7 +619,8 @@ CREATE OR REPLACE FUNCTION confirmar_venta(
   p_descuento_porcentaje NUMERIC DEFAULT 0,
   p_nota TEXT DEFAULT NULL,
   p_recargo_porcentaje NUMERIC DEFAULT 0,
-  p_pagos JSONB DEFAULT NULL  -- [{"forma_pago":"efectivo","monto":500},{"forma_pago":"tarjeta_credito","monto":1000}]
+  p_pagos JSONB DEFAULT NULL,  -- [{"forma_pago":"efectivo","monto":500},{"forma_pago":"tarjeta_credito","monto":1000}]
+  p_precio_cobrado NUMERIC DEFAULT NULL  -- precio final editado por el cajero; NULL = igual al oficial
 ) RETURNS UUID
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
@@ -621,10 +629,15 @@ DECLARE
   v_item JSONB;
   v_pago JSONB;
   v_subtotal NUMERIC := 0;
-  v_total NUMERIC;
+  v_precio_oficial NUMERIC;
+  v_precio_cobrado NUMERIC;
+  v_ratio NUMERIC;
   v_importe NUMERIC;
   v_forma_pago_final forma_pago_venta;
   v_suma_pagos NUMERIC;
+  v_suma_ajustada NUMERIC := 0;
+  v_monto_ajustado NUMERIC;
+  v_idx INT := 0;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM perfiles WHERE id = auth.uid() AND activo = true) THEN
     RAISE EXCEPTION 'Usuario no autorizado';
@@ -635,7 +648,7 @@ BEGIN
   INTO v_subtotal
   FROM jsonb_array_elements(p_items) AS i;
 
-  v_total := ROUND(v_subtotal * (1 - COALESCE(p_descuento_porcentaje,0)/100.0)
+  v_precio_oficial := ROUND(v_subtotal * (1 - COALESCE(p_descuento_porcentaje,0)/100.0)
                     * (1 + COALESCE(p_recargo_porcentaje,0)/100.0), 2);
 
   IF p_pagos IS NOT NULL AND jsonb_array_length(p_pagos) > 0 THEN
@@ -648,9 +661,11 @@ BEGIN
     ) THEN
       RAISE EXCEPTION 'La cuenta corriente no puede combinarse con otro medio de pago';
     END IF;
+    -- La validación de la suma es contra el precio OFICIAL: es el monto con el que se armó el
+    -- reparto en PagoCombinadoModal, antes de que el cajero edite el precio final a cobrar.
     SELECT COALESCE(SUM((p->>'monto')::NUMERIC), 0) INTO v_suma_pagos FROM jsonb_array_elements(p_pagos) AS p;
-    IF ROUND(v_suma_pagos, 2) <> v_total THEN
-      RAISE EXCEPTION 'La suma de los pagos (%) no coincide con el total de la venta (%)', v_suma_pagos, v_total;
+    IF ROUND(v_suma_pagos, 2) <> v_precio_oficial THEN
+      RAISE EXCEPTION 'La suma de los pagos (%) no coincide con el total de la venta (%)', v_suma_pagos, v_precio_oficial;
     END IF;
     v_forma_pago_final := CASE WHEN jsonb_array_length(p_pagos) = 1
       THEN (p_pagos->0->>'forma_pago')::forma_pago_venta
@@ -664,21 +679,37 @@ BEGIN
     RAISE EXCEPTION 'Una venta a cuenta corriente necesita un cliente asignado';
   END IF;
 
-  INSERT INTO ventas (cliente_id, forma_pago, subtotal, descuento_porcentaje, recargo_porcentaje, total, nota, usuario_id)
+  v_precio_cobrado := COALESCE(p_precio_cobrado, v_precio_oficial);
+  IF v_precio_cobrado <= 0 THEN
+    RAISE EXCEPTION 'El precio final a cobrar debe ser mayor a 0';
+  END IF;
+
+  INSERT INTO ventas (cliente_id, forma_pago, subtotal, descuento_porcentaje, recargo_porcentaje, total,
+         precio_oficial, precio_cobrado, nota, usuario_id)
   VALUES (p_cliente_id, v_forma_pago_final, v_subtotal, COALESCE(p_descuento_porcentaje,0),
-          COALESCE(p_recargo_porcentaje,0), v_total, p_nota, auth.uid())
+          COALESCE(p_recargo_porcentaje,0), v_precio_cobrado, v_precio_oficial, v_precio_cobrado, p_nota, auth.uid())
   RETURNING id INTO v_venta_id;
 
   IF v_forma_pago_final <> 'cuenta_corriente' THEN
     IF p_pagos IS NOT NULL AND jsonb_array_length(p_pagos) > 0 THEN
+      -- Reescala cada parte al precio cobrado, manteniendo la proporción del reparto original —
+      -- la última parte absorbe el centavo de redondeo para que la suma dé exacta.
+      v_ratio := CASE WHEN v_precio_oficial = 0 THEN 1 ELSE v_precio_cobrado / v_precio_oficial END;
       FOR v_pago IN SELECT * FROM jsonb_array_elements(p_pagos)
       LOOP
+        v_idx := v_idx + 1;
+        IF v_idx = jsonb_array_length(p_pagos) THEN
+          v_monto_ajustado := v_precio_cobrado - v_suma_ajustada;
+        ELSE
+          v_monto_ajustado := ROUND((v_pago->>'monto')::NUMERIC * v_ratio, 2);
+          v_suma_ajustada := v_suma_ajustada + v_monto_ajustado;
+        END IF;
         INSERT INTO venta_pagos (venta_id, forma_pago, monto, usuario_id)
-        VALUES (v_venta_id, (v_pago->>'forma_pago')::forma_pago_venta, (v_pago->>'monto')::NUMERIC, auth.uid());
+        VALUES (v_venta_id, (v_pago->>'forma_pago')::forma_pago_venta, v_monto_ajustado, auth.uid());
       END LOOP;
     ELSE
       INSERT INTO venta_pagos (venta_id, forma_pago, monto, usuario_id)
-      VALUES (v_venta_id, v_forma_pago_final, v_total, auth.uid());
+      VALUES (v_venta_id, v_forma_pago_final, v_precio_cobrado, auth.uid());
     END IF;
   END IF;
 
@@ -925,6 +956,9 @@ $$;
 
 -- ============================================================
 -- 6. cerrar_caja (sirve para X y para Z)
+-- Versión con el merge de docs/21 (apertura de caja, v_monto_base) + docs/22 (venta_pagos) ya
+-- aplicado, más el cambio de docs/23: la rama de cuenta corriente lee precio_cobrado en vez de
+-- total (hoy da lo mismo porque total = precio_cobrado, pero queda explícito).
 -- ============================================================
 CREATE OR REPLACE FUNCTION cerrar_caja(
   p_tipo tipo_cierre,
@@ -934,6 +968,8 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
 DECLARE
   v_cierre_id UUID;
+  v_apertura aperturas_caja%ROWTYPE;  -- docs/21: apertura vigente (todavía sin cierre_z_id)
+  v_monto_base NUMERIC;               -- docs/21: monto real contado al abrir, suma al efectivo esperado
   v_total_efectivo NUMERIC;
   v_total_transferencia NUMERIC;
   v_total_qr NUMERIC;
@@ -949,8 +985,12 @@ BEGIN
     RAISE EXCEPTION 'Usuario no autorizado';
   END IF;
 
+  SELECT * INTO v_apertura FROM aperturas_caja WHERE cierre_z_id IS NULL ORDER BY abierta_at DESC LIMIT 1;
+  v_monto_base := COALESCE(v_apertura.monto_real, 0);
+
   -- Efectivo/transferencia/QR/tarjeta salen del detalle por parte (venta_pagos, docs/22) — no de
-  -- ventas.total, que en una venta combinada no pertenece a un solo medio.
+  -- ventas.total, que en una venta combinada no pertenece a un solo medio. venta_pagos.monto ya
+  -- sale de precio_cobrado (docs/23), no de precio_oficial.
   SELECT COALESCE(SUM(vp.monto) FILTER (WHERE vp.forma_pago = 'efectivo'), 0),
          COALESCE(SUM(vp.monto) FILTER (WHERE vp.forma_pago = 'transferencia'), 0),
          COALESCE(SUM(vp.monto) FILTER (WHERE vp.forma_pago = 'qr'), 0),
@@ -960,8 +1000,9 @@ BEGIN
   JOIN ventas v ON v.id = vp.venta_id
   WHERE v.created_at::date = current_date AND v.estado <> 'anulada';
 
-  -- Cuenta corriente sigue sin combinarse — se sigue leyendo directo de ventas.total
-  SELECT COALESCE(SUM(total), 0) INTO v_total_cuenta_corriente
+  -- Cuenta corriente sigue sin combinarse — se sigue leyendo directo de ventas, ahora de
+  -- precio_cobrado (docs/23) en vez de total.
+  SELECT COALESCE(SUM(precio_cobrado), 0) INTO v_total_cuenta_corriente
   FROM ventas
   WHERE created_at::date = current_date AND estado <> 'anulada' AND forma_pago = 'cuenta_corriente';
 
@@ -974,16 +1015,20 @@ BEGIN
   SELECT COALESCE(SUM(monto), 0) INTO v_total_retiros
   FROM retiros_caja WHERE fecha = current_date;
 
-  v_efectivo_esperado := v_total_efectivo - v_total_egresos_efectivo - v_total_retiros;
+  v_efectivo_esperado := v_monto_base + v_total_efectivo - v_total_egresos_efectivo - v_total_retiros;
   v_diferencia := CASE WHEN p_efectivo_contado IS NOT NULL THEN p_efectivo_contado - v_efectivo_esperado ELSE NULL END;
 
   INSERT INTO cierres_caja (tipo, turno_fecha, total_efectivo, total_transferencia, total_qr, total_tarjeta,
          total_cuenta_corriente, total_egresos, total_retiros, efectivo_esperado, efectivo_contado, diferencia,
-         estado_validacion, usuario_id)
+         estado_validacion, usuario_id, apertura_id)
   VALUES (p_tipo, current_date, v_total_efectivo, v_total_transferencia, v_total_qr, v_total_tarjeta,
          v_total_cuenta_corriente, v_total_egresos, v_total_retiros, v_efectivo_esperado, p_efectivo_contado, v_diferencia,
-         CASE WHEN p_tipo = 'z' THEN 'pendiente_validacion'::estado_cierre_z ELSE NULL END, auth.uid())
+         CASE WHEN p_tipo = 'z' THEN 'pendiente_validacion'::estado_cierre_z ELSE NULL END, auth.uid(), v_apertura.id)
   RETURNING id INTO v_cierre_id;
+
+  IF p_tipo = 'z' AND v_apertura.id IS NOT NULL THEN
+    UPDATE aperturas_caja SET cierre_z_id = v_cierre_id WHERE id = v_apertura.id;
+  END IF;
 
   RETURN v_cierre_id;
 END;

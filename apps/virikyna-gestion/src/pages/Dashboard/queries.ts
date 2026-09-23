@@ -10,7 +10,7 @@ export async function fetchVentasUltimosDias(dias: number) {
 
   const { data, error } = await supabase
     .from('ventas')
-    .select('total, created_at')
+    .select('precio_cobrado, created_at')
     .neq('estado', 'anulada')
     .gte('created_at', desde)
     .lte('created_at', hasta)
@@ -18,10 +18,10 @@ export async function fetchVentasUltimosDias(dias: number) {
   if (error || !data) return { porDia: new Map<string, VentaDelDia>(), error }
 
   const porDia = new Map<string, VentaDelDia>()
-  for (const venta of data as { total: number; created_at: string }[]) {
+  for (const venta of data as { precio_cobrado: number; created_at: string }[]) {
     const fecha = fechaLocalDeISO(venta.created_at)
     const actual = porDia.get(fecha) ?? { fecha, total: 0, cantidad: 0 }
-    actual.total += venta.total
+    actual.total += venta.precio_cobrado
     actual.cantidad += 1
     porDia.set(fecha, actual)
   }

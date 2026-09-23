@@ -12,7 +12,8 @@ const MARGEN = 5
 export async function generarPdfComprobante(datos: DatosComprobante) {
   const { jsPDF } = await import('jspdf')
   const lineasPago = lineasFormaPago(datos)
-  const alto = 62 + datos.items.length * 5 + 29 + (lineasPago.length - 1) * 4
+  const hayDiferencia = datos.precioOficial !== datos.total
+  const alto = 62 + datos.items.length * 5 + 29 + (lineasPago.length - 1) * 4 + (hayDiferencia ? 8 : 0)
   const doc = new jsPDF({ unit: 'mm', format: [ANCHO_MM, alto] })
   const centro = ANCHO_MM / 2
   let y = 4
@@ -77,10 +78,27 @@ export async function generarPdfComprobante(datos: DatosComprobante) {
     doc.text(`Recargo: ${datos.recargoPorcentaje}%`, ANCHO_MM - MARGEN, y, { align: 'right' })
     y += 4
   }
+  if (hayDiferencia) {
+    doc.text(`Precio oficial: ${formatCurrency(datos.precioOficial)}`, ANCHO_MM - MARGEN, y, { align: 'right' })
+    y += 4
+  }
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
   doc.text(`TOTAL: ${formatCurrency(datos.total)}`, ANCHO_MM - MARGEN, y, { align: 'right' })
   y += 7
+
+  if (hayDiferencia) {
+    const diferencia = datos.total - datos.precioOficial
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    doc.text(
+      `Diferencia (redondeo): ${diferencia > 0 ? '+' : ''}${formatCurrency(diferencia)}`,
+      ANCHO_MM - MARGEN,
+      y,
+      { align: 'right' },
+    )
+    y += 4
+  }
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7)

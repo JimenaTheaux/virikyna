@@ -17,7 +17,8 @@ function mm(valor: number): number {
 
 export async function generarJpgComprobante(datos: DatosComprobante): Promise<Blob> {
   const lineasPago = lineasFormaPago(datos)
-  const altoMm = 62 + datos.items.length * 5 + 29 + (lineasPago.length - 1) * 4
+  const hayDiferencia = datos.precioOficial !== datos.total
+  const altoMm = 62 + datos.items.length * 5 + 29 + (lineasPago.length - 1) * 4 + (hayDiferencia ? 8 : 0)
   const canvas = document.createElement('canvas')
   canvas.width = ANCHO_PX
   canvas.height = mm(altoMm)
@@ -97,9 +98,24 @@ export async function generarJpgComprobante(datos: DatosComprobante): Promise<Bl
     ctx.fillText(`Recargo: ${datos.recargoPorcentaje}%`, ANCHO_PX - MARGEN_PX, y)
     y += mm(4)
   }
+  if (hayDiferencia) {
+    ctx.fillText(`Precio oficial: ${formatCurrency(datos.precioOficial)}`, ANCHO_PX - MARGEN_PX, y)
+    y += mm(4)
+  }
   ctx.font = `bold ${mm(3.5)}px helvetica, sans-serif`
   ctx.fillText(`TOTAL: ${formatCurrency(datos.total)}`, ANCHO_PX - MARGEN_PX, y)
   y += mm(7)
+
+  if (hayDiferencia) {
+    const diferencia = datos.total - datos.precioOficial
+    ctx.font = `${mm(2.6)}px helvetica, sans-serif`
+    ctx.fillText(
+      `Diferencia (redondeo): ${diferencia > 0 ? '+' : ''}${formatCurrency(diferencia)}`,
+      ANCHO_PX - MARGEN_PX,
+      y,
+    )
+    y += mm(4)
+  }
 
   ctx.font = `${mm(2.4)}px helvetica, sans-serif`
   ctx.textAlign = 'center'

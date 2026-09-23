@@ -24,7 +24,8 @@ export type DatosComprobante = {
   subtotal: number
   descuentoPorcentaje: number
   recargoPorcentaje: number
-  total: number
+  precioOficial: number // calculado por el sistema, antes del redondeo manual del cajero
+  total: number // = precio cobrado (puede diferir de precioOficial por redondeo)
   cae: string | null
 }
 

@@ -7,6 +7,7 @@ import type { DatosComprobante } from '../lib/comprobante'
 import { ComprobanteModal } from '../components/ComprobanteModal'
 import { Modal } from '../components/Modal'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { Field, inputClass } from '../components/FormField'
 import { ProductoBusqueda } from './Ventas/ProductoBusqueda'
 import { CarritoTabla } from './Ventas/CarritoTabla'
 import { ClienteSelector } from './Ventas/ClienteSelector'
@@ -61,8 +62,12 @@ export function VentasPage() {
   const [comprobante, setComprobante] = useState<DatosComprobante | null>(null)
   const [confirmandoId, setConfirmandoId] = useState<string | null>(null)
   const [pagoCombinadoModalOpen, setPagoCombinadoModalOpen] = useState(false)
+  // Precio final a cobrar (punto 4 del pedido): precargado con el precio oficial al abrir la
+  // confirmación, editable por el cajero (redondeo manual, sin restricción de monto).
+  const [precioCobradoStr, setPrecioCobradoStr] = useState('')
 
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const precioCobradoInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     guardarTickets(ticketsState)
@@ -88,6 +93,11 @@ export function VentasPage() {
   )
 
   const bloqueado = confirmandoId !== null || saving || comprobante !== null
+
+  // Valores en vivo del recuadro "Precio final a cobrar" de la confirmación (docs/23) — para
+  // mostrar la diferencia contra el precio oficial (`total`) antes de que el cajero confirme.
+  const precioCobradoNum = Math.round((Number(precioCobradoStr.replace(',', '.')) || 0) * 100) / 100
+  const diferenciaPrecioCobrado = Math.round((precioCobradoNum - total) * 100) / 100
 
   function actualizarTicket(id: string, patch: Partial<Ticket>) {
     setTicketsState((prev) => ({
@@ -209,6 +219,7 @@ export function VentasPage() {
     }
     setError(null)
     setConfirmandoId(id)
+    setPrecioCobradoStr(String(calcularTotales(ticket).total))
   }
 
   function iniciarCobro() {
@@ -217,6 +228,7 @@ export function VentasPage() {
 
   function cancelarConfirmacion() {
     setConfirmandoId(null)
+    setPrecioCobradoStr('')
   }
 
   async function confirmarCobro() {
@@ -230,6 +242,13 @@ export function VentasPage() {
     const subtotalTicket = ticket.cart.reduce((acc, it) => acc + it.cantidad * it.precioUnitario, 0)
     const totalTicket =
       Math.round(subtotalTicket * (1 - ticket.descuentoPorcentaje / 100) * (1 + ticket.recargoPorcentaje / 100) * 100) / 100
+
+    const precioCobradoNum = Math.round((Number(precioCobradoStr.replace(',', '.')) || 0) * 100) / 100
+    if (precioCobradoNum <= 0) {
+      setSaving(false)
+      setError('El precio final a cobrar debe ser mayor a $0.')
+      return
+    }
 
     const esCombinado = ticket.formaPago === 'combinado' && ticket.pagosCombinados
     const { data: ventaId, error: rpcError, status } = await supabase.rpc('confirmar_venta', {
@@ -249,6 +268,9 @@ export function VentasPage() {
       p_pagos: esCombinado
         ? ticket.pagosCombinados!.map((p) => ({ forma_pago: p.formaPago, monto: p.monto }))
         : null,
+      // Precio final a cobrar (docs/23): precargado con totalTicket, editable por el cajero antes
+      // de confirmar. El backend guarda ambos valores (precio_oficial y precio_cobrado).
+      p_precio_cobrado: precioCobradoNum,
     })
 
     if (rpcError || !ventaId) {
@@ -263,6 +285,18 @@ export function VentasPage() {
       .eq('id', ventaId)
       .single()
 
+    // Si el precio final a cobrar cambió, el backend reescala cada parte del pago combinado
+    // (docs/23) — se trae el reparto real desde venta_pagos en vez de reusar el que se armó en
+    // PagoCombinadoModal (que sigue sumando al precio oficial, no al cobrado).
+    let pagosComprobante = ticket.pagosCombinados ?? undefined
+    if (esCombinado) {
+      const { data: pagosData } = await supabase
+        .from('venta_pagos')
+        .select('forma_pago, monto')
+        .eq('venta_id', ventaId)
+      pagosComprobante = (pagosData ?? []).map((p) => ({ formaPago: p.forma_pago, monto: p.monto }))
+    }
+
     setSaving(false)
     setComprobante({
       tipo: 'comprobante_x',
@@ -272,7 +306,7 @@ export function VentasPage() {
       clienteMail: ticket.cliente?.mail ?? null,
       clienteCelular: ticket.cliente?.celular ?? null,
       formaPago: ticket.formaPago,
-      pagos: ticket.pagosCombinados ?? undefined,
+      pagos: pagosComprobante,
       items: ticket.cart.map((it) => ({
         nombre: it.nombre,
         codigo: it.codigo,
@@ -283,7 +317,8 @@ export function VentasPage() {
       subtotal: subtotalTicket,
       descuentoPorcentaje: ticket.descuentoPorcentaje,
       recargoPorcentaje: ticket.recargoPorcentaje,
-      total: totalTicket,
+      precioOficial: totalTicket,
+      total: precioCobradoNum,
       cae: null,
     })
     setConfirmandoId(null)
@@ -318,6 +353,7 @@ export function VentasPage() {
       const target = e.target as HTMLElement
       const tag = target.tagName
       const isSearch = target === searchInputRef.current
+      const isPrecioCobrado = target === precioCobradoInputRef.current
       const isTextish = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
       const searchEmpty = isSearch && (target as HTMLInputElement).value.trim() === ''
 
@@ -333,7 +369,7 @@ export function VentasPage() {
       }
 
       if (e.key === 'Enter') {
-        if ((isTextish && !isSearch) || tag === 'BUTTON') return
+        if ((isTextish && !isSearch && !isPrecioCobrado) || tag === 'BUTTON') return
         if (stateRef.current.saving) return
         e.preventDefault()
         if (stateRef.current.confirmando) {
@@ -493,6 +529,31 @@ export function VentasPage() {
           <p className="text-center font-sans text-label-bold text-accent-darker">
             ¿Confirmar venta por {formatCurrency(total)}?
           </p>
+
+          <div className="mt-stack-md rounded-lg border border-line p-4">
+            <Field label="Precio final a cobrar">
+              <input
+                ref={precioCobradoInputRef}
+                autoFocus
+                type="number"
+                step="0.01"
+                min="0"
+                value={precioCobradoStr}
+                onChange={(e) => setPrecioCobradoStr(e.target.value)}
+                onFocus={(e) => e.target.select()}
+                className={inputClass}
+              />
+            </Field>
+            {diferenciaPrecioCobrado !== 0 && (
+              <p
+                className={`mt-2 font-sans text-label-md ${diferenciaPrecioCobrado > 0 ? 'text-success' : 'text-error'}`}
+              >
+                Diferencia respecto al precio oficial: {diferenciaPrecioCobrado > 0 ? '+' : ''}
+                {formatCurrency(diferenciaPrecioCobrado)}
+              </p>
+            )}
+          </div>
+
           {error && (
             <p className="mt-stack-sm rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>
           )}

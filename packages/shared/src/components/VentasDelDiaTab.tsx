@@ -27,7 +27,8 @@ export type DatosComprobante = {
   subtotal: number
   descuentoPorcentaje: number
   recargoPorcentaje: number
-  total: number
+  precioOficial: number // calculado por el sistema, antes del redondeo manual del cajero
+  total: number // = precio cobrado (puede diferir de precioOficial por redondeo)
   cae: string | null
 }
 
@@ -134,6 +135,7 @@ export function VentasDelDiaTab({
       subtotal: venta.subtotal,
       descuentoPorcentaje: venta.descuento_porcentaje,
       recargoPorcentaje: venta.recargo_porcentaje,
+      precioOficial: venta.precio_oficial,
       total: venta.total,
       cae: venta.factura_c?.cae ?? null,
     }

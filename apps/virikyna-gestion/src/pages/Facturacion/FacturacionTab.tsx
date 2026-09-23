@@ -140,6 +140,7 @@ export function FacturacionTab() {
       subtotal: venta.subtotal,
       descuentoPorcentaje: venta.descuento_porcentaje,
       recargoPorcentaje: venta.recargo_porcentaje,
+      precioOficial: venta.precio_oficial,
       total: venta.total,
       cae: venta.factura_c?.cae ?? null,
     })

@@ -185,7 +185,9 @@ export type Venta = {
   subtotal: number
   descuento_porcentaje: number
   recargo_porcentaje: number
-  total: number
+  total: number // = precio_cobrado (docs/23) — lo que efectivamente se cobró
+  precio_oficial: number // calculado por el sistema, sin el redondeo manual del cajero
+  precio_cobrado: number // confirmado/editado por el cajero al cerrar la venta
   estado: EstadoComprobante
   nota: string | null
   terminal_id: string

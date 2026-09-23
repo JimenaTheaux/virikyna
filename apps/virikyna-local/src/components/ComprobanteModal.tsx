@@ -108,7 +108,14 @@ export function ComprobanteModal({ datos, onClose, footer }: Props) {
           <p>Subtotal: {formatCurrency(datos.subtotal)}</p>
           {datos.descuentoPorcentaje > 0 && <p>Descuento: {datos.descuentoPorcentaje}%</p>}
           {datos.recargoPorcentaje > 0 && <p>Recargo: {datos.recargoPorcentaje}%</p>}
+          {datos.precioOficial !== datos.total && <p>Precio oficial: {formatCurrency(datos.precioOficial)}</p>}
           <p className="font-display text-headline-md text-accent-darker">Total: {formatCurrency(datos.total)}</p>
+          {datos.precioOficial !== datos.total && (
+            <p className={datos.total > datos.precioOficial ? 'text-success' : 'text-error'}>
+              Diferencia (redondeo): {datos.total > datos.precioOficial ? '+' : ''}
+              {formatCurrency(datos.total - datos.precioOficial)}
+            </p>
+          )}
         </div>
 
         <button
