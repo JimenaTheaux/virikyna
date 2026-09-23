@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import type { PostgrestError } from '@supabase/supabase-js'
 import type { EstadoProducto, Proveedor, RolUsuario, UbicacionStock } from '@virikyna/shared'
 import {
@@ -9,14 +9,13 @@ import {
   generarCodigoInterno,
   IVA_DEFAULT,
 } from '@virikyna/shared'
+import { CodigoBarrasBox } from '@virikyna/shared'
+import { buscarProductoPorCodigoBarras } from '../../lib/productos'
 import { supabase } from '../../lib/supabaseClient'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field, ErrorText, inputClass, selectClass } from '../../components/FormField'
-import { IconCamara } from '../../components/icons'
 import { AjustarStockSheet } from './AjustarStockSheet'
 import type { ProductoConRelaciones } from './types'
-
-const BarcodeScanner = lazy(() => import('../../components/BarcodeScanner'))
 
 type ProductoCreado = { id: string; nombre: string; costo: number }
 
@@ -28,6 +27,8 @@ type Props = {
   nombreInicial?: string
   onClose: () => void
   onSaved: (creado?: ProductoCreado) => void
+  // Desde el aviso de código duplicado: ir directo a editar el producto que ya existe.
+  onEditarExistente?: (id: string) => void
   onStockChanged: () => void
 }
 
@@ -44,6 +45,7 @@ export function ProductoFormSheet({
   onClose,
   onSaved,
   onStockChanged,
+  onEditarExistente,
 }: Props) {
   const esAdmin = rol === 'admin'
 
@@ -60,7 +62,6 @@ export function ProductoFormSheet({
   const [estado, setEstado] = useState<EstadoProducto>(producto?.estado ?? 'activo')
   const [stock, setStock] = useState(producto?.stock_ubicaciones ?? [])
   const [ajusteUbicacion, setAjusteUbicacion] = useState<UbicacionStock | null>(null)
-  const [escaneando, setEscaneando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -152,14 +153,30 @@ export function ProductoFormSheet({
     onSaved(creado)
   }
 
+  const buscarProductoPorCodigo = async (codigo: string) => {
+    const p = await buscarProductoPorCodigoBarras(codigo)
+    return p ? { id: p.id, nombre: p.nombre } : null
+  }
+
   const stockLocal = stock.find((s) => s.ubicacion === 'local')?.cantidad ?? 0
   const stockDeposito = stock.find((s) => s.ubicacion === 'deposito')?.cantidad ?? 0
 
   return (
     <BottomSheet title={producto ? 'Editar producto' : 'Nuevo producto'} onClose={pedirCierre}>
       <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
+        <CodigoBarrasBox
+          value={codigoBarras}
+          onChange={(v) => {
+            setCodigoBarras(v)
+            setDirty(true)
+          }}
+          buscarPorCodigo={buscarProductoPorCodigo}
+          excluirId={producto?.id}
+          onEditarExistente={onEditarExistente}
+        />
+
         <Field label="Nombre">
-          <input autoFocus value={nombre} onChange={(e) => setNombre(e.target.value)} className={inputClass} />
+          <input value={nombre} onChange={(e) => setNombre(e.target.value)} className={inputClass} />
         </Field>
 
         <Field label="Marca">
@@ -180,25 +197,6 @@ export function ProductoFormSheet({
             ))}
           </select>
         </Field>
-
-        <Field label="Código de barras" hint="Escaneá con la cámara o dejalo vacío para generar un código interno.">
-          <div className="flex gap-2">
-            <input
-              value={codigoBarras}
-              onChange={(e) => setCodigoBarras(e.target.value)}
-              className={`${inputClass} flex-1`}
-            />
-            <button
-              type="button"
-              onClick={() => setEscaneando(true)}
-              aria-label="Escanear código de barras"
-              className="flex items-center justify-center rounded border border-line bg-surface px-4 text-accent-dark hover:bg-accent-light"
-            >
-              <IconCamara className="h-6 w-6" />
-            </button>
-          </div>
-        </Field>
-
         <div className="rounded border border-line p-4">
           <div className="grid grid-cols-3 gap-stack-sm">
             <Field label="Costo">
@@ -329,18 +327,6 @@ export function ProductoFormSheet({
           </button>
         </div>
       </form>
-
-      {escaneando && (
-        <Suspense fallback={null}>
-          <BarcodeScanner
-            onDetect={(codigo) => {
-              setCodigoBarras(codigo)
-              setEscaneando(false)
-            }}
-            onClose={() => setEscaneando(false)}
-          />
-        </Suspense>
-      )}
 
       {producto && ajusteUbicacion && (
         <AjustarStockSheet

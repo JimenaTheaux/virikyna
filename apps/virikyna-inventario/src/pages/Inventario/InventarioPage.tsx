@@ -184,6 +184,7 @@ export function InventarioPage() {
 
       {modal && (
         <ProductoFormSheet
+          key={modal.tipo === 'editar' ? modal.producto.id : 'nuevo'}
           producto={modal.tipo === 'editar' ? modal.producto : undefined}
           codigoBarrasInicial={modal.tipo === 'nuevo' ? modal.codigoBarras : undefined}
           proveedores={proveedores}
@@ -194,6 +195,10 @@ export function InventarioPage() {
             cargar()
           }}
           onStockChanged={cargar}
+          onEditarExistente={(id) => {
+            const existente = productos.find((p) => p.id === id)
+            if (existente) setModal({ tipo: 'editar', producto: existente })
+          }}
         />
       )}
 

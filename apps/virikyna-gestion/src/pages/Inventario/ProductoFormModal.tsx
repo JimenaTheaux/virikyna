@@ -5,13 +5,17 @@ import { supabase } from '../../lib/supabaseClient'
 import { friendlyError, nombresPorId } from '@virikyna/shared'
 import { calcularPrecioVenta, formatCurrency, formatFechaHora, generarCodigoInterno, historialDeMargen } from '@virikyna/shared'
 import { Modal } from '../../components/Modal'
+import { CodigoBarrasBox } from '@virikyna/shared'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
-import { Field, ErrorText, inputClass, selectClass } from '../../components/FormField'
+import { Field, ErrorText, inputClass } from '../../components/FormField'
 import { AjustarStockModal } from './AjustarStockModal'
 import { HistorialPrecioTab } from './HistorialPrecioTab'
 import type { ProductoConRelaciones } from './types'
 
 const IVA_DEFAULT = 21
+
+// Input compacto para que el formulario completo entre en una sola pantalla sin scroll interno.
+const inputCompacto = inputClass.replace('py-2.5', 'py-2')
 
 type ProductoCreado = { id: string; nombre: string; costo: number }
 
@@ -21,13 +25,15 @@ type Props = {
   nombreInicial?: string
   onClose: () => void
   onSaved: (creado?: ProductoCreado) => void
+  // Desde el aviso de código duplicado: ir directo a editar el producto que ya existe.
+  onEditarExistente?: (id: string) => void
   onStockChanged: () => void
 }
 
 // Admin siempre — Virikyna Gestión es exclusiva de administradoras (docs/02_roles_y_permisos.md),
 // así que a diferencia de Virikyna Local acá no hace falta condicionar el margen ni el ajuste
 // de stock por rol: quien entró a esta app ya es admin.
-export function ProductoFormModal({ producto, proveedores, nombreInicial, onClose, onSaved, onStockChanged }: Props) {
+export function ProductoFormModal({ producto, proveedores, nombreInicial, onClose, onSaved, onStockChanged, onEditarExistente }: Props) {
   const [nombre, setNombre] = useState(producto?.nombre ?? nombreInicial ?? '')
   const [descripcion, setDescripcion] = useState(producto?.descripcion ?? '')
   const [codigoBarras, setCodigoBarras] = useState(producto?.codigo_barras ?? '')
@@ -95,6 +101,11 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, onClos
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [producto?.id])
+
+  const buscarProductoPorCodigo = async (codigo: string) => {
+    const { data } = await supabase.from('productos').select('id, nombre').eq('codigo_barras', codigo).maybeSingle()
+    return data ?? null
+  }
 
   const costoNum = Number(costo) || 0
   const margen1Num = Number(margen1) || 0
@@ -171,7 +182,35 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, onClos
   const stockDeposito = stock.find((s) => s.ubicacion === 'deposito')?.cantidad ?? 0
 
   return (
-    <Modal title={producto ? 'Editar producto' : 'Nuevo producto'} onClose={pedirCierre} widthClassName="max-w-[680px]">
+    <Modal
+      title={producto ? 'Editar producto' : 'Nuevo producto'}
+      onClose={pedirCierre}
+      widthClassName="max-w-[960px]"
+      footer={
+        tab === 'datos' || !producto ? (
+          <div className="flex flex-col gap-2">
+            {error && <ErrorText>{error}</ErrorText>}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={pedirCierre}
+                className="rounded border border-line px-5 py-2.5 font-sans text-label-bold text-ink-soft hover:bg-bg"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                form="producto-form"
+                disabled={saving}
+                className="rounded bg-accent px-5 py-2.5 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-60"
+              >
+                {saving ? 'Guardando...' : 'Guardar producto'}
+              </button>
+            </div>
+          </div>
+        ) : undefined
+      }
+    >
       {producto && (
         <div className="mb-stack-md flex gap-1 border-b border-line">
           <button
@@ -202,157 +241,190 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, onClos
       {tab === 'historial' && producto ? (
         <HistorialPrecioTab cambios={cambiosMargen} usuarios={usuariosCambio} loading={cargandoHistorial} />
       ) : (
-      <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
-        <div className="grid grid-cols-2 gap-stack-md">
-          <Field label="Nombre">
-            <input autoFocus value={nombre} onChange={(e) => setNombre(e.target.value)} className={inputClass} />
+      <form
+        id="producto-form"
+        onSubmit={handleSubmit}
+        onChangeCapture={() => setDirty(true)}
+        className="grid grid-cols-[minmax(0,1fr)_240px] gap-stack-md"
+      >
+        <div className="flex flex-col gap-3">
+          <CodigoBarrasBox
+            value={codigoBarras}
+            onChange={(v) => {
+              setCodigoBarras(v)
+              setDirty(true)
+            }}
+            buscarPorCodigo={buscarProductoPorCodigo}
+            excluirId={producto?.id}
+            onEditarExistente={onEditarExistente}
+          />
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Nombre">
+              <input
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                placeholder="Ej: Agua mineral 500ml"
+                className={inputCompacto}
+              />
+            </Field>
+            <Field label="Marca">
+              <input
+                value={marca}
+                onChange={(e) => setMarca(e.target.value)}
+                placeholder="Ej: Coca Cola"
+                className={inputCompacto}
+              />
+            </Field>
+          </div>
+
+          <Field label="Descripción (opcional)">
+            <input value={descripcion} onChange={(e) => setDescripcion(e.target.value)} className={inputCompacto} />
           </Field>
-          <Field label="Marca">
-            <input value={marca} onChange={(e) => setMarca(e.target.value)} className={inputClass} />
+
+          <Field label="Proveedor">
+            <select value={proveedorId} onChange={(e) => setProveedorId(e.target.value)} className={inputCompacto}>
+              <option value="">Sin proveedor</option>
+              {proveedores.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.razon_social}
+                </option>
+              ))}
+            </select>
           </Field>
-        </div>
 
-        <Field label="Descripción">
-          <input value={descripcion} onChange={(e) => setDescripcion(e.target.value)} className={inputClass} />
-        </Field>
+          <div className="rounded-lg border border-line p-3">
+            <p className="mb-2 font-sans text-label-bold text-ink">Precio</p>
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Costo">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={costo}
+                  onChange={(e) => setCosto(e.target.value)}
+                  placeholder="$ 0,00"
+                  className={inputCompacto}
+                />
+              </Field>
+              <Field label="Margen 1 (%)">
+                <input
+                  type="number"
+                  step="0.01"
+                  value={margen1}
+                  onChange={(e) => {
+                    setMargenesAuto(false)
+                    setMargen1(e.target.value)
+                  }}
+                  className={inputCompacto}
+                />
+              </Field>
+              <Field label="Margen 2 (%)">
+                <input
+                  type="number"
+                  step="0.01"
+                  value={margen2}
+                  onChange={(e) => {
+                    setMargenesAuto(false)
+                    setMargen2(e.target.value)
+                  }}
+                  className={inputCompacto}
+                />
+              </Field>
+            </div>
+            <div className="mt-2 flex items-center justify-between rounded bg-accent-light/50 px-3 py-2">
+              <div>
+                <p className="font-sans text-label-md text-ink-soft">Precio de venta</p>
+                <p className="font-sans text-label-md text-ink-soft">Costo × margen 1 × margen 2 × IVA 21%</p>
+              </div>
+              <p className="font-display text-headline-md text-accent-darker">{formatCurrency(precioVenta)}</p>
+            </div>
+            {producto && cambiosMargen.length > 0 && (
+              <p className="mt-2 font-sans text-label-md text-ink-soft">
+                Última modificación de margen: {formatFechaHora(cambiosMargen[0].createdAt)}
+                {usuariosCambio.get(cambiosMargen[0].usuarioId)
+                  ? ` — ${usuariosCambio.get(cambiosMargen[0].usuarioId)}`
+                  : ''}
+              </p>
+            )}
+          </div>
 
-        <Field label="Proveedor">
-          <select value={proveedorId} onChange={(e) => setProveedorId(e.target.value)} className={selectClass}>
-            <option value="">Sin proveedor</option>
-            {proveedores.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.razon_social}
-              </option>
-            ))}
-          </select>
-        </Field>
-
-        <Field label="Código de barras" hint="Si lo dejás vacío, el sistema genera un código interno automático.">
-          <input value={codigoBarras} onChange={(e) => setCodigoBarras(e.target.value)} className={inputClass} />
-        </Field>
-
-        <div className="rounded border border-line p-4">
-          <div className="grid grid-cols-3 gap-stack-md">
-            <Field label="Costo">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Stock mínimo">
               <input
                 type="number"
                 min="0"
-                step="0.01"
-                value={costo}
-                onChange={(e) => setCosto(e.target.value)}
-                className={inputClass}
+                step="1"
+                value={stockMinimo}
+                onChange={(e) => setStockMinimo(e.target.value)}
+                className={inputCompacto}
               />
             </Field>
-            <Field label="Margen 1 (%)">
-              <input
-                type="number"
-                step="0.01"
-                value={margen1}
-                onChange={(e) => {
-                  setMargenesAuto(false)
-                  setMargen1(e.target.value)
-                }}
-                className={inputClass}
-              />
-            </Field>
-            <Field label="Margen 2 (%)">
-              <input
-                type="number"
-                step="0.01"
-                value={margen2}
-                onChange={(e) => {
-                  setMargenesAuto(false)
-                  setMargen2(e.target.value)
-                }}
-                className={inputClass}
-              />
-            </Field>
+            {producto && (
+              <Field label="Estado">
+                <select
+                  value={estado}
+                  onChange={(e) => setEstado(e.target.value as EstadoProducto)}
+                  className={inputCompacto}
+                >
+                  <option value="activo">Activo</option>
+                  <option value="inactivo">Inactivo</option>
+                </select>
+              </Field>
+            )}
           </div>
-          <p className="mt-3 font-display text-headline-md text-accent-darker">
-            Precio de venta: {formatCurrency(precioVenta)}
-          </p>
-          <p className="font-sans text-label-md text-ink-soft">Costo × margen 1 × margen 2 × IVA 21%</p>
-          {producto && cambiosMargen.length > 0 && (
-            <p className="mt-2 font-sans text-label-md text-ink-soft">
-              Última modificación de margen: {formatFechaHora(cambiosMargen[0].createdAt)}
-              {usuariosCambio.get(cambiosMargen[0].usuarioId)
-                ? ` — ${usuariosCambio.get(cambiosMargen[0].usuarioId)}`
-                : ''}
-            </p>
-          )}
         </div>
 
-        <div className="grid grid-cols-2 gap-stack-md">
-          <Field label="Stock mínimo" hint="Dispara la alerta de stock bajo.">
-            <input
-              type="number"
-              min="0"
-              step="1"
-              value={stockMinimo}
-              onChange={(e) => setStockMinimo(e.target.value)}
-              className={inputClass}
-            />
-          </Field>
-          {producto && (
-            <Field label="Estado">
-              <select
-                value={estado}
-                onChange={(e) => setEstado(e.target.value as EstadoProducto)}
-                className={selectClass}
-              >
-                <option value="activo">Activo</option>
-                <option value="inactivo">Inactivo</option>
-              </select>
-            </Field>
-          )}
-        </div>
-
-        {producto && (
-          <div className="rounded border border-line p-4">
-            <p className="font-sans text-label-bold text-ink">Stock por ubicación</p>
-            <div className="mt-2 flex items-center gap-stack-lg font-sans text-body-md text-ink">
-              <span className="flex items-center gap-2">
-                Local: <strong>{stockLocal}</strong>
-                <button
-                  type="button"
-                  onClick={() => setAjusteUbicacion('local')}
-                  className="rounded px-2 py-1 font-sans text-label-md text-accent-dark hover:bg-accent-light"
-                >
-                  Ajustar
-                </button>
-              </span>
-              <span className="flex items-center gap-2">
-                Depósito: <strong>{stockDeposito}</strong>
-                <button
-                  type="button"
-                  onClick={() => setAjusteUbicacion('deposito')}
-                  className="rounded px-2 py-1 font-sans text-label-md text-accent-dark hover:bg-accent-light"
-                >
-                  Ajustar
-                </button>
-              </span>
+        <aside className="flex flex-col gap-3">
+          <div>
+            <p className="mb-1.5 font-sans text-label-md text-ink-soft">Vista previa</p>
+            <div className="rounded-lg border border-line bg-surface p-3">
+              <p className="font-sans text-label-md uppercase text-ink-soft">Código</p>
+              <p className="truncate font-sans text-label-bold text-ink">{codigoBarras.trim() || '— sin escanear —'}</p>
+              <p className="mt-2 font-sans text-label-md uppercase text-ink-soft">Nombre / marca</p>
+              <p className="font-sans text-label-bold text-ink">
+                {nombre.trim() || marca.trim() ? [nombre.trim(), marca.trim()].filter(Boolean).join(' · ') : '— vacío —'}
+              </p>
+              <p className="mt-2 font-sans text-label-md uppercase text-ink-soft">Precio de venta</p>
+              <p className="font-display text-headline-md text-accent-darker">{formatCurrency(precioVenta)}</p>
             </div>
           </div>
-        )}
+          <p className="rounded-lg border border-line bg-surface p-3 font-sans text-label-md text-ink-soft">
+            Se actualiza en vivo a medida que completás el formulario, para verificar antes de guardar.
+          </p>
 
-        {error && <ErrorText>{error}</ErrorText>}
-
-        <div className="flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={pedirCierre}
-            className="rounded px-4 py-3 font-sans text-label-bold text-ink-soft hover:bg-bg"
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded bg-accent px-4 py-3 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-60"
-          >
-            {saving ? 'Guardando...' : 'Guardar'}
-          </button>
-        </div>
+          {producto && (
+            <div className="rounded-lg border border-line bg-surface p-3">
+              <p className="font-sans text-label-bold text-ink">Stock por ubicación</p>
+              <div className="mt-1.5 flex flex-col gap-1 font-sans text-body-md text-ink">
+                <span className="flex items-center justify-between">
+                  <span>
+                    Local: <strong>{stockLocal}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setAjusteUbicacion('local')}
+                    className="rounded px-2 py-0.5 font-sans text-label-md text-accent-dark hover:bg-accent-light"
+                  >
+                    Ajustar
+                  </button>
+                </span>
+                <span className="flex items-center justify-between">
+                  <span>
+                    Depósito: <strong>{stockDeposito}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setAjusteUbicacion('deposito')}
+                    className="rounded px-2 py-0.5 font-sans text-label-md text-accent-dark hover:bg-accent-light"
+                  >
+                    Ajustar
+                  </button>
+                </span>
+              </div>
+            </div>
+          )}
+        </aside>
       </form>
       )}
 

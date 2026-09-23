@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { friendlyError } from '@virikyna/shared'
 import { formatCurrency } from '@virikyna/shared'
 import { coincideBusquedaProducto } from '@virikyna/shared'
-import { SearchInput } from '../../components/SearchInput'
+import { ProductoBuscador } from '@virikyna/shared'
 import { ProductoFormModal } from './ProductoFormModal'
 import { ActualizarPreciosModal } from './ActualizarPreciosModal'
 import type { ProductoConRelaciones } from './types'
@@ -65,25 +65,29 @@ export function ProductosTab() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between">
-        <p className="font-sans text-body-md text-ink-soft">Catálogo de productos, precios y stock por ubicación.</p>
+      <div className="flex flex-col gap-2">
         <div className="flex items-center gap-3">
-          <SearchInput value={busqueda} onChange={setBusqueda} placeholder="Buscar producto..." />
+          <ProductoBuscador value={busqueda} onChange={setBusqueda} />
           <button
             type="button"
             onClick={() => setActualizandoPrecios(true)}
-            className="rounded border border-accent px-4 py-3 font-sans text-label-bold text-accent-dark transition hover:bg-accent-light"
+            className="h-10 whitespace-nowrap rounded border border-line bg-surface px-4 font-sans text-label-bold text-ink-soft transition hover:border-accent hover:text-accent-darker"
           >
             Actualizar precios{seleccion.size > 0 ? ` (${seleccion.size})` : ''}
           </button>
           <button
             type="button"
             onClick={() => setModal('nuevo')}
-            className="rounded bg-accent px-4 py-3 font-sans text-label-bold text-white transition hover:bg-accent-dark"
+            className="h-10 whitespace-nowrap rounded bg-accent px-4 font-sans text-label-bold text-white transition hover:bg-accent-dark"
           >
             + Nuevo producto
           </button>
         </div>
+        <p className="font-sans text-label-md text-ink-soft">
+          Catálogo de productos, precios y stock por ubicación. El campo de búsqueda acepta lector físico de código
+          de barras (enfoca y escanea) o el botón de escaneo con cámara — busca por código, nombre o marca en
+          simultáneo.
+        </p>
       </div>
 
       {error && (
@@ -179,6 +183,7 @@ export function ProductosTab() {
 
       {modal && (
         <ProductoFormModal
+          key={modal === 'nuevo' ? 'nuevo' : modal.id}
           producto={modal === 'nuevo' ? undefined : modal}
           proveedores={proveedores}
           onClose={() => setModal(null)}
@@ -187,6 +192,10 @@ export function ProductosTab() {
             cargar()
           }}
           onStockChanged={cargar}
+          onEditarExistente={(id) => {
+            const existente = productos.find((p) => p.id === id)
+            if (existente) setModal(existente)
+          }}
         />
       )}
 
