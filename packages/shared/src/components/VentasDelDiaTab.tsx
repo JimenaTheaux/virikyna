@@ -174,12 +174,12 @@ export function VentasDelDiaTab({
         <table className="w-full text-left font-sans text-body-md leading-5">
           <thead>
             <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-              <th className="px-3 py-2">Fecha</th>
-              <th className="px-3 py-2">Hora</th>
-              <th className="px-3 py-2">Cliente</th>
-              <th className="px-3 py-2">Medio de pago</th>
-              <th className="px-3 py-2">Monto</th>
-              <th className="px-3 py-2"></th>
+              <th className="whitespace-nowrap px-3 py-2">Fecha</th>
+              <th className="whitespace-nowrap px-3 py-2">Hora</th>
+              <th className="whitespace-nowrap px-3 py-2">Cliente</th>
+              <th className="whitespace-nowrap px-3 py-2">Medio de pago</th>
+              <th className="whitespace-nowrap px-3 py-2">Monto</th>
+              <th className="whitespace-nowrap px-3 py-2"></th>
             </tr>
           </thead>
           <tbody>

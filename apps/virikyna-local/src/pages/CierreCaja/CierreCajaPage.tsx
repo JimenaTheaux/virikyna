@@ -224,11 +224,11 @@ export function CierreCajaPage() {
           <table className="w-full text-left font-sans text-body-md leading-5">
             <thead>
               <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-                <th className="px-3 py-2">Hora</th>
-                <th className="px-3 py-2">Categoría</th>
-                <th className="px-3 py-2">Descripción</th>
-                <th className="px-3 py-2">Usuario</th>
-                <th className="px-3 py-2 text-right">Monto</th>
+                <th className="whitespace-nowrap px-3 py-2">Hora</th>
+                <th className="whitespace-nowrap px-3 py-2">Categoría</th>
+                <th className="whitespace-nowrap px-3 py-2">Descripción</th>
+                <th className="whitespace-nowrap px-3 py-2">Usuario</th>
+                <th className="whitespace-nowrap px-3 py-2 text-right">Monto</th>
               </tr>
             </thead>
             <tbody>
@@ -269,10 +269,10 @@ export function CierreCajaPage() {
           <table className="w-full text-left font-sans text-body-md leading-5">
             <thead>
               <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-                <th className="px-3 py-2">Hora</th>
-                <th className="px-3 py-2">Cajero</th>
-                <th className="px-3 py-2">Admin que recibe</th>
-                <th className="px-3 py-2 text-right">Monto</th>
+                <th className="whitespace-nowrap px-3 py-2">Hora</th>
+                <th className="whitespace-nowrap px-3 py-2">Cajero</th>
+                <th className="whitespace-nowrap px-3 py-2">Admin que recibe</th>
+                <th className="whitespace-nowrap px-3 py-2 text-right">Monto</th>
               </tr>
             </thead>
             <tbody>
@@ -312,10 +312,10 @@ export function CierreCajaPage() {
           <table className="w-full text-left font-sans text-body-md leading-5">
             <thead>
               <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-                <th className="px-3 py-2">Hora</th>
-                <th className="px-3 py-2">Usuario</th>
-                <th className="px-3 py-2 text-right">Efectivo esperado</th>
-                <th className="px-3 py-2"></th>
+                <th className="whitespace-nowrap px-3 py-2">Hora</th>
+                <th className="whitespace-nowrap px-3 py-2">Usuario</th>
+                <th className="whitespace-nowrap px-3 py-2 text-right">Efectivo esperado</th>
+                <th className="whitespace-nowrap px-3 py-2"></th>
               </tr>
             </thead>
             <tbody>

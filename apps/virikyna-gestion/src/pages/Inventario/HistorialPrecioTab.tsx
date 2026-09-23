@@ -28,11 +28,11 @@ export function HistorialPrecioTab({ cambios, usuarios, loading }: Props) {
         <thead>
           <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
             <th className="min-w-[110px] whitespace-nowrap px-3 py-2">Fecha</th>
-            <th className="px-3 py-2">Usuario</th>
-            <th className="px-3 py-2">Costo</th>
-            <th className="px-3 py-2">Margen 1</th>
-            <th className="px-3 py-2">Margen 2</th>
-            <th className="px-3 py-2">Precio de venta</th>
+            <th className="whitespace-nowrap px-3 py-2">Usuario</th>
+            <th className="whitespace-nowrap px-3 py-2">Costo</th>
+            <th className="whitespace-nowrap px-3 py-2">Margen 1</th>
+            <th className="whitespace-nowrap px-3 py-2">Margen 2</th>
+            <th className="whitespace-nowrap px-3 py-2">Precio de venta</th>
           </tr>
         </thead>
         <tbody>

@@ -35,11 +35,12 @@ export function formatFecha(fecha: string): string {
   return new Date(`${fecha}T00:00:00`).toLocaleDateString('es-AR', { dateStyle: 'long' })
 }
 
-// dd-MM-YYYY — mismo dato que formatFecha, formato corto (ej. tabla de historial de egresos).
+// DD/MM/AAAA — formato corto estándar para columnas de fecha en tablas y vistas de detalle
+// (mismo dato que formatFecha, sin el texto largo "15 de septiembre de 2026").
 // Reordena el string 'YYYY-MM-DD' directo, sin pasar por Date, así no hay riesgo de UTC.
 export function formatFechaCorta(fecha: string): string {
   const [anio, mes, dia] = fecha.split('-')
-  return `${dia}-${mes}-${anio}`
+  return `${dia}/${mes}/${anio}`
 }
 
 // `offsetDias` negativo = días hacia atrás desde hoy (ej. -1 = ayer, -6 = hace 6 días).

@@ -415,7 +415,7 @@ export function VentasPage() {
   }, [activeTicketId])
 
   return (
-    <div className="flex h-full flex-col gap-stack-md">
+    <div className="flex h-full flex-col gap-stack-sm">
       <TicketsBar
         tickets={tickets}
         activeTicketId={activeTicketId}
@@ -463,7 +463,7 @@ export function VentasPage() {
             </div>
           )}
 
-          <div className="mt-stack-md">
+          <div className="mt-2">
             <FormaPagoSelector
               value={activeTicket.formaPago}
               disponibleCuentaCorriente={activeTicket.cliente !== null}
@@ -472,27 +472,25 @@ export function VentasPage() {
             />
           </div>
 
-          <div className="mt-stack-sm">
-            <label className="flex flex-col gap-1">
-              <span className="font-sans text-label-bold text-ink-soft">Nota (opcional)</span>
-              <input
-                value={nota}
-                onChange={(e) => setNota(e.target.value)}
-                className="rounded border border-line bg-surface px-3 py-2 font-sans text-body-md text-ink outline-none focus:border-accent"
-              />
-            </label>
+          <div className="mt-2">
+            <input
+              value={nota}
+              onChange={(e) => setNota(e.target.value)}
+              placeholder="Nota (opcional)"
+              className="w-full rounded border border-line bg-surface px-3 py-1.5 font-sans text-body-md text-ink outline-none placeholder:text-ink-soft focus:border-accent"
+            />
           </div>
 
           {error && (
-            <p className="mt-stack-sm rounded bg-error/10 px-4 py-2 font-sans text-body-md text-error">{error}</p>
+            <p className="mt-2 rounded bg-error/10 px-4 py-2 font-sans text-body-md text-error">{error}</p>
           )}
 
-          <div className="mt-stack-sm grid grid-cols-3 gap-2">
+          <div className="mt-2 grid grid-cols-3 gap-2">
             <button
               type="button"
               onClick={() => setDescuentoModalOpen(true)}
               disabled={confirmandoId !== null}
-              className="rounded-lg border border-line px-4 py-2.5 font-sans text-label-bold text-ink-soft hover:border-accent disabled:opacity-50"
+              className="rounded-lg border border-line px-4 py-2 font-sans text-label-bold text-ink-soft hover:border-accent disabled:opacity-50"
             >
               Descuento (D)
             </button>
@@ -500,14 +498,14 @@ export function VentasPage() {
               type="button"
               onClick={() => setRecargoModalOpen(true)}
               disabled={confirmandoId !== null}
-              className="rounded-lg border border-line px-4 py-2.5 font-sans text-label-bold text-ink-soft hover:border-accent disabled:opacity-50"
+              className="rounded-lg border border-line px-4 py-2 font-sans text-label-bold text-ink-soft hover:border-accent disabled:opacity-50"
             >
               Recargo (R)
             </button>
             <button
               type="button"
               onClick={limpiarTicketActivo}
-              className="rounded-lg border border-error px-4 py-2.5 font-sans text-label-bold text-error hover:bg-error/10"
+              className="rounded-lg border border-error px-4 py-2 font-sans text-label-bold text-error hover:bg-error/10"
             >
               Cancelar (Esc)
             </button>
@@ -517,7 +515,7 @@ export function VentasPage() {
             type="button"
             onClick={iniciarCobro}
             disabled={activeTicket.cart.length === 0 || !activeTicket.formaPago || confirmandoId !== null}
-            className="mt-stack-sm flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-4 font-display text-headline-md text-white transition hover:bg-accent-dark disabled:opacity-50"
+            className="mt-2 flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-3.5 font-display text-headline-md text-white transition hover:bg-accent-dark disabled:opacity-50"
           >
             COBRAR (Enter)
           </button>

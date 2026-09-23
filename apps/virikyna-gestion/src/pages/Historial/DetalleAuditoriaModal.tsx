@@ -104,9 +104,9 @@ export function DetalleAuditoriaModal({ auditoria, ventaEstado, onClose, onRever
             <table className="w-full text-left font-sans text-label-md">
               <thead>
                 <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-                  <th className="px-3 py-2">Campo</th>
-                  <th className="px-3 py-2">Antes</th>
-                  <th className="px-3 py-2">Después</th>
+                  <th className="whitespace-nowrap px-3 py-2">Campo</th>
+                  <th className="whitespace-nowrap px-3 py-2">Antes</th>
+                  <th className="whitespace-nowrap px-3 py-2">Después</th>
                 </tr>
               </thead>
               <tbody>

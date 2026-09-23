@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import type { CierreCaja } from '@virikyna/shared'
-import { formatFecha, friendlyError } from '@virikyna/shared'
+import { formatFechaCorta, friendlyError } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { agregarNotaCorreccion } from '../../lib/historial'
 import { Modal } from '../../components/Modal'
@@ -98,7 +98,7 @@ export function NotaCorreccionModal({ onClose, onSaved }: Props) {
               <select value={cierreId} onChange={(e) => setCierreId(e.target.value)} className={selectClass}>
                 {cierres.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {formatFecha(c.turno_fecha)}
+                    {formatFechaCorta(c.turno_fecha)}
                   </option>
                 ))}
               </select>

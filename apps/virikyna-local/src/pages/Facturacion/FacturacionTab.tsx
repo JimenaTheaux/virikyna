@@ -224,14 +224,14 @@ export function FacturacionTab() {
         <table className="w-full text-left font-sans text-body-md leading-5">
           <thead>
             <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-              <th className="px-3 py-2"></th>
-              <th className="px-3 py-2">N°</th>
+              <th className="whitespace-nowrap px-3 py-2"></th>
+              <th className="whitespace-nowrap px-3 py-2">N°</th>
               <th className="min-w-[120px] whitespace-nowrap px-3 py-2">Fecha</th>
-              <th className="px-3 py-2">Cliente</th>
-              <th className="px-3 py-2">Medio de pago</th>
-              <th className="px-3 py-2">Total</th>
-              <th className="px-3 py-2">Estado</th>
-              <th className="px-3 py-2"></th>
+              <th className="whitespace-nowrap px-3 py-2">Cliente</th>
+              <th className="whitespace-nowrap px-3 py-2">Medio de pago</th>
+              <th className="whitespace-nowrap px-3 py-2">Total</th>
+              <th className="whitespace-nowrap px-3 py-2">Estado</th>
+              <th className="whitespace-nowrap px-3 py-2"></th>
             </tr>
           </thead>
           <tbody>

@@ -52,9 +52,9 @@ export function ComprobanteModal({ datos, onClose, footer }: Props) {
           <table className="w-full text-left font-sans text-body-md">
             <thead>
               <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-                <th className="px-3 py-2">Producto</th>
-                <th className="px-3 py-2 text-center">Cant.</th>
-                <th className="px-3 py-2 text-right">Importe</th>
+                <th className="whitespace-nowrap px-3 py-2">Producto</th>
+                <th className="whitespace-nowrap px-3 py-2 text-center">Cant.</th>
+                <th className="whitespace-nowrap px-3 py-2 text-right">Importe</th>
               </tr>
             </thead>
             <tbody>

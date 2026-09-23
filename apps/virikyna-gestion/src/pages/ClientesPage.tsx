@@ -111,12 +111,12 @@ export function ClientesPage() {
         <table className="w-full text-left font-sans text-body-md leading-5">
           <thead>
             <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-              <th className="px-3 py-2">Nombre</th>
-              <th className="px-3 py-2">CUIT</th>
-              <th className="px-3 py-2">Celular</th>
-              <th className="px-3 py-2 text-right">Saldo cta. cte.</th>
-              <th className="px-3 py-2">Estado</th>
-              <th className="px-3 py-2"></th>
+              <th className="whitespace-nowrap px-3 py-2">Nombre</th>
+              <th className="whitespace-nowrap px-3 py-2">CUIT</th>
+              <th className="whitespace-nowrap px-3 py-2">Celular</th>
+              <th className="whitespace-nowrap px-3 py-2 text-right">Saldo cta. cte.</th>
+              <th className="whitespace-nowrap px-3 py-2">Estado</th>
+              <th className="whitespace-nowrap px-3 py-2"></th>
             </tr>
           </thead>
           <tbody>

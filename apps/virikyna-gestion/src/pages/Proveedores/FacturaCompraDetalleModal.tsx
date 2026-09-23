@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { FacturaCompraItem, FacturaCompraSaldo, PagoProveedor } from '@virikyna/shared'
-import { formatCurrency, formatFecha, formatFechaHora, friendlyError, nombresPorId } from '@virikyna/shared'
+import { formatCurrency, formatFechaCorta, formatFechaHora, friendlyError, nombresPorId } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { Modal } from '../../components/Modal'
 import { ErrorText } from '../../components/FormField'
@@ -102,7 +102,7 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
             Proveedor: <span className="text-ink">{proveedorNombre}</span>
           </p>
           <p className="text-ink-soft">
-            Fecha: <span className="text-ink">{formatFecha(facturaActual.fecha_comprobante)}</span>
+            Fecha: <span className="text-ink">{formatFechaCorta(facturaActual.fecha_comprobante)}</span>
           </p>
           <p className="text-ink-soft">
             Forma de pago:{' '}

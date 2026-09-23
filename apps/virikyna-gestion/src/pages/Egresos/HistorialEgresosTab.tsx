@@ -106,12 +106,12 @@ export function HistorialEgresosTab() {
           <thead>
             <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
               <th className="min-w-[100px] whitespace-nowrap px-3 py-2">Fecha</th>
-              <th className="px-3 py-2">Categoría</th>
-              <th className="px-3 py-2 text-right">Monto</th>
-              <th className="px-3 py-2">Forma de pago</th>
-              <th className="px-3 py-2">Descripción</th>
-              <th className="px-3 py-2">Origen</th>
-              <th className="px-3 py-2">Usuario</th>
+              <th className="whitespace-nowrap px-3 py-2">Categoría</th>
+              <th className="whitespace-nowrap px-3 py-2 text-right">Monto</th>
+              <th className="whitespace-nowrap px-3 py-2">Forma de pago</th>
+              <th className="whitespace-nowrap px-3 py-2">Descripción</th>
+              <th className="whitespace-nowrap px-3 py-2">Origen</th>
+              <th className="whitespace-nowrap px-3 py-2">Usuario</th>
             </tr>
           </thead>
           <tbody>

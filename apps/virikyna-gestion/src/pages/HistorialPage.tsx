@@ -193,10 +193,10 @@ export function HistorialPage() {
           <thead>
             <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
               <th className="min-w-[120px] whitespace-nowrap px-3 py-2">Fecha</th>
-              <th className="px-3 py-2">Usuario</th>
-              <th className="px-3 py-2">Módulo</th>
-              <th className="px-3 py-2">Acción</th>
-              <th className="px-3 py-2"></th>
+              <th className="whitespace-nowrap px-3 py-2">Usuario</th>
+              <th className="whitespace-nowrap px-3 py-2">Módulo</th>
+              <th className="whitespace-nowrap px-3 py-2">Acción</th>
+              <th className="whitespace-nowrap px-3 py-2"></th>
             </tr>
           </thead>
           <tbody>

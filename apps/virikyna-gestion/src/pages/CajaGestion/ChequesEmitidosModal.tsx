@@ -52,10 +52,10 @@ export function ChequesEmitidosModal({ onClose }: Props) {
           <table className="w-full text-left font-sans text-body-md leading-5">
             <thead>
               <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-                <th className="px-3 py-2">Vencimiento</th>
-                <th className="px-3 py-2">Nro.</th>
-                <th className="px-3 py-2">Proveedor</th>
-                <th className="px-3 py-2 text-right">Importe</th>
+                <th className="whitespace-nowrap px-3 py-2">Vencimiento</th>
+                <th className="whitespace-nowrap px-3 py-2">Nro.</th>
+                <th className="whitespace-nowrap px-3 py-2">Proveedor</th>
+                <th className="whitespace-nowrap px-3 py-2 text-right">Importe</th>
               </tr>
             </thead>
             <tbody>
