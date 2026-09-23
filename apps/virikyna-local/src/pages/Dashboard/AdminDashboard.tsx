@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { IconCierreCaja, IconConfiguracion, IconInventario, IconProveedores } from '../../components/icons'
-import { fechaISO, formatCurrency, StockBajoCard } from '@virikyna/shared'
+import { fechaISO, formatCurrency, StockBajoCard, DefectuososCard } from '@virikyna/shared'
 import { friendlyError } from '@virikyna/shared'
 import { fetchDevolucionesUltimosDias, fetchVentasUltimosDias } from './queries'
-import { DefectuososCard } from './DefectuososCard'
 import { WeeklySalesChart } from './WeeklySalesChart'
 import { AbrirCajaCard } from './AbrirCajaCard'
 import { supabase } from '../../lib/supabaseClient'
@@ -95,7 +94,7 @@ export function AdminDashboard() {
 
         <div className="flex flex-col gap-gutter-grid">
           <StockBajoCard supabase={supabase} className="flex-1" />
-          <DefectuososCard />
+          <DefectuososCard supabase={supabase} to="/facturacion" />
         </div>
       </div>
 

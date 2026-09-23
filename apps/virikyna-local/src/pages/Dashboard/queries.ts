@@ -45,30 +45,3 @@ export async function fetchDevolucionesUltimosDias(dias: number) {
   }
   return { netoPorDia, error: null }
 }
-
-export type DefectuosoPendiente = { productoId: string; nombre: string; cantidad: number }
-
-// Ítems devueltos como defectuosos (reingresa_stock = false) de devoluciones activas: mercadería
-// separada que no volvió al stock y espera revisión.
-export async function fetchDefectuososPendientes() {
-  const { data, error } = await supabase
-    .from('devolucion_items')
-    .select('producto_id, cantidad, producto:productos(nombre), devolucion:devoluciones!inner(estado)')
-    .eq('tipo', 'devuelto')
-    .eq('reingresa_stock', false)
-    .eq('devolucion.estado', 'activa')
-
-  if (error || !data) return { data: [] as DefectuosoPendiente[], error }
-
-  const porProducto = new Map<string, DefectuosoPendiente>()
-  for (const row of data as unknown as { producto_id: string; cantidad: number; producto: { nombre: string } | null }[]) {
-    const actual = porProducto.get(row.producto_id) ?? {
-      productoId: row.producto_id,
-      nombre: row.producto?.nombre ?? 'Producto',
-      cantidad: 0,
-    }
-    actual.cantidad += row.cantidad
-    porProducto.set(row.producto_id, actual)
-  }
-  return { data: [...porProducto.values()].sort((a, b) => b.cantidad - a.cantidad), error: null }
-}

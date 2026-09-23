@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { IconCajaGestion, IconInventario, IconProveedores } from '../components/icons'
-import { fechaISO, formatCurrency, friendlyError, StockBajoCard } from '@virikyna/shared'
+import { fechaISO, formatCurrency, friendlyError, StockBajoCard, DefectuososCard } from '@virikyna/shared'
 import { fetchVentasUltimosDias } from './Dashboard/queries'
 import { WeeklySalesChart } from './Dashboard/WeeklySalesChart'
 import { AperturasAlerta } from './Dashboard/AperturasAlerta'
@@ -87,7 +87,10 @@ export function DashboardPage() {
           <WeeklySalesChart porDia={porDia} />
         </div>
 
-        <StockBajoCard supabase={supabase} />
+        <div className="flex flex-col gap-gutter-grid">
+          <StockBajoCard supabase={supabase} className="flex-1" />
+          <DefectuososCard supabase={supabase} to="/inventario" />
+        </div>
       </div>
 
       <div className="grid grid-cols-4 gap-gutter-grid">
