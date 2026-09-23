@@ -6,6 +6,9 @@ type Props = {
   onClose: () => void
   children: ReactNode
   widthClassName?: string
+  // Pie fijo (fuera del área con scroll) — para formularios largos donde los botones de acción
+  // deben quedar siempre accesibles sin scrollear (ej. carga de factura de compra tipo planilla).
+  footer?: ReactNode
 }
 
 // Portal a document.body a propósito: un Modal puede abrirse desde adentro de OTRO formulario
@@ -21,7 +24,7 @@ type Props = {
 // cerrar el subformulario de producto cerraba la factura entera). Cortamos esa propagación acá,
 // en el único punto por el que pasan todos los modales de la app — así ningún formulario futuro
 // que se abra dentro de otro va a heredar este mismo bug.
-export function Modal({ title, onClose, children, widthClassName = 'max-w-[560px]' }: Props) {
+export function Modal({ title, onClose, children, widthClassName = 'max-w-[560px]', footer }: Props) {
   return createPortal(
     // Sin cierre por click afuera a propósito — un clic perdido durante la carga de una factura
     // (varios ítems, muchos campos) no debe tirar todo lo cargado. Solo cierran el botón ✕ y los
@@ -30,8 +33,12 @@ export function Modal({ title, onClose, children, widthClassName = 'max-w-[560px
       className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
       onSubmit={(e) => e.stopPropagation()}
     >
-      <div className={`w-full ${widthClassName} max-h-[90vh] overflow-y-auto rounded-lg bg-surface p-card shadow-sm`}>
-        <div className="flex items-center justify-between">
+      <div
+        className={`flex w-full ${widthClassName} max-h-[90vh] flex-col rounded-lg bg-surface shadow-sm ${
+          footer ? '' : 'overflow-y-auto p-card'
+        }`}
+      >
+        <div className={`flex shrink-0 items-center justify-between ${footer ? 'p-card pb-0' : ''}`}>
           <h2 className="font-display text-headline-md text-accent-darker">{title}</h2>
           <button
             type="button"
@@ -42,7 +49,11 @@ export function Modal({ title, onClose, children, widthClassName = 'max-w-[560px
             ✕
           </button>
         </div>
-        <div className="mt-stack-md">{children}</div>
+        {/* Sin footer: mismo layout de siempre (todo scrollea junto). Con footer: esta zona es la
+            única que scrollea y el footer queda fijo abajo — para formularios largos donde las
+            acciones (Cancelar/Guardar) no deben requerir scroll para ser alcanzadas. */}
+        <div className={footer ? 'min-h-0 flex-1 overflow-y-auto p-card pt-stack-md' : 'mt-stack-md'}>{children}</div>
+        {footer && <div className="shrink-0 border-t border-line p-card pt-4">{footer}</div>}
       </div>
     </div>,
     document.body,

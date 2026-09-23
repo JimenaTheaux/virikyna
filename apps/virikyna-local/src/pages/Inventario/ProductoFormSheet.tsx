@@ -27,7 +27,7 @@ import type { ProductoConRelaciones } from './types'
 
 const IVA_DEFAULT = 21
 
-type ProductoCreado = { id: string; nombre: string; costo: number }
+type ProductoCreado = { id: string; nombre: string; costo: number; marca: string | null; codigo_barras: string | null }
 
 type Props = {
   producto?: ProductoConRelaciones
@@ -177,7 +177,7 @@ export function ProductoFormSheet({
           ...payload,
           codigo_interno: codigoBarrasLimpio ? null : generarCodigoInterno(),
         })
-        .select('id, nombre, costo')
+        .select('id, nombre, costo, marca, codigo_barras')
         .single()
       dbError = error
       creado = data ?? undefined

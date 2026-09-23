@@ -12,14 +12,12 @@ import {
   formatCurrency,
   itemsValidosFacturaCompra,
   mensajeErrorGuardado,
-  nuevoItemFacturaCompra,
-  type ItemFacturaCompra,
 } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field, ErrorText, inputClass, selectClass } from '../../components/FormField'
-import { ItemFacturaRow } from './ItemFacturaRow'
+import { ItemFacturaRow, nuevoItemFacturaCompraUI, type ItemFacturaCompraUI } from './ItemFacturaRow'
 
 const TIPOS: { value: TipoComprobanteCompra; label: string }[] = [
   { value: 'factura', label: 'Factura' },
@@ -31,6 +29,18 @@ const TIPOS: { value: TipoComprobanteCompra; label: string }[] = [
 
 const LETRAS: LetraComprobanteCompra[] = ['A', 'B', 'R', 'X']
 
+const COLUMNAS_ITEMS = [
+  { label: 'Cód. barras', align: 'left', width: '11%' },
+  { label: 'Producto', align: 'left', width: '22%' },
+  { label: 'Marca', align: 'left', width: '13%' },
+  { label: 'Cant.', align: 'right', width: '8%' },
+  { label: 'P. unitario', align: 'right', width: '11%' },
+  { label: 'Desc. %', align: 'right', width: '7%' },
+  { label: 'Depósito', align: 'left', width: '10%' },
+  { label: 'Subtotal', align: 'right', width: '12%' },
+  { label: '', align: 'center', width: '6%' },
+] as const
+
 type Props = {
   onClose: () => void
   onSaved: () => void
@@ -38,8 +48,9 @@ type Props = {
 
 // Versión de escritorio de la carga de factura de compra de Virikyna Inventario (celular) —
 // misma lógica de negocio (packages/shared/lib/facturasCompra.ts), mismo RPC atómico
-// `cargar_factura_compra`, solo cambia la UI: acá va en un modal, y la búsqueda de producto por
-// ítem es por nombre en vez de cámara (ver ItemFacturaRow).
+// `cargar_factura_compra`, solo cambia la UI: acá va en un modal tipo planilla (una fila por
+// ítem, editable celda por celda), y la búsqueda de producto por ítem es por tipeo/lector en vez
+// de cámara (ver ItemFacturaRow).
 export function CargarFacturaCompraModal({ onClose, onSaved }: Props) {
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [proveedorId, setProveedorId] = useState('')
@@ -49,8 +60,9 @@ export function CargarFacturaCompraModal({ onClose, onSaved }: Props) {
   const [numeroComprobante, setNumeroComprobante] = useState('')
   const [fechaComprobante, setFechaComprobante] = useState(fechaHoyISO())
   const [fechaFiscal, setFechaFiscal] = useState('')
+  const [mostrarFechaFiscal, setMostrarFechaFiscal] = useState(false)
   const [formaPago, setFormaPago] = useState<FormaPagoCompra>('contado')
-  const [items, setItems] = useState<ItemFacturaCompra[]>([nuevoItemFacturaCompra()])
+  const [items, setItems] = useState<ItemFacturaCompraUI[]>([nuevoItemFacturaCompraUI()])
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -72,7 +84,7 @@ export function CargarFacturaCompraModal({ onClose, onSaved }: Props) {
       .then(({ data }) => setProveedores((data ?? []) as Proveedor[]))
   }, [])
 
-  function actualizarItem(key: string, cambios: Partial<ItemFacturaCompra>) {
+  function actualizarItem(key: string, cambios: Partial<ItemFacturaCompraUI>) {
     setItems((prev) => prev.map((it) => (it.key === key ? { ...it, ...cambios } : it)))
   }
 
@@ -109,7 +121,14 @@ export function CargarFacturaCompraModal({ onClose, onSaved }: Props) {
       fechaComprobante,
       fechaFiscal: fechaFiscal || null,
       formaPago,
-      items,
+      // Un ítem libre (sin producto_id) no tiene columna propia de marca en la factura — la
+      // pegamos dentro de la descripción para no perderla. Un ítem vinculado al catálogo no la
+      // necesita ahí: ya se recupera vía producto_id → producto.marca.
+      items: items.map((it) =>
+        !it.productoId && it.marca.trim()
+          ? { ...it, descripcion: `${it.descripcion.trim()} - ${it.marca.trim()}` }
+          : it,
+      ),
     })
     setSaving(false)
 
@@ -122,150 +141,209 @@ export function CargarFacturaCompraModal({ onClose, onSaved }: Props) {
   }
 
   return (
-    <Modal title="Nueva factura de compra" onClose={pedirCierre} widthClassName="max-w-[760px]">
-      <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
-        <Field label="Proveedor">
-          <select value={proveedorId} onChange={(e) => setProveedorId(e.target.value)} className={selectClass}>
-            <option value="">Elegí un proveedor</option>
-            {proveedores.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.razon_social}
-              </option>
-            ))}
-          </select>
-        </Field>
+    <Modal
+      title="Nueva factura de compra"
+      onClose={pedirCierre}
+      widthClassName="max-w-[1180px]"
+      footer={
+        <div className="flex flex-col gap-stack-sm">
+          <div className="flex items-center justify-between gap-stack-md">
+            <div className="flex gap-stack-lg">
+              <div>
+                <p className="font-sans text-label-md text-ink-soft">Subtotal</p>
+                <p className="font-sans text-body-md text-ink">{formatCurrency(subtotalPreview)}</p>
+              </div>
+              <div>
+                <p className="font-sans text-label-md text-ink-soft">IVA (21%)</p>
+                <p className="font-sans text-body-md text-ink">{formatCurrency(ivaPreview)}</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="font-sans text-label-md text-ink-soft">Total factura</p>
+              <p className="font-display text-headline-md text-accent-darker">{formatCurrency(totalPreview)}</p>
+            </div>
+          </div>
 
-        <div className="grid grid-cols-2 gap-stack-sm">
-          <Field label="Tipo de comprobante">
-            <select
-              value={tipoComprobante}
-              onChange={(e) => setTipoComprobante(e.target.value as TipoComprobanteCompra)}
-              className={selectClass}
+          {error && <ErrorText>{error}</ErrorText>}
+
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={pedirCierre}
+              className="rounded px-4 py-3 font-sans text-label-bold text-ink-soft hover:bg-bg"
             >
-              {TIPOS.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Letra">
-            <select
-              value={letra}
-              onChange={(e) => setLetra(e.target.value as LetraComprobanteCompra | '')}
-              className={selectClass}
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              form="form-factura-compra"
+              disabled={saving}
+              className="rounded bg-accent px-4 py-3 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-60"
             >
-              <option value="">—</option>
-              {LETRAS.map((l) => (
-                <option key={l} value={l}>
-                  {l}
-                </option>
-              ))}
-            </select>
-          </Field>
+              {saving ? 'Guardando...' : 'Guardar factura'}
+            </button>
+          </div>
+        </div>
+      }
+    >
+      <form
+        id="form-factura-compra"
+        onSubmit={handleSubmit}
+        onChangeCapture={() => setDirty(true)}
+        className="flex flex-col gap-stack-md"
+      >
+        {/* Franja superior — datos del comprobante en una sola fila compacta */}
+        <div className="grid grid-cols-12 gap-stack-sm">
+          <div className="col-span-3">
+            <Field label="Proveedor">
+              <select value={proveedorId} onChange={(e) => setProveedorId(e.target.value)} className={selectClass}>
+                <option value="">Elegí un proveedor</option>
+                {proveedores.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.razon_social}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <div className="col-span-2">
+            <Field label="Tipo de comprobante">
+              <select
+                value={tipoComprobante}
+                onChange={(e) => setTipoComprobante(e.target.value as TipoComprobanteCompra)}
+                className={selectClass}
+              >
+                {TIPOS.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <div className="col-span-1">
+            <Field label="Letra">
+              <select
+                value={letra}
+                onChange={(e) => setLetra(e.target.value as LetraComprobanteCompra | '')}
+                className={selectClass}
+              >
+                <option value="">—</option>
+                {LETRAS.map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <div className="col-span-1">
+            <Field label="Punto de venta">
+              <input value={puntoVenta} onChange={(e) => setPuntoVenta(e.target.value)} className={inputClass} />
+            </Field>
+          </div>
+          <div className="col-span-2">
+            <Field label="Número">
+              <input
+                value={numeroComprobante}
+                onChange={(e) => setNumeroComprobante(e.target.value)}
+                className={inputClass}
+              />
+            </Field>
+          </div>
+          <div className="col-span-2">
+            <Field label="Fecha comprobante">
+              <input
+                type="date"
+                value={fechaComprobante}
+                onChange={(e) => setFechaComprobante(e.target.value)}
+                className={inputClass}
+              />
+            </Field>
+          </div>
+          <div className="col-span-1">
+            <Field label="Forma de pago">
+              <select
+                value={formaPago}
+                onChange={(e) => setFormaPago(e.target.value as FormaPagoCompra)}
+                className={selectClass}
+              >
+                <option value="contado">Contado</option>
+                <option value="cuenta_corriente">Cta. cte.</option>
+              </select>
+            </Field>
+          </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-stack-sm">
-          <Field label="Punto de venta">
-            <input value={puntoVenta} onChange={(e) => setPuntoVenta(e.target.value)} className={inputClass} />
-          </Field>
-          <Field label="Número de comprobante">
-            <input
-              value={numeroComprobante}
-              onChange={(e) => setNumeroComprobante(e.target.value)}
-              className={inputClass}
-            />
-          </Field>
-        </div>
-
-        <div className="grid grid-cols-2 gap-stack-sm">
-          <Field label="Fecha del comprobante">
-            <input
-              type="date"
-              value={fechaComprobante}
-              onChange={(e) => setFechaComprobante(e.target.value)}
-              className={inputClass}
-            />
-          </Field>
-          <Field label="Fecha fiscal" hint="Opcional">
-            <input
-              type="date"
-              value={fechaFiscal}
-              onChange={(e) => setFechaFiscal(e.target.value)}
-              className={inputClass}
-            />
-          </Field>
-        </div>
-
-        <Field label="Forma de pago">
-          <select
-            value={formaPago}
-            onChange={(e) => setFormaPago(e.target.value as FormaPagoCompra)}
-            className={selectClass}
-          >
-            <option value="contado">Contado</option>
-            <option value="cuenta_corriente">Cuenta corriente</option>
-          </select>
-        </Field>
-
-        <div className="flex items-center justify-between">
-          <p className="font-sans text-label-bold text-ink">Ítems</p>
+        {mostrarFechaFiscal ? (
+          <div className="grid grid-cols-12 gap-stack-sm">
+            <div className="col-span-2">
+              <Field label="Fecha fiscal" hint="Opcional">
+                <input
+                  type="date"
+                  value={fechaFiscal}
+                  onChange={(e) => setFechaFiscal(e.target.value)}
+                  className={inputClass}
+                />
+              </Field>
+            </div>
+          </div>
+        ) : (
           <button
             type="button"
-            onClick={() => setItems((prev) => [...prev, nuevoItemFacturaCompra()])}
+            onClick={() => setMostrarFechaFiscal(true)}
+            className="self-start rounded px-1 font-sans text-label-md text-accent-dark hover:underline"
+          >
+            + Agregar fecha fiscal (opcional)
+          </button>
+        )}
+
+        {/* Tabla de ítems tipo planilla — sin scroll interno propio, crece con la página */}
+        <div className="flex items-center justify-between">
+          <p className="font-sans text-label-bold text-ink">Ítems de la factura</p>
+          <button
+            type="button"
+            onClick={() => setItems((prev) => [...prev, nuevoItemFacturaCompraUI()])}
             className="rounded px-3 py-2 font-sans text-label-bold text-accent-dark hover:bg-accent-light"
           >
             + Agregar ítem
           </button>
         </div>
 
-        <div className="flex flex-col gap-stack-sm">
-          {items.map((item, i) => (
-            <ItemFacturaRow
-              key={item.key}
-              item={item}
-              index={i}
-              puedeEliminar={items.length > 1}
-              proveedores={proveedores}
-              onChange={(cambios) => actualizarItem(item.key, cambios)}
-              onEliminar={() => eliminarItem(item.key)}
-            />
-          ))}
-        </div>
-
-        <div className="rounded-lg border border-line bg-bg p-4">
-          <div className="flex justify-between font-sans text-body-md text-ink-soft">
-            <span>Total sin IVA</span>
-            <span>{formatCurrency(subtotalPreview)}</span>
-          </div>
-          <div className="mt-1 flex justify-between font-sans text-body-md text-ink-soft">
-            <span>IVA (21%)</span>
-            <span>{formatCurrency(ivaPreview)}</span>
-          </div>
-          <div className="mt-2 flex justify-between font-display text-headline-md text-accent-darker">
-            <span>Total</span>
-            <span>{formatCurrency(totalPreview)}</span>
-          </div>
-        </div>
-
-        {error && <ErrorText>{error}</ErrorText>}
-
-        <div className="flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={pedirCierre}
-            className="rounded px-4 py-3 font-sans text-label-bold text-ink-soft hover:bg-bg"
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded bg-accent px-4 py-3 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-60"
-          >
-            {saving ? 'Guardando...' : 'Guardar factura'}
-          </button>
-        </div>
+        <table className="w-full table-fixed border-collapse">
+          <colgroup>
+            {COLUMNAS_ITEMS.map((c) => (
+              <col key={c.label || 'accion'} style={{ width: c.width }} />
+            ))}
+          </colgroup>
+          <thead>
+            <tr className="border-b border-line">
+              {COLUMNAS_ITEMS.map((c) => (
+                <th
+                  key={c.label || 'accion'}
+                  className={`px-2 py-2 font-sans text-label-md text-ink-soft ${
+                    c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : 'text-left'
+                  }`}
+                >
+                  {c.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item, i) => (
+              <ItemFacturaRow
+                key={item.key}
+                item={item}
+                index={i}
+                puedeEliminar={items.length > 1}
+                proveedores={proveedores}
+                onChange={(cambios) => actualizarItem(item.key, cambios)}
+                onEliminar={() => eliminarItem(item.key)}
+              />
+            ))}
+          </tbody>
+        </table>
       </form>
 
       {confirmCerrar && (

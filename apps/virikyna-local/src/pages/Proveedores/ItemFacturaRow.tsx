@@ -5,57 +5,92 @@ import {
   totalItemFacturaCompra,
   armarFiltroBusquedaProducto,
   useDebouncedValue,
+  nuevoItemFacturaCompra,
   type ItemFacturaCompra,
 } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { usePerfil } from '../../auth/AuthContext'
-import { Field, inputClass, selectClass } from '../../components/FormField'
+import { selectClass } from '../../components/FormField'
 import { ProductoFormSheet } from '../Inventario/ProductoFormSheet'
 
-type ProductoBusquedaItem = Pick<Producto, 'id' | 'nombre' | 'costo' | 'codigo_barras'>
+// Extiende el ítem "real" (el que viaja al RPC `cargar_factura_compra`) con dos campos que
+// solo existen para la UI de esta planilla y nunca se envían al backend:
+// - marca: para ítems vinculados al catálogo es puramente informativa (ya vive en producto.marca,
+//   recuperable vía producto_id); para ítems libres se pega dentro de `descripcion` recién al
+//   guardar (ver CargarFacturaCompraModal), porque no existe una columna de marca por ítem.
+// - codigoBarras: solo dispara la búsqueda de producto, no se persiste (un ítem libre no tiene
+//   código de barras propio en el catálogo).
+export type ItemFacturaCompraUI = ItemFacturaCompra & { marca: string; codigoBarras: string }
+
+export function nuevoItemFacturaCompraUI(): ItemFacturaCompraUI {
+  return { ...nuevoItemFacturaCompra(), marca: '', codigoBarras: '' }
+}
+
+type ProductoBusquedaItem = Pick<Producto, 'id' | 'nombre' | 'marca' | 'costo' | 'codigo_barras'>
 
 type Props = {
-  item: ItemFacturaCompra
+  item: ItemFacturaCompraUI
   index: number
   puedeEliminar: boolean
   proveedores: Proveedor[]
-  onChange: (cambios: Partial<ItemFacturaCompra>) => void
+  onChange: (cambios: Partial<ItemFacturaCompraUI>) => void
   onEliminar: () => void
 }
 
-// Fila de ítem de una factura de compra en escritorio — búsqueda de producto por nombre O por
-// código de barras en el mismo campo de descripción (un lector USB/Bluetooth de mostrador
-// funciona "tipeando" el código muy rápido seguido de Enter, como si fuera un teclado — no hace
-// falta cámara acá, a diferencia de Virikyna Inventario). Sin selección, el ítem queda "libre"
-// (sin producto_id), igual que en el celular.
+const cellInputClass =
+  'w-full rounded border border-transparent bg-transparent px-2 py-1.5 font-sans text-body-md text-ink outline-none focus:border-accent focus:bg-surface disabled:text-ink-soft'
+const cellInputRightClass = `${cellInputClass} text-right`
+const cellSelectClass = `${selectClass} !rounded !border-transparent !bg-transparent !px-2 !py-1.5 focus:!border-accent focus:!bg-surface`
+
+// Fila de ítem de una factura de compra, en formato planilla (una <tr>, celdas editables inline).
+// La búsqueda de producto puede dispararse desde la celda "Cód. barras" (pensada para un lector
+// USB/Bluetooth que "tipea" el código y Enter) o desde la celda "Producto" (nombre/marca) — ambas
+// usan la misma búsqueda unificada (packages/shared/lib/productoBusqueda.ts) y comparten un único
+// dropdown de sugerencias que aparece debajo de la celda que la disparó. Sin match, el ítem queda
+// "libre" (sin producto_id) y Producto/Marca se cargan a mano, sin bloquear.
 export function ItemFacturaRow({ item, index, puedeEliminar, proveedores, onChange, onEliminar }: Props) {
   const { rol } = usePerfil()
   const [resultados, setResultados] = useState<ProductoBusquedaItem[]>([])
   const [query, setQuery] = useState('')
+  const [campoActivo, setCampoActivo] = useState<'codigo' | 'producto' | null>(null)
   const [creandoProducto, setCreandoProducto] = useState(false)
   const queryDebounced = useDebouncedValue(query, 200)
 
   function seleccionarProducto(p: ProductoBusquedaItem) {
-    onChange({ productoId: p.id, descripcion: p.nombre, precioUnitarioSinIva: String(p.costo) })
+    onChange({
+      productoId: p.id,
+      descripcion: p.nombre,
+      marca: p.marca ?? '',
+      codigoBarras: p.codigo_barras ?? item.codigoBarras,
+      precioUnitarioSinIva: String(p.costo),
+    })
     setResultados([])
     setQuery('')
+    setCampoActivo(null)
   }
 
-  function cambiarDescripcion(texto: string) {
+  function buscarPorCodigo(texto: string) {
+    onChange({ codigoBarras: texto, productoId: null })
+    setQuery(texto)
+    setCampoActivo('codigo')
+  }
+
+  function buscarPorProducto(texto: string) {
     onChange({ descripcion: texto, productoId: null })
     setQuery(texto)
+    setCampoActivo('producto')
   }
 
   useEffect(() => {
     const q = queryDebounced.trim()
-    if (q.length < 2) {
+    if (!campoActivo || q.length < 2) {
       setResultados([])
       return
     }
     let cancelado = false
     supabase
       .from('productos')
-      .select('id, nombre, costo, codigo_barras')
+      .select('id, nombre, marca, costo, codigo_barras')
       .eq('estado', 'activo')
       .or(armarFiltroBusquedaProducto(q))
       .order('nombre')
@@ -68,7 +103,7 @@ export function ItemFacturaRow({ item, index, puedeEliminar, proveedores, onChan
         // codigo_barras de un solo producto, seleccionalo directo — no tiene sentido pedirle al
         // cajero que además clickee el resultado, el escaneo ya fue la confirmación.
         const matchExacto = encontrados.find((p) => p.codigo_barras === q)
-        if (matchExacto && encontrados.length === 1) {
+        if (campoActivo === 'codigo' && matchExacto && encontrados.length === 1) {
           seleccionarProducto(matchExacto)
           return
         }
@@ -79,121 +114,128 @@ export function ItemFacturaRow({ item, index, puedeEliminar, proveedores, onChan
       cancelado = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queryDebounced])
+  }, [queryDebounced, campoActivo])
 
   const nombreNuevoProducto = query.trim() || item.descripcion.trim()
-  const mostrarDropdown = resultados.length > 0 || query.trim().length >= 2
+  const mostrarDropdownCodigo = campoActivo === 'codigo' && (resultados.length > 0 || query.trim().length >= 2)
+  const mostrarDropdownProducto = campoActivo === 'producto' && (resultados.length > 0 || query.trim().length >= 2)
+
+  function Sugerencias() {
+    return (
+      <div className="absolute left-0 z-10 mt-1 w-64 overflow-hidden rounded-lg border border-line bg-surface shadow-sm">
+        {resultados.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => seleccionarProducto(p)}
+            className="flex w-full flex-col items-start px-3 py-2 text-left font-sans hover:bg-bg"
+          >
+            <span className="text-body-md text-ink">{p.nombre}</span>
+            <span className="font-sans text-label-md text-ink-soft">
+              {p.marca ? `${p.marca} · ` : ''}Costo actual: {formatCurrency(p.costo)}
+            </span>
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => setCreandoProducto(true)}
+          className="flex w-full items-center px-3 py-2 text-left font-sans text-label-md text-accent-dark hover:bg-accent-light"
+        >
+          + Crear producto nuevo{nombreNuevoProducto ? ` "${nombreNuevoProducto}"` : ''}
+        </button>
+      </div>
+    )
+  }
 
   return (
-    <div className="rounded-lg border border-line bg-surface p-4">
-      <div className="flex items-center justify-between">
-        <span className="font-sans text-label-md text-ink-soft">Ítem {index + 1}</span>
+    <tr className="border-b border-line last:border-b-0 hover:bg-bg/60">
+      <td className="relative px-2 py-1.5 align-top">
+        <input
+          value={item.codigoBarras}
+          onChange={(e) => buscarPorCodigo(e.target.value)}
+          onFocus={() => setCampoActivo('codigo')}
+          placeholder="Escaneá o tipeá"
+          className={cellInputClass}
+        />
+        {mostrarDropdownCodigo && <Sugerencias />}
+      </td>
+      <td className="relative px-2 py-1.5 align-top">
+        <input
+          value={item.descripcion}
+          onChange={(e) => buscarPorProducto(e.target.value)}
+          onFocus={() => setCampoActivo('producto')}
+          placeholder="Buscar por código, nombre o marca..."
+          className={cellInputClass}
+        />
+        {mostrarDropdownProducto && <Sugerencias />}
+      </td>
+      <td className="px-2 py-1.5 align-top">
+        <input
+          value={item.marca}
+          onChange={(e) => onChange({ marca: e.target.value })}
+          placeholder="—"
+          className={cellInputClass}
+        />
+      </td>
+      <td className="px-2 py-1.5 align-top">
+        <input
+          type="number"
+          inputMode="decimal"
+          min="0"
+          step="0.01"
+          value={item.cantidad}
+          onChange={(e) => onChange({ cantidad: e.target.value })}
+          className={cellInputRightClass}
+        />
+      </td>
+      <td className="px-2 py-1.5 align-top">
+        <input
+          type="number"
+          inputMode="decimal"
+          min="0"
+          step="0.01"
+          value={item.precioUnitarioSinIva}
+          onChange={(e) => onChange({ precioUnitarioSinIva: e.target.value })}
+          className={cellInputRightClass}
+        />
+      </td>
+      <td className="px-2 py-1.5 align-top">
+        <input
+          type="number"
+          inputMode="decimal"
+          min="0"
+          max="100"
+          step="0.01"
+          value={item.descuentoPorcentaje}
+          onChange={(e) => onChange({ descuentoPorcentaje: e.target.value })}
+          className={cellInputRightClass}
+        />
+      </td>
+      <td className="px-2 py-1.5 align-top">
+        <select
+          value={item.ubicacion}
+          onChange={(e) => onChange({ ubicacion: e.target.value as UbicacionStock })}
+          className={cellSelectClass}
+        >
+          <option value="local">Local</option>
+          <option value="deposito">Depósito</option>
+        </select>
+      </td>
+      <td className="px-2 py-1.5 text-right align-top">
+        <span className="font-sans text-label-bold text-ink">{formatCurrency(totalItemFacturaCompra(item))}</span>
+      </td>
+      <td className="px-2 py-1.5 text-center align-top">
         {puedeEliminar && (
           <button
             type="button"
             onClick={onEliminar}
             aria-label={`Quitar ítem ${index + 1}`}
-            className="rounded p-1 font-sans text-body-md text-error hover:bg-error/10"
+            className="rounded p-1 font-sans text-body-md text-ink-soft hover:bg-error/10 hover:text-error"
           >
             ✕
           </button>
         )}
-      </div>
-
-      <div className="mt-2 flex flex-col gap-stack-sm">
-        <div className="relative">
-          <Field
-            label="Descripción"
-            hint={
-              item.productoId
-                ? 'Vinculado a un producto del catálogo'
-                : 'Ítem libre — o escribí el nombre, marca o código de barras para buscar en el catálogo'
-            }
-          >
-            <input
-              value={item.descripcion}
-              onChange={(e) => cambiarDescripcion(e.target.value)}
-              className={inputClass}
-            />
-          </Field>
-          {mostrarDropdown && (
-            <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-line bg-surface shadow-sm">
-              {resultados.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => seleccionarProducto(p)}
-                  className="flex w-full items-center justify-between px-4 py-2 text-left font-sans hover:bg-bg"
-                >
-                  <span className="text-body-md text-ink">{p.nombre}</span>
-                  <span className="font-sans text-label-md text-ink-soft">Costo actual: {formatCurrency(p.costo)}</span>
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => setCreandoProducto(true)}
-                className="flex w-full items-center justify-between border-t border-line px-4 py-2 text-left font-sans text-accent-dark hover:bg-accent-light"
-              >
-                + Crear producto nuevo{nombreNuevoProducto ? ` "${nombreNuevoProducto}"` : ''}
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="grid grid-cols-2 gap-stack-sm">
-          <Field label="Cantidad">
-            <input
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="0.01"
-              value={item.cantidad}
-              onChange={(e) => onChange({ cantidad: e.target.value })}
-              className={inputClass}
-            />
-          </Field>
-          <Field label="Precio unit. sin IVA">
-            <input
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="0.01"
-              value={item.precioUnitarioSinIva}
-              onChange={(e) => onChange({ precioUnitarioSinIva: e.target.value })}
-              className={inputClass}
-            />
-          </Field>
-        </div>
-
-        <div className="grid grid-cols-2 gap-stack-sm">
-          <Field label="Descuento %">
-            <input
-              type="number"
-              inputMode="decimal"
-              min="0"
-              max="100"
-              step="0.01"
-              value={item.descuentoPorcentaje}
-              onChange={(e) => onChange({ descuentoPorcentaje: e.target.value })}
-              className={inputClass}
-            />
-          </Field>
-          <Field label="Depósito">
-            <select
-              value={item.ubicacion}
-              onChange={(e) => onChange({ ubicacion: e.target.value as UbicacionStock })}
-              className={selectClass}
-            >
-              <option value="local">Local</option>
-              <option value="deposito">Depósito</option>
-            </select>
-          </Field>
-        </div>
-
-        <p className="text-right font-sans text-label-bold text-ink">
-          Subtotal: {formatCurrency(totalItemFacturaCompra(item))}
-        </p>
-      </div>
+      </td>
 
       {creandoProducto && rol && (
         <ProductoFormSheet
@@ -204,14 +246,21 @@ export function ItemFacturaRow({ item, index, puedeEliminar, proveedores, onChan
           onSaved={(creado) => {
             setCreandoProducto(false)
             if (creado) {
-              onChange({ productoId: creado.id, descripcion: creado.nombre, precioUnitarioSinIva: String(creado.costo) })
+              onChange({
+                productoId: creado.id,
+                descripcion: creado.nombre,
+                marca: creado.marca ?? '',
+                codigoBarras: creado.codigo_barras ?? item.codigoBarras,
+                precioUnitarioSinIva: String(creado.costo),
+              })
               setResultados([])
               setQuery('')
+              setCampoActivo(null)
             }
           }}
           onStockChanged={() => {}}
         />
       )}
-    </div>
+    </tr>
   )
 }
