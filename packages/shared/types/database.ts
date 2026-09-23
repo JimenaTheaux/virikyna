@@ -26,6 +26,9 @@ export type TipoCierre = 'x' | 'z'
 export type EstadoCierreZ = 'pendiente_validacion' | 'validado'
 export type OrigenEgreso = 'turno' | 'general'
 export type TipoMovimientoStock = 'venta' | 'compra' | 'ajuste'
+export type MotivoDevolucion = 'regalo' | 'defectuoso' | 'arrepentimiento' | 'otro'
+export type EstadoDevolucion = 'activa' | 'anulada'
+export type TipoItemDevolucion = 'devuelto' | 'nuevo'
 // sueldo/servicio son categorías de Virikyna-Gestión (origen='general'); agua/descartables/super
 // son las categorías de gasto de turno en Virikyna-Local (origen='turno') — ver docs/13.
 export type CategoriaEgreso = 'pago_proveedor' | 'sueldo' | 'servicio' | 'otro' | 'agua' | 'descartables' | 'super'
@@ -302,6 +305,14 @@ export type CierreCaja = {
   validado_at: string | null
   usuario_id: string
   apertura_id: string | null // docs/21: apertura de caja vigente al momento de este cierre (X o Z)
+  // docs/24: devoluciones/cambios del día, netos con signo por medio (+ el comercio cobró una
+  // diferencia, − devolvió plata al cliente). total_efectivo/transferencia/qr/tarjeta siguen siendo
+  // solo ventas; el neto en efectivo ya está sumado en efectivo_esperado.
+  cantidad_devoluciones: number
+  total_devoluciones_efectivo: number
+  total_devoluciones_transferencia: number
+  total_devoluciones_qr: number
+  total_devoluciones_tarjeta: number
   created_at: string
 }
 
@@ -397,4 +408,41 @@ export type CuentaSaldo = Cuenta & {
 // para no depender de que el cliente tenga acceso directo a `perfiles` de otro usuario.
 export type NotaInternaConAutor = NotaInterna & {
   autor_nombre: string
+}
+
+// Devolución / cambio sobre una venta ya emitida (docs/24_devoluciones_cambios.sql). Documento nuevo
+// vinculado a la venta — nunca modifica la venta original.
+export type Devolucion = {
+  id: string
+  numero: number
+  venta_id: string
+  fecha: string // DATE — día de caja en el que impacta
+  usuario_id: string
+  motivo: MotivoDevolucion
+  motivo_detalle: string | null // obligatorio si motivo = 'otro'
+  observaciones: string | null
+  diferencia_monto: number // nuevos − devueltos: > 0 paga el cliente, < 0 a favor del cliente
+  diferencia_forma_pago: FormaPagoVenta | null // null si diferencia_monto = 0; 'combinado' = ver DevolucionPago
+  estado: EstadoDevolucion
+  anulada_por: string | null
+  anulada_at: string | null
+  motivo_anulacion: string | null
+  created_at: string
+}
+
+export type DevolucionItem = {
+  id: string
+  devolucion_id: string
+  tipo: TipoItemDevolucion
+  producto_id: string
+  cantidad: number
+  precio_unitario: number // snapshot al momento
+  reingresa_stock: boolean // false = mercadería defectuosa, separada del stock
+}
+
+export type DevolucionPago = {
+  id: string
+  devolucion_id: string
+  forma_pago: FormaPagoVenta // nunca 'cuenta_corriente' ni 'combinado' acá
+  monto: number // siempre positivo — el sentido lo da el signo de Devolucion.diferencia_monto
 }

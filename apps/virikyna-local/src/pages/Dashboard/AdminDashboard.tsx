@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom'
 import { IconCierreCaja, IconConfiguracion, IconInventario, IconProveedores } from '../../components/icons'
 import { fechaISO, formatCurrency, StockBajoCard } from '@virikyna/shared'
 import { friendlyError } from '@virikyna/shared'
-import { fetchVentasUltimosDias } from './queries'
+import { fetchDevolucionesUltimosDias, fetchVentasUltimosDias } from './queries'
+import { DefectuososCard } from './DefectuososCard'
 import { WeeklySalesChart } from './WeeklySalesChart'
 import { AbrirCajaCard } from './AbrirCajaCard'
 import { supabase } from '../../lib/supabaseClient'
@@ -20,14 +21,16 @@ export function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [porDia, setPorDia] = useState<Map<string, VentaDelDia>>(new Map())
+  const [devolucionesNetoHoy, setDevolucionesNetoHoy] = useState(0)
 
   useEffect(() => {
     async function cargar() {
       setLoading(true)
       setError(null)
-      const ventasRes = await fetchVentasUltimosDias(7)
+      const [ventasRes, devolucionesRes] = await Promise.all([fetchVentasUltimosDias(7), fetchDevolucionesUltimosDias(1)])
       if (ventasRes.error) setError(friendlyError(ventasRes.error as never))
       setPorDia(ventasRes.porDia)
+      setDevolucionesNetoHoy(devolucionesRes.netoPorDia.get(fechaISO(0)) ?? 0)
       setLoading(false)
     }
     cargar()
@@ -57,10 +60,16 @@ export function AdminDashboard() {
 
       <div className="grid grid-cols-4 gap-gutter-grid">
         <div className="col-span-2 rounded-lg bg-surface p-card shadow-sm">
-          <p className="font-sans text-label-bold uppercase text-ink-soft">Ventas de hoy</p>
+          <p className="font-sans text-label-bold uppercase text-ink-soft">Ventas de hoy (brutas)</p>
           <p className="mt-2 font-display text-display-card text-accent-darker">
             {loading ? '—' : formatCurrency(hoy.total)}
           </p>
+          {!loading && devolucionesNetoHoy !== 0 && (
+            <p className="mt-2 font-sans text-label-md text-ink-soft">
+              Devoluciones y cambios: {devolucionesNetoHoy < 0 ? '−' : '+'} {formatCurrency(Math.abs(devolucionesNetoHoy))} ·
+              Venta neta {formatCurrency(hoy.total + devolucionesNetoHoy)}
+            </p>
+          )}
           {!loading && variacion && (
             <p className={`mt-2 font-sans text-label-bold ${variacion.subida ? 'text-success' : 'text-error'}`}>
               {variacion.texto}
@@ -84,7 +93,10 @@ export function AdminDashboard() {
           <WeeklySalesChart porDia={porDia} />
         </div>
 
-        <StockBajoCard supabase={supabase} />
+        <div className="flex flex-col gap-gutter-grid">
+          <StockBajoCard supabase={supabase} className="flex-1" />
+          <DefectuososCard />
+        </div>
       </div>
 
       <div className="grid grid-cols-4 gap-stack-sm">

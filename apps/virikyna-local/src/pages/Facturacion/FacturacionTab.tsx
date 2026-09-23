@@ -5,6 +5,7 @@ import { friendlyError, emitirFacturaCReal } from '@virikyna/shared'
 import { formatCurrency, formatFechaHora } from '@virikyna/shared'
 import { FORMA_PAGO_LABEL, type DatosComprobante } from '../../lib/comprobante'
 import { ComprobanteModal } from '../../components/ComprobanteModal'
+import { DevolucionModal } from './DevolucionModal'
 import type { VentaConFactura, VentaItemConProducto } from './types'
 
 const ESTADO_LABEL: Record<'sin_facturar' | 'facturado', string> = {
@@ -23,6 +24,10 @@ export function FacturacionTab() {
   const [fechaHasta, setFechaHasta] = useState('')
   const [estadoFiltro, setEstadoFiltro] = useState<EstadoFiltro>('todas')
   const [formaPagoFiltro, setFormaPagoFiltro] = useState<'todas' | FormaPagoVenta>('todas')
+  // Ticket por número (server-side) o por nombre de cliente (sobre lo ya cargado) — para ubicar
+  // rápido la venta original de una devolución/cambio.
+  const [busqueda, setBusqueda] = useState('')
+  const [aDevolver, setADevolver] = useState<VentaConFactura | null>(null)
 
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
   const [emitiendo, setEmitiendo] = useState(false)
@@ -43,6 +48,8 @@ export function FacturacionTab() {
     if (fechaDesde) query = query.gte('created_at', `${fechaDesde}T00:00:00`)
     if (fechaHasta) query = query.lte('created_at', `${fechaHasta}T23:59:59`)
     if (formaPagoFiltro !== 'todas') query = query.eq('forma_pago', formaPagoFiltro)
+    const numeroBuscado = /^\d+$/.test(busqueda.trim()) ? Number(busqueda.trim()) : null
+    if (numeroBuscado !== null) query = query.eq('numero', numeroBuscado)
 
     const { data, error: dbError } = await query
     if (dbError) {
@@ -55,7 +62,7 @@ export function FacturacionTab() {
 
   useEffect(() => {
     cargar()
-  }, [fechaDesde, fechaHasta, estadoFiltro, formaPagoFiltro])
+  }, [fechaDesde, fechaHasta, estadoFiltro, formaPagoFiltro, busqueda])
 
   function toggleSeleccion(id: string) {
     setSeleccion((prev) => {
@@ -65,6 +72,13 @@ export function FacturacionTab() {
       return next
     })
   }
+
+  const textoCliente = /^\d+$/.test(busqueda.trim()) ? '' : busqueda.trim().toLowerCase()
+  const ventasVisibles = textoCliente
+    ? ventas.filter((v) =>
+        `${v.cliente?.razon_social ?? ''} ${v.cliente?.nombre_fantasia ?? ''}`.toLowerCase().includes(textoCliente),
+      )
+    : ventas
 
   const seleccionadas = ventas.filter((v) => seleccion.has(v.id))
   const totalSeleccionado = seleccionadas.reduce((acc, v) => acc + v.total, 0)
@@ -167,6 +181,16 @@ export function FacturacionTab() {
           />
         </label>
         <label className="flex flex-col gap-1">
+          <span className="font-sans text-label-md text-ink-soft">N° de ticket o cliente</span>
+          <input
+            type="search"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Ej. 1234 o Pérez"
+            className="w-[170px] rounded border border-line bg-surface px-3 py-2 font-sans text-body-md text-ink outline-none focus:border-accent"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
           <span className="font-sans text-label-md text-ink-soft">Estado</span>
           <select
             value={estadoFiltro}
@@ -242,14 +266,14 @@ export function FacturacionTab() {
                 </td>
               </tr>
             )}
-            {!loading && ventas.length === 0 && (
+            {!loading && ventasVisibles.length === 0 && (
               <tr>
                 <td className="px-4 py-4 text-ink-soft" colSpan={8}>
                   No hay comprobantes para este filtro.
                 </td>
               </tr>
             )}
-            {ventas.map((venta) => (
+            {ventasVisibles.map((venta) => (
               <tr key={venta.id} className="border-b border-line last:border-0">
                 <td className="px-3 py-1.5">
                   {venta.estado === 'sin_facturar' && (
@@ -281,12 +305,30 @@ export function FacturacionTab() {
                   >
                     {venta.estado === 'facturado' ? 'Ver factura' : 'Ver comprobante'}
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setADevolver(venta)}
+                    className="rounded px-3 py-1.5 font-sans text-label-bold text-accent-dark hover:bg-accent-light"
+                  >
+                    Devolución / Cambio
+                  </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {aDevolver && (
+        <DevolucionModal
+          venta={aDevolver}
+          onClose={() => setADevolver(null)}
+          onDone={() => {
+            setADevolver(null)
+            cargar()
+          }}
+        />
+      )}
 
       {verComprobante && <ComprobanteModal datos={verComprobante} onClose={() => setVerComprobante(null)} />}
     </div>
