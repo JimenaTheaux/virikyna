@@ -317,16 +317,7 @@ export function CargarFacturaCompraModal({ onClose, onSaved }: Props) {
         )}
 
         {/* Tabla de ítems tipo planilla — sin scroll interno propio, crece con la página */}
-        <div className="flex items-center justify-between">
-          <p className="font-sans text-label-bold text-ink">Ítems de la factura</p>
-          <button
-            type="button"
-            onClick={() => setItems((prev) => [...prev, nuevoItemFacturaCompraUI()])}
-            className="rounded px-3 py-2 font-sans text-label-bold text-accent-dark hover:bg-accent-light"
-          >
-            + Agregar ítem
-          </button>
-        </div>
+        <p className="font-sans text-label-bold text-ink">Ítems de la factura</p>
 
         <table className="w-full table-fixed border-collapse">
           <colgroup>
@@ -362,6 +353,14 @@ export function CargarFacturaCompraModal({ onClose, onSaved }: Props) {
             ))}
           </tbody>
         </table>
+
+        <button
+          type="button"
+          onClick={() => setItems((prev) => [...prev, nuevoItemFacturaCompraUI()])}
+          className="self-start rounded px-3 py-2 font-sans text-label-bold text-accent-dark hover:bg-accent-light"
+        >
+          + Agregar ítem
+        </button>
       </form>
 
       {confirmCerrar && (
