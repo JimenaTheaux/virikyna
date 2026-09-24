@@ -210,11 +210,8 @@ export function CargarFacturaCompraModal({ onClose, onSaved }: Props) {
         className="flex flex-col gap-stack-md"
       >
         {/* Franja superior — datos del comprobante en una sola fila compacta */}
-        <div
-          className="grid gap-stack-sm [&_label>span]:whitespace-nowrap"
-          style={{ gridTemplateColumns: 'minmax(0,2.4fr) minmax(0,1.6fr) minmax(0,0.8fr) minmax(0,1.3fr) minmax(0,1.5fr) minmax(0,1.6fr) minmax(0,1.4fr)' }}
-        >
-          <div>
+        <div className="grid grid-cols-2 items-end gap-stack-sm md:grid-cols-8">
+          <div className="col-span-2 md:col-span-4">
             <Field label="Proveedor">
               <select value={proveedorId} onChange={(e) => setProveedorId(e.target.value)} className={selectClass}>
                 <option value="">Elegí un proveedor</option>
@@ -226,7 +223,7 @@ export function CargarFacturaCompraModal({ onClose, onSaved }: Props) {
               </select>
             </Field>
           </div>
-          <div>
+          <div className="col-span-1 md:col-span-3">
             <Field label="Tipo de comprobante">
               <select
                 value={tipoComprobante}
@@ -241,7 +238,7 @@ export function CargarFacturaCompraModal({ onClose, onSaved }: Props) {
               </select>
             </Field>
           </div>
-          <div>
+          <div className="col-span-1 md:col-span-1">
             <Field label="Letra">
               <select
                 value={letra}
@@ -257,12 +254,12 @@ export function CargarFacturaCompraModal({ onClose, onSaved }: Props) {
               </select>
             </Field>
           </div>
-          <div>
+          <div className="col-span-1 md:col-span-2">
             <Field label="Punto de venta">
               <input value={puntoVenta} onChange={(e) => setPuntoVenta(e.target.value)} className={inputClass} />
             </Field>
           </div>
-          <div>
+          <div className="col-span-1 md:col-span-2">
             <Field label="Número">
               <input
                 value={numeroComprobante}
@@ -271,7 +268,7 @@ export function CargarFacturaCompraModal({ onClose, onSaved }: Props) {
               />
             </Field>
           </div>
-          <div>
+          <div className="col-span-1 md:col-span-2">
             <Field label="Fecha comprobante">
               <input
                 type="date"
@@ -281,7 +278,7 @@ export function CargarFacturaCompraModal({ onClose, onSaved }: Props) {
               />
             </Field>
           </div>
-          <div>
+          <div className="col-span-1 md:col-span-2">
             <Field label="Forma de pago">
               <select
                 value={formaPago}
