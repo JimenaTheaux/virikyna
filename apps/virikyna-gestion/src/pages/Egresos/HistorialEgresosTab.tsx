@@ -101,17 +101,17 @@ export function HistorialEgresosTab() {
 
       {error && <p className="rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>}
 
-      <div className="flex-1 overflow-auto rounded-lg border border-line">
-        <table className="w-full text-left font-sans text-body-md leading-5">
+      <div className="flex-1 overflow-auto rounded-xl shadow-sm">
+        <table className="w-full text-left font-sans text-table-row">
           <thead>
-            <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-              <th className="min-w-[100px] whitespace-nowrap px-3 py-2">Fecha</th>
-              <th className="whitespace-nowrap px-3 py-2">Categoría</th>
-              <th className="whitespace-nowrap px-3 py-2 text-right">Monto</th>
-              <th className="whitespace-nowrap px-3 py-2">Forma de pago</th>
-              <th className="whitespace-nowrap px-3 py-2">Descripción</th>
-              <th className="whitespace-nowrap px-3 py-2">Origen</th>
-              <th className="whitespace-nowrap px-3 py-2">Usuario</th>
+            <tr className="bg-accent-light text-table-head uppercase text-accent-dark">
+              <th className="min-w-[100px] whitespace-nowrap px-3 py-2.5">Fecha</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Categoría</th>
+              <th className="whitespace-nowrap px-3 py-2.5 text-right">Monto</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Forma de pago</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Descripción</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Origen</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Usuario</th>
             </tr>
           </thead>
           <tbody>
@@ -130,14 +130,24 @@ export function HistorialEgresosTab() {
               </tr>
             )}
             {filas.map((fila) => (
-              <tr key={fila.id} className="border-b border-line last:border-0">
-                <td className="whitespace-nowrap px-3 py-1.5 text-ink-soft">{formatFechaCorta(fila.fecha)}</td>
-                <td className="px-3 py-1.5 text-ink">{CATEGORIA_EGRESO_LABEL[fila.categoria]}</td>
-                <td className="px-3 py-1.5 text-right text-error">{formatCurrency(-fila.monto)}</td>
-                <td className="px-3 py-1.5 text-ink-soft">{FORMA_PAGO_EGRESO_LABEL[fila.forma_pago]}</td>
-                <td className="px-3 py-1.5 text-ink-soft">{fila.descripcion ?? '—'}</td>
-                <td className="px-3 py-1.5 text-ink-soft">{ORIGEN_EGRESO_LABEL[fila.origen]}</td>
-                <td className="px-3 py-1.5 text-ink-soft">{fila.usuario?.nombre ?? '—'}</td>
+              <tr key={fila.id} className="border-b border-table-divider last:border-0 even:bg-table-row-alt">
+                <td className="whitespace-nowrap px-3 py-3 text-ink-soft">{formatFechaCorta(fila.fecha)}</td>
+                <td className="px-3 py-3 text-ink">{CATEGORIA_EGRESO_LABEL[fila.categoria]}</td>
+                <td className="px-3 py-3 text-right font-semibold text-error">{formatCurrency(-fila.monto)}</td>
+                <td className="px-3 py-3 text-ink-soft">{FORMA_PAGO_EGRESO_LABEL[fila.forma_pago]}</td>
+                <td className="px-3 py-3 text-ink-soft">{fila.descripcion ?? '—'}</td>
+                <td className="px-3 py-3">
+                  <span
+                    className={
+                      fila.origen === 'turno'
+                        ? 'rounded-[6px] bg-accent px-2 py-0.5 font-sans text-table-row font-semibold text-white'
+                        : 'rounded-[6px] bg-badge-neutral-bg px-2 py-0.5 font-sans text-table-row font-semibold text-ink-soft'
+                    }
+                  >
+                    {ORIGEN_EGRESO_LABEL[fila.origen]}
+                  </span>
+                </td>
+                <td className="px-3 py-3 text-ink-soft">{fila.usuario?.nombre ?? '—'}</td>
               </tr>
             ))}
           </tbody>
