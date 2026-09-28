@@ -1,7 +1,7 @@
 import { useEffect, useState, type ComponentType } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { friendlyError } from '../../lib/supabaseErrors'
-import { formatCurrency, fechaHoyISO } from '../../lib/format'
+import { formatCurrency, fechaHoyISO, formatFechaCortaLocal, formatHora } from '../../lib/format'
 import { emitirFacturaCReal } from '../../lib/arcaFacturacion'
 import type { Cliente, FacturaC, FormaPagoVenta, Producto, Venta, VentaItem, VentaPago } from '../../types/database'
 
@@ -38,14 +38,6 @@ export interface VentasDelDiaTabProps {
   ComprobanteModal: ComponentType<{ datos: DatosComprobante; onClose: () => void }>
   IconVerDetalle: ComponentType<{ className?: string }>
   IconEnviar: ComponentType<{ className?: string }>
-}
-
-function formatFecha(iso: string): string {
-  return new Date(iso).toLocaleDateString('es-AR', { dateStyle: 'short' })
-}
-
-function formatHora(iso: string): string {
-  return new Date(iso).toLocaleTimeString('es-AR', { timeStyle: 'short' })
 }
 
 // Submenú "Ventas del día" de Facturación — igual en Virikyna Local y Virikyna Gestión, por eso
@@ -199,7 +191,7 @@ export function VentasDelDiaTab({
             )}
             {ventas.map((venta) => (
               <tr key={venta.id} className="border-b border-line last:border-0">
-                <td className="px-3 py-1.5 text-ink-soft">{formatFecha(venta.created_at)}</td>
+                <td className="px-3 py-1.5 text-ink-soft">{formatFechaCortaLocal(venta.created_at)}</td>
                 <td className="px-3 py-1.5 text-ink-soft">{formatHora(venta.created_at)}</td>
                 <td className="px-3 py-1.5 text-ink-soft">
                   {venta.cliente ? venta.cliente.razon_social ?? venta.cliente.nombre_fantasia : 'Consumidor final'}

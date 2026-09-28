@@ -1,4 +1,4 @@
-import { cargarImagen, formatCurrency } from '@virikyna/shared'
+import { cargarImagen, formatCurrency, formatFechaHora } from '@virikyna/shared'
 import virikynaWordmark from '@virikyna/shared/src/assets/virikyna-wordmark.png'
 import { lineasFormaPago, type DatosComprobante } from './comprobante'
 
@@ -48,7 +48,7 @@ export async function generarJpgComprobante(datos: DatosComprobante): Promise<Bl
   ctx.font = `${mm(2.8)}px helvetica, sans-serif`
   ctx.fillText(`N°: ${datos.numero}`, MARGEN_PX, y)
   y += mm(4)
-  ctx.fillText(`Fecha: ${new Date(datos.fecha).toLocaleString('es-AR')}`, MARGEN_PX, y)
+  ctx.fillText(`Fecha: ${formatFechaHora(datos.fecha)}`, MARGEN_PX, y)
   y += mm(4)
   ctx.fillText(`Cliente: ${datos.clienteNombre}`, MARGEN_PX, y)
   y += mm(4)

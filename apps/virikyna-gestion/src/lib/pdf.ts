@@ -1,4 +1,4 @@
-import { cargarImagen, formatCurrency } from '@virikyna/shared'
+import { cargarImagen, formatCurrency, formatFechaHora } from '@virikyna/shared'
 import virikynaWordmark from '@virikyna/shared/src/assets/virikyna-wordmark.png'
 import { lineasFormaPago, type DatosComprobante } from './comprobante'
 
@@ -31,7 +31,7 @@ export async function generarPdfComprobante(datos: DatosComprobante) {
   doc.setFontSize(8)
   doc.text(`N°: ${datos.numero}`, MARGEN, y)
   y += 4
-  doc.text(`Fecha: ${new Date(datos.fecha).toLocaleString('es-AR')}`, MARGEN, y)
+  doc.text(`Fecha: ${formatFechaHora(datos.fecha)}`, MARGEN, y)
   y += 4
   doc.text(`Cliente: ${datos.clienteNombre}`, MARGEN, y)
   y += 4

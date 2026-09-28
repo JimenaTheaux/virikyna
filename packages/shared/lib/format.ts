@@ -25,19 +25,37 @@ export function generarCodigoInterno(): string {
   return `INT-${timestamp}${random}`
 }
 
+const dos = (n: number) => String(n).padStart(2, '0')
+
+// Formato único de fecha con hora en toda la app: DD/MM/AAAA HH:mm (24 hs), en la hora local del
+// dispositivo. Se arma a mano en vez de con toLocaleString/Intl porque esos dan un resultado
+// distinto según opciones y motor ("5/9/26, 2:07 p. m." vs "5/9/2026, 02:07:00") y ya divergió
+// una vez entre pantallas, PDF y comprobantes. Cualquier lugar que muestre un timestamp
+// (created_at, abierta_at…) debe usar esta función o sus dos partes (formatFechaCortaLocal +
+// formatHora), nunca toLocale*String.
 export function formatFechaHora(iso: string): string {
-  return new Date(iso).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  return `${formatFechaCortaLocal(iso)} ${formatHora(iso)}`
 }
 
-// `fecha` es una columna DATE de Postgres ('YYYY-MM-DD') — se arma con hora fija para evitar
-// que el navegador la interprete en UTC y muestre el día anterior según la zona horaria local.
-export function formatFecha(fecha: string): string {
-  return new Date(`${fecha}T00:00:00`).toLocaleDateString('es-AR', { dateStyle: 'long' })
+// DD/MM/AAAA de un timestamp (día local) — para columnas que separan fecha y hora.
+export function formatFechaCortaLocal(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  return `${dos(d.getDate())}/${dos(d.getMonth() + 1)}/${d.getFullYear()}`
 }
 
-// DD/MM/AAAA — formato corto estándar para columnas de fecha en tablas y vistas de detalle
-// (mismo dato que formatFecha, sin el texto largo "15 de septiembre de 2026").
-// Reordena el string 'YYYY-MM-DD' directo, sin pasar por Date, así no hay riesgo de UTC.
+// HH:mm (24 hs) de un timestamp (hora local).
+export function formatHora(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  return `${dos(d.getHours())}:${dos(d.getMinutes())}`
+}
+
+// DD/MM/AAAA — formato corto estándar para columnas de fecha (DATE de Postgres, 'YYYY-MM-DD') en
+// tablas y vistas de detalle. Reordena el string directo, sin pasar por Date, así no hay riesgo de
+// que el navegador lo interprete en UTC y muestre el día anterior según la zona horaria local.
 export function formatFechaCorta(fecha: string): string {
   const [anio, mes, dia] = fecha.split('-')
   return `${dia}/${mes}/${anio}`

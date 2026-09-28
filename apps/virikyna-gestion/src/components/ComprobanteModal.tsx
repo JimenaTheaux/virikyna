@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { Modal } from './Modal'
 import { Field, inputClass } from './FormField'
-import { formatCurrency } from '@virikyna/shared'
+import { formatCurrency, formatFechaHora } from '@virikyna/shared'
 import { lineasFormaPago, linkGmail, linkWhatsApp, mensajeEnvio, type DatosComprobante } from '../lib/comprobante'
 import { generarPdfComprobante, nombreArchivoPdf } from '../lib/pdf'
 
@@ -45,7 +45,7 @@ export function ComprobanteModal({ datos, onClose, footer }: Props) {
             ))}
             {datos.tipo === 'factura_c' && datos.cae && <p>CAE: {datos.cae}</p>}
           </div>
-          <p>{new Date(datos.fecha).toLocaleString('es-AR')}</p>
+          <p>{formatFechaHora(datos.fecha)}</p>
         </div>
 
         <div className="overflow-x-auto rounded-lg border border-line">
