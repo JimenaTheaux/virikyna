@@ -70,15 +70,15 @@ export function FacturasCompraTab() {
         <p className="mt-stack-md rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>
       )}
 
-      <div className="mt-stack-md flex-1 overflow-auto rounded-lg border border-line">
-        <table className="w-full text-left font-sans text-body-md leading-5">
+      <div className="mt-stack-md flex-1 overflow-auto rounded-xl shadow-sm">
+        <table className="w-full text-left font-sans text-table-row">
           <thead>
-            <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-              <th className="min-w-[100px] whitespace-nowrap px-3 py-2">Fecha</th>
-              <th className="min-w-[180px] whitespace-nowrap px-3 py-2">Proveedor</th>
-              <th className="whitespace-nowrap px-3 py-2">Comprobante</th>
-              <th className="whitespace-nowrap px-3 py-2 text-right">Total</th>
-              <th className="whitespace-nowrap px-3 py-2 text-right">Saldo pendiente</th>
+            <tr className="bg-accent-light text-table-head uppercase text-accent-dark">
+              <th className="min-w-[100px] whitespace-nowrap px-3 py-2.5">Fecha</th>
+              <th className="min-w-[180px] whitespace-nowrap px-3 py-2.5">Proveedor</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Comprobante</th>
+              <th className="whitespace-nowrap px-3 py-2.5 text-right">Total</th>
+              <th className="whitespace-nowrap px-3 py-2.5 text-right">Saldo pendiente</th>
             </tr>
           </thead>
           <tbody>
@@ -100,17 +100,17 @@ export function FacturasCompraTab() {
               <tr
                 key={f.id}
                 onClick={() => setDetalle(f)}
-                className="cursor-pointer border-b border-line last:border-0 hover:bg-bg"
+                className="cursor-pointer border-b border-table-divider last:border-0 even:bg-table-row-alt hover:bg-accent-light/40"
               >
-                <td className="whitespace-nowrap px-3 py-1.5 text-ink-soft">{formatFechaCorta(f.fecha_comprobante)}</td>
-                <td className="px-3 py-1.5 text-ink">{f.proveedor?.razon_social ?? '—'}</td>
-                <td className="px-3 py-1.5 text-ink-soft">
+                <td className="whitespace-nowrap px-3 py-3 text-ink-soft">{formatFechaCorta(f.fecha_comprobante)}</td>
+                <td className="px-3 py-3 text-ink">{f.proveedor?.razon_social ?? '—'}</td>
+                <td className="px-3 py-3 text-ink-soft">
                   {TIPO_LABEL[f.tipo_comprobante] ?? f.tipo_comprobante}
                   {f.letra ? ` ${f.letra}` : ''}
                   {f.numero_comprobante ? ` · ${f.numero_comprobante}` : ''}
                 </td>
-                <td className="px-3 py-1.5 text-right text-ink">{formatCurrency(f.total)}</td>
-                <td className={`px-3 py-1.5 text-right ${f.saldo_pendiente > 0 ? 'text-error' : 'text-success'}`}>
+                <td className="px-3 py-3 text-right text-ink">{formatCurrency(f.total)}</td>
+                <td className={`px-3 py-3 text-right font-semibold ${f.saldo_pendiente > 0 ? 'text-error' : 'text-success'}`}>
                   {formatCurrency(f.saldo_pendiente)}
                 </td>
               </tr>

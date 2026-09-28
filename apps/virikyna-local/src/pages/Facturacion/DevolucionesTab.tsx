@@ -9,6 +9,7 @@ import {
   formatFechaHora,
   friendlyError,
   nombresPorId,
+  EstadoBadge,
 } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { showToast } from '../../lib/toast'
@@ -101,18 +102,18 @@ export function DevolucionesTab() {
 
       {error && <p className="mt-stack-md rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>}
 
-      <div className="mt-stack-md flex-1 overflow-auto rounded-lg border border-line">
-        <table className="w-full text-left font-sans text-body-md leading-5">
+      <div className="mt-stack-md flex-1 overflow-auto rounded-xl shadow-sm">
+        <table className="w-full text-left font-sans text-table-row">
           <thead>
-            <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-              <th className="whitespace-nowrap px-3 py-2">N°</th>
-              <th className="whitespace-nowrap px-3 py-2">Fecha</th>
-              <th className="whitespace-nowrap px-3 py-2">Ticket</th>
-              <th className="px-3 py-2">Detalle</th>
-              <th className="whitespace-nowrap px-3 py-2">Motivo</th>
-              <th className="whitespace-nowrap px-3 py-2">Usuario</th>
-              <th className="whitespace-nowrap px-3 py-2 text-right">Diferencia</th>
-              <th className="whitespace-nowrap px-3 py-2"></th>
+            <tr className="bg-accent-light text-table-head uppercase text-accent-dark">
+              <th className="whitespace-nowrap px-3 py-2.5">N°</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Fecha</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Ticket</th>
+              <th className="px-3 py-2.5">Detalle</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Motivo</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Usuario</th>
+              <th className="whitespace-nowrap px-3 py-2.5 text-right">Diferencia</th>
+              <th className="whitespace-nowrap px-3 py-2.5"></th>
             </tr>
           </thead>
           <tbody>
@@ -131,11 +132,14 @@ export function DevolucionesTab() {
               </tr>
             )}
             {filas.map((f) => (
-              <tr key={f.id} className={`border-b border-line last:border-0 ${f.estado === 'anulada' ? 'opacity-60' : ''}`}>
-                <td className="px-3 py-1.5 text-ink">{f.numero}</td>
-                <td className="whitespace-nowrap px-3 py-1.5 text-ink-soft">{formatFechaHora(f.created_at)}</td>
-                <td className="px-3 py-1.5 text-ink-soft">{f.venta?.numero ?? '—'}</td>
-                <td className="px-3 py-1.5 text-ink-soft">
+              <tr
+                key={f.id}
+                className={`border-b border-table-divider last:border-0 even:bg-table-row-alt ${f.estado === 'anulada' ? 'opacity-60' : ''}`}
+              >
+                <td className="px-3 py-3 text-ink">{f.numero}</td>
+                <td className="whitespace-nowrap px-3 py-3 text-ink-soft">{formatFechaHora(f.created_at)}</td>
+                <td className="px-3 py-3 text-ink-soft">{f.venta?.numero ?? '—'}</td>
+                <td className="px-3 py-3 text-ink-soft">
                   {f.items.map((it) => (
                     <p key={it.id}>
                       {it.tipo === 'devuelto' ? '↩' : '→'} {it.cantidad} × {it.producto?.nombre ?? 'Producto'}
@@ -146,23 +150,23 @@ export function DevolucionesTab() {
                   ))}
                   {f.observaciones && <p className="mt-0.5 text-label-md italic">{f.observaciones}</p>}
                 </td>
-                <td className="px-3 py-1.5 text-ink-soft">
+                <td className="px-3 py-3 text-ink-soft">
                   {MOTIVO_DEVOLUCION_LABEL[f.motivo]}
                   {f.motivo_detalle && <span className="block text-label-md">{f.motivo_detalle}</span>}
                 </td>
-                <td className="px-3 py-1.5 text-ink-soft">{f.usuarioNombre ?? '—'}</td>
-                <td className="whitespace-nowrap px-3 py-1.5 text-right">
-                  <span className="font-sans text-label-bold text-ink">{formatCurrency(f.diferencia_monto)}</span>
+                <td className="px-3 py-3 text-ink-soft">{f.usuarioNombre ?? '—'}</td>
+                <td className="whitespace-nowrap px-3 py-3 text-right">
+                  <span className="font-sans font-semibold text-ink">{formatCurrency(f.diferencia_monto)}</span>
                   <span className="block text-label-md text-ink-soft">
                     {f.diferencia_forma_pago
                       ? `${f.diferencia_monto < 0 ? 'Devuelto en' : 'Cobrado en'} ${FORMA_PAGO_LABEL[f.diferencia_forma_pago]}`
                       : 'Sin diferencia'}
                   </span>
                 </td>
-                <td className="px-3 py-1.5 text-right">
+                <td className="px-3 py-3 text-right">
                   {f.estado === 'anulada' ? (
-                    <span className="font-sans text-label-bold text-error" title={f.motivo_anulacion ?? undefined}>
-                      Anulada
+                    <span title={f.motivo_anulacion ?? undefined}>
+                      <EstadoBadge variant="red">Anulada</EstadoBadge>
                     </span>
                   ) : (
                     rol === 'admin' && (

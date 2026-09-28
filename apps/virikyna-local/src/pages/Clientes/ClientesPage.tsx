@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Eye, Pencil, Trash2 } from 'lucide-react'
 import type { ClienteSaldo } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
-import { formatCurrency, friendlyError } from '@virikyna/shared'
+import { formatCurrency, friendlyError, EstadoBadge, RowActionsMenu, type RowActionsMenuItem } from '@virikyna/shared'
 import { SearchInput } from '../../components/SearchInput'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { ClienteFormModal } from './ClienteFormModal'
@@ -107,16 +107,16 @@ export function ClientesPage() {
         <p className="mt-stack-md rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>
       )}
 
-      <div className="mt-stack-md flex-1 overflow-auto rounded-lg border border-line">
-        <table className="w-full text-left font-sans text-body-md leading-5">
+      <div className="mt-stack-md flex-1 overflow-auto rounded-xl shadow-sm">
+        <table className="w-full text-left font-sans text-table-row">
           <thead>
-            <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-              <th className="whitespace-nowrap px-3 py-2">Nombre</th>
-              <th className="whitespace-nowrap px-3 py-2">CUIT</th>
-              <th className="whitespace-nowrap px-3 py-2">Celular</th>
-              <th className="whitespace-nowrap px-3 py-2 text-right">Saldo cta. cte.</th>
-              <th className="whitespace-nowrap px-3 py-2">Estado</th>
-              <th className="whitespace-nowrap px-3 py-2"></th>
+            <tr className="bg-accent-light text-table-head uppercase text-accent-dark">
+              <th className="whitespace-nowrap px-3 py-2.5">Nombre</th>
+              <th className="whitespace-nowrap px-3 py-2.5">CUIT</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Celular</th>
+              <th className="whitespace-nowrap px-3 py-2.5 text-right">Saldo cta. cte.</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Estado</th>
+              <th className="whitespace-nowrap px-3 py-2.5"></th>
             </tr>
           </thead>
           <tbody>
@@ -141,54 +141,41 @@ export function ClientesPage() {
                 </td>
               </tr>
             )}
-            {clientesFiltrados.map((cliente) => (
-              <tr key={cliente.id} className="border-b border-line last:border-0">
-                <td className="px-3 py-1.5 text-ink">{cliente.razon_social ?? cliente.nombre_fantasia}</td>
-                <td className="px-3 py-1.5 text-ink-soft">{cliente.cuit ?? '—'}</td>
-                <td className="px-3 py-1.5 text-ink-soft">{cliente.celular ?? '—'}</td>
-                <td
-                  className={`px-3 py-1.5 text-right ${cliente.saldo_actual > 0 ? 'text-error' : 'text-ink-soft'}`}
-                >
-                  {formatCurrency(cliente.saldo_actual)}
-                </td>
-                <td className="px-3 py-1.5">
-                  <span className={cliente.activo ? 'text-success' : 'text-ink-soft'}>
-                    {cliente.activo ? 'Activo' : 'Inactivo'}
-                  </span>
-                </td>
-                <td className="px-3 py-1.5 text-right">
-                  <button
-                    type="button"
-                    onClick={() => setVerDetalle(cliente)}
-                    title="Ver detalle"
-                    aria-label="Ver detalle"
-                    className="rounded px-3 py-1.5 text-accent-dark hover:bg-accent-light"
-                  >
-                    <Eye size={18} strokeWidth={1.5} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModal(cliente)}
-                    title="Editar"
-                    aria-label="Editar"
-                    className="rounded px-3 py-1.5 text-accent-dark hover:bg-accent-light"
-                  >
-                    <Pencil size={18} strokeWidth={1.5} />
-                  </button>
-                  {cliente.activo && (
-                    <button
-                      type="button"
-                      onClick={() => setAEliminar(cliente)}
-                      title="Eliminar"
-                      aria-label="Eliminar"
-                      className="rounded px-3 py-1.5 text-error hover:bg-error/10"
-                    >
-                      <Trash2 size={18} strokeWidth={1.5} />
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {clientesFiltrados.map((cliente) => {
+              const items: RowActionsMenuItem[] = [
+                { label: 'Ver detalle', icon: Eye, onClick: () => setVerDetalle(cliente) },
+                { label: 'Editar', icon: Pencil, onClick: () => setModal(cliente) },
+              ]
+              if (cliente.activo) {
+                items.push({
+                  label: 'Eliminar',
+                  icon: Trash2,
+                  onClick: () => setAEliminar(cliente),
+                  destructive: true,
+                })
+              }
+              return (
+                <tr key={cliente.id} className="border-b border-table-divider last:border-0 even:bg-table-row-alt">
+                  <td className="px-3 py-3 text-ink">{cliente.razon_social ?? cliente.nombre_fantasia}</td>
+                  <td className="px-3 py-3 text-ink-soft">{cliente.cuit ?? '—'}</td>
+                  <td className="px-3 py-3 text-ink-soft">{cliente.celular ?? '—'}</td>
+                  <td className={`px-3 py-3 text-right font-semibold ${cliente.saldo_actual > 0 ? 'text-error' : 'text-ink-soft'}`}>
+                    {formatCurrency(cliente.saldo_actual)}
+                  </td>
+                  <td className="px-3 py-3">
+                    <EstadoBadge variant={cliente.activo ? 'green' : 'neutral'}>
+                      {cliente.activo ? 'Activo' : 'Inactivo'}
+                    </EstadoBadge>
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    <RowActionsMenu
+                      ariaLabel={`Más acciones para ${cliente.razon_social ?? cliente.nombre_fantasia}`}
+                      items={items}
+                    />
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>

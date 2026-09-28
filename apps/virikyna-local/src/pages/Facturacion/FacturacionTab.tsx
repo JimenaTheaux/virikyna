@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
+import { Eye, ArrowLeftRight } from 'lucide-react'
 import type { EstadoComprobante, FormaPagoVenta } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { friendlyError, emitirFacturaCReal } from '@virikyna/shared'
 import { formatCurrency, formatFechaHora } from '@virikyna/shared'
+import { EstadoBadge, RowActionsMenu } from '@virikyna/shared'
 import { FORMA_PAGO_LABEL, type DatosComprobante } from '../../lib/comprobante'
 import { ComprobanteModal } from '../../components/ComprobanteModal'
 import { DevolucionModal } from './DevolucionModal'
@@ -244,18 +246,18 @@ export function FacturacionTab() {
         </p>
       )}
 
-      <div className="mt-stack-md flex-1 overflow-auto rounded-lg border border-line">
-        <table className="w-full text-left font-sans text-body-md leading-5">
+      <div className="mt-stack-md flex-1 overflow-auto rounded-xl shadow-sm">
+        <table className="w-full text-left font-sans text-table-row">
           <thead>
-            <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-              <th className="whitespace-nowrap px-3 py-2"></th>
-              <th className="whitespace-nowrap px-3 py-2">N°</th>
-              <th className="min-w-[120px] whitespace-nowrap px-3 py-2">Fecha</th>
-              <th className="whitespace-nowrap px-3 py-2">Cliente</th>
-              <th className="whitespace-nowrap px-3 py-2">Medio de pago</th>
-              <th className="whitespace-nowrap px-3 py-2">Total</th>
-              <th className="whitespace-nowrap px-3 py-2">Estado</th>
-              <th className="whitespace-nowrap px-3 py-2"></th>
+            <tr className="bg-accent-light text-table-head uppercase text-accent-dark">
+              <th className="whitespace-nowrap px-3 py-2.5"></th>
+              <th className="whitespace-nowrap px-3 py-2.5">N°</th>
+              <th className="min-w-[120px] whitespace-nowrap px-3 py-2.5">Fecha</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Cliente</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Medio de pago</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Total</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Estado</th>
+              <th className="whitespace-nowrap px-3 py-2.5"></th>
             </tr>
           </thead>
           <tbody>
@@ -274,8 +276,8 @@ export function FacturacionTab() {
               </tr>
             )}
             {ventasVisibles.map((venta) => (
-              <tr key={venta.id} className="border-b border-line last:border-0">
-                <td className="px-3 py-1.5">
+              <tr key={venta.id} className="border-b border-table-divider last:border-0 even:bg-table-row-alt">
+                <td className="px-3 py-3">
                   {venta.estado === 'sin_facturar' && (
                     <input
                       type="checkbox"
@@ -285,33 +287,34 @@ export function FacturacionTab() {
                     />
                   )}
                 </td>
-                <td className="px-3 py-1.5 text-ink">{venta.numero}</td>
-                <td className="whitespace-nowrap px-3 py-1.5 text-ink-soft">{formatFechaHora(venta.created_at)}</td>
-                <td className="px-3 py-1.5 text-ink-soft">
+                <td className="px-3 py-3 text-ink">{venta.numero}</td>
+                <td className="whitespace-nowrap px-3 py-3 text-ink-soft">{formatFechaHora(venta.created_at)}</td>
+                <td className="px-3 py-3 text-ink-soft">
                   {venta.cliente ? venta.cliente.razon_social ?? venta.cliente.nombre_fantasia : 'Consumidor final'}
                 </td>
-                <td className="px-3 py-1.5 text-ink-soft">{FORMA_PAGO_LABEL[venta.forma_pago]}</td>
-                <td className="px-3 py-1.5 font-sans text-label-bold text-ink">{formatCurrency(venta.total)}</td>
-                <td className="px-3 py-1.5">
-                  <span className={venta.estado === 'facturado' ? 'text-success' : 'text-ink-soft'}>
+                <td className="px-3 py-3 text-ink-soft">{FORMA_PAGO_LABEL[venta.forma_pago]}</td>
+                <td className="px-3 py-3 font-sans font-semibold text-ink">{formatCurrency(venta.total)}</td>
+                <td className="px-3 py-3">
+                  <EstadoBadge variant={venta.estado === 'facturado' ? 'green' : 'amber'}>
                     {ESTADO_LABEL[venta.estado === 'facturado' ? 'facturado' : 'sin_facturar']}
-                  </span>
+                  </EstadoBadge>
                 </td>
-                <td className="px-3 py-1.5 text-right">
-                  <button
-                    type="button"
-                    onClick={() => verDetalle(venta)}
-                    className="rounded px-3 py-1.5 font-sans text-label-bold text-accent-dark hover:bg-accent-light"
-                  >
-                    {venta.estado === 'facturado' ? 'Ver factura' : 'Ver comprobante'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setADevolver(venta)}
-                    className="rounded px-3 py-1.5 font-sans text-label-bold text-accent-dark hover:bg-accent-light"
-                  >
-                    Devolución / Cambio
-                  </button>
+                <td className="px-3 py-3 text-right">
+                  <RowActionsMenu
+                    ariaLabel={`Más acciones para el comprobante ${venta.numero}`}
+                    items={[
+                      {
+                        label: venta.estado === 'facturado' ? 'Ver factura' : 'Ver comprobante',
+                        icon: Eye,
+                        onClick: () => verDetalle(venta),
+                      },
+                      {
+                        label: 'Devolución / Cambio',
+                        icon: ArrowLeftRight,
+                        onClick: () => setADevolver(venta),
+                      },
+                    ]}
+                  />
                 </td>
               </tr>
             ))}
