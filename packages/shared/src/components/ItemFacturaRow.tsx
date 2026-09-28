@@ -1,39 +1,40 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { createPortal } from 'react-dom'
-import type { Producto, Proveedor, UbicacionStock } from '@virikyna/shared'
-import {
-  formatCurrency,
-  totalItemFacturaCompra,
-  armarFiltroBusquedaProducto,
-  useDebouncedValue,
-  nuevoItemFacturaCompra,
-  type ItemFacturaCompra,
-} from '@virikyna/shared'
-import { supabase } from '../../lib/supabaseClient'
-import { usePerfil } from '../../auth/AuthContext'
-import { selectClass } from '../../components/FormField'
-import { ProductoFormSheet } from '../Inventario/ProductoFormSheet'
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Producto, Proveedor, UbicacionStock } from '../../types/database'
+import { formatCurrency } from '../../lib/format'
+import { totalItemFacturaCompra, type ItemFacturaCompraUI } from '../../lib/facturasCompra'
+import { armarFiltroBusquedaProducto } from '../../lib/productoBusqueda'
+import { useDebouncedValue } from '../../lib/useDebouncedValue'
+import { selectClass } from './FormField'
+import { DropdownFlotante } from './DropdownFlotante'
 
-// Extiende el ítem "real" (el que viaja al RPC `cargar_factura_compra`) con dos campos que
-// solo existen para la UI de esta planilla y nunca se envían al backend:
-// - marca: para ítems vinculados al catálogo es puramente informativa (ya vive en producto.marca,
-//   recuperable vía producto_id); para ítems libres se pega dentro de `descripcion` recién al
-//   guardar (ver CargarFacturaCompraModal), porque no existe una columna de marca por ítem.
-// - codigoBarras: solo dispara la búsqueda de producto, no se persiste (un ítem libre no tiene
-//   código de barras propio en el catálogo).
-export type ItemFacturaCompraUI = ItemFacturaCompra & { marca: string; codigoBarras: string }
-
-export function nuevoItemFacturaCompraUI(): ItemFacturaCompraUI {
-  return { ...nuevoItemFacturaCompra(), marca: '', codigoBarras: '' }
+// Lo que necesita la planilla de un producto recién creado para dejar el ítem vinculado.
+export type ProductoCreadoFactura = {
+  id: string
+  nombre: string
+  costo: number
+  marca: string | null
+  codigo_barras: string | null
 }
+
+// Cada app aporta su propio formulario de producto (Local: ProductoFormSheet con rol; Gestión:
+// ProductoFormModal) — la planilla solo lo monta cuando se elige "+ Crear producto nuevo".
+export type CrearProductoRender = (args: {
+  proveedores: Proveedor[]
+  nombreInicial: string
+  onClose: () => void
+  onSaved: (creado?: ProductoCreadoFactura) => void
+}) => ReactNode
 
 type ProductoBusquedaItem = Pick<Producto, 'id' | 'nombre' | 'marca' | 'costo' | 'codigo_barras'>
 
 type Props = {
+  supabase: SupabaseClient
   item: ItemFacturaCompraUI
   index: number
   puedeEliminar: boolean
   proveedores: Proveedor[]
+  crearProducto: CrearProductoRender
   onChange: (cambios: Partial<ItemFacturaCompraUI>) => void
   onEliminar: () => void
 }
@@ -43,58 +44,22 @@ const cellInputClass =
 const cellInputRightClass = `${cellInputClass} text-right`
 const cellSelectClass = `${selectClass} !rounded !border-transparent !bg-transparent !px-2 !py-1.5 focus:!border-accent focus:!bg-surface`
 
-// Dropdown de sugerencias en un portal con position:fixed calculado desde el input: el modal tiene
-// overflow-y-auto y un dropdown "absolute" adentro queda recortado o tapado por el footer. Se
-// reposiciona en scroll/resize y se abre hacia arriba si abajo no hay lugar.
-function DropdownFlotante({ anchorRef, children }: { anchorRef: RefObject<HTMLElement>; children: ReactNode }) {
-  const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number; maxHeight: number } | null>(null)
-
-  useLayoutEffect(() => {
-    function calcular() {
-      const el = anchorRef.current
-      if (!el) return
-      const r = el.getBoundingClientRect()
-      const left = Math.max(8, Math.min(r.left, window.innerWidth - 264))
-      const espacioAbajo = window.innerHeight - r.bottom - 8
-      const abajo = espacioAbajo >= 220 || espacioAbajo >= r.top
-      setPos(
-        abajo
-          ? { left, top: r.bottom + 4, maxHeight: Math.max(espacioAbajo, 120) }
-          : { left, bottom: window.innerHeight - r.top + 4, maxHeight: Math.max(r.top - 8, 120) },
-      )
-    }
-    calcular()
-    window.addEventListener('scroll', calcular, true)
-    window.addEventListener('resize', calcular)
-    return () => {
-      window.removeEventListener('scroll', calcular, true)
-      window.removeEventListener('resize', calcular)
-    }
-  }, [anchorRef])
-
-  if (!pos) return null
-  return createPortal(
-    // mousedown sin default: el click en una sugerencia no le quita el foco al input (si no, el
-    // blur cerraría el dropdown antes de que el click llegue a dispararse).
-    <div
-      className="fixed z-[60] w-64 overflow-y-auto rounded-lg border border-line bg-surface shadow-sm"
-      style={pos}
-      onMouseDown={(e) => e.preventDefault()}
-    >
-      {children}
-    </div>,
-    document.body,
-  )
-}
-
 // Fila de ítem de una factura de compra, en formato planilla (una <tr>, celdas editables inline).
 // La búsqueda de producto puede dispararse desde la celda "Cód. barras" (pensada para un lector
 // USB/Bluetooth que "tipea" el código y Enter) o desde la celda "Producto" (nombre/marca) — ambas
-// usan la misma búsqueda unificada (packages/shared/lib/productoBusqueda.ts) y comparten un único
+// usan la misma búsqueda unificada (lib/productoBusqueda.ts) y comparten un único
 // dropdown de sugerencias que aparece debajo de la celda que la disparó. Sin match, el ítem queda
 // "libre" (sin producto_id) y Producto/Marca se cargan a mano, sin bloquear.
-export function ItemFacturaRow({ item, index, puedeEliminar, proveedores, onChange, onEliminar }: Props) {
-  const { rol } = usePerfil()
+export function ItemFacturaRow({
+  supabase,
+  item,
+  index,
+  puedeEliminar,
+  proveedores,
+  crearProducto,
+  onChange,
+  onEliminar,
+}: Props) {
   const [resultados, setResultados] = useState<ProductoBusquedaItem[]>([])
   const [query, setQuery] = useState('')
   const [campoActivo, setCampoActivo] = useState<'codigo' | 'producto' | null>(null)
@@ -175,7 +140,7 @@ export function ItemFacturaRow({ item, index, puedeEliminar, proveedores, onChan
             key={p.id}
             type="button"
             onClick={() => seleccionarProducto(p)}
-            className="flex w-full flex-col items-start px-3 py-2 text-left font-sans hover:bg-bg"
+            className="flex w-full flex-col items-start px-3 py-1.5 text-left font-sans hover:bg-bg"
           >
             <span className="text-body-md text-ink">{p.nombre}</span>
             <span className="font-sans text-label-md text-ink-soft">
@@ -189,7 +154,7 @@ export function ItemFacturaRow({ item, index, puedeEliminar, proveedores, onChan
             setCreandoProducto(true)
             setCampoActivo(null)
           }}
-          className="flex w-full items-center px-3 py-2 text-left font-sans text-label-md text-accent-dark hover:bg-accent-light"
+          className="flex w-full items-center px-3 py-1.5 text-left font-sans text-label-md text-accent-dark hover:bg-accent-light"
         >
           + Crear producto nuevo{nombreNuevoProducto ? ` "${nombreNuevoProducto}"` : ''}
         </button>
@@ -297,13 +262,12 @@ export function ItemFacturaRow({ item, index, puedeEliminar, proveedores, onChan
         )}
       </td>
 
-      {creandoProducto && rol && (
-        <ProductoFormSheet
-          proveedores={proveedores}
-          rol={rol}
-          nombreInicial={nombreNuevoProducto}
-          onClose={() => setCreandoProducto(false)}
-          onSaved={(creado) => {
+      {creandoProducto &&
+        crearProducto({
+          proveedores,
+          nombreInicial: nombreNuevoProducto,
+          onClose: () => setCreandoProducto(false),
+          onSaved: (creado) => {
             setCreandoProducto(false)
             if (creado) {
               onChange({
@@ -317,10 +281,8 @@ export function ItemFacturaRow({ item, index, puedeEliminar, proveedores, onChan
               setQuery('')
               setCampoActivo(null)
             }
-          }}
-          onStockChanged={() => {}}
-        />
-      )}
+          },
+        })}
     </tr>
   )
 }

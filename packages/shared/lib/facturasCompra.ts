@@ -52,14 +52,45 @@ export function itemsValidosFacturaCompra(items: ItemFacturaCompra[]): ItemFactu
   return items.filter((it) => it.descripcion.trim() && Number(it.cantidad) > 0)
 }
 
+// `descuento` es informativo: lo que restan los % de descuento por ítem, ya descontado del
+// subtotal (no se resta de nuevo del total). `saldoPendiente`: al cargar la factura todavía no
+// hay pagos (el RPC no registra ninguno, ni siquiera en contado), así que es igual al total.
 export function calcularTotalesFacturaCompra(items: ItemFacturaCompra[]): {
   subtotalSinIva: number
+  descuento: number
   iva: number
   total: number
+  saldoPendiente: number
 } {
-  const subtotalSinIva = itemsValidosFacturaCompra(items).reduce((acc, it) => acc + totalItemFacturaCompra(it), 0)
+  const validos = itemsValidosFacturaCompra(items)
+  const subtotalSinIva = validos.reduce((acc, it) => acc + totalItemFacturaCompra(it), 0)
+  const bruto = validos.reduce((acc, it) => acc + (Number(it.cantidad) || 0) * (Number(it.precioUnitarioSinIva) || 0), 0)
+  const descuento = Math.max(0, Math.round((bruto - subtotalSinIva) * 100) / 100)
   const iva = Math.round(subtotalSinIva * (IVA_DEFAULT / 100) * 100) / 100
-  return { subtotalSinIva, iva, total: subtotalSinIva + iva }
+  const total = subtotalSinIva + iva
+  return { subtotalSinIva, descuento, iva, total, saldoPendiente: total }
+}
+
+// Extiende el ítem "real" (el que viaja al RPC `cargar_factura_compra`) con dos campos que
+// solo existen para la UI de la planilla/tarjeta de carga y nunca se envían al backend:
+// - marca: para ítems vinculados al catálogo es puramente informativa (ya vive en producto.marca,
+//   recuperable vía producto_id); para ítems libres se pega dentro de `descripcion` recién al
+//   guardar (ver integrarMarcaEnItemsLibres), porque no existe una columna de marca por ítem.
+// - codigoBarras: solo dispara la búsqueda de producto, no se persiste (un ítem libre no tiene
+//   código de barras propio en el catálogo).
+export type ItemFacturaCompraUI = ItemFacturaCompra & { marca: string; codigoBarras: string }
+
+export function nuevoItemFacturaCompraUI(): ItemFacturaCompraUI {
+  return { ...nuevoItemFacturaCompra(), marca: '', codigoBarras: '' }
+}
+
+// Un ítem libre (sin producto_id) no tiene columna propia de marca en la factura — la pegamos
+// dentro de la descripción para no perderla. Un ítem vinculado al catálogo no la necesita ahí:
+// ya se recupera vía producto_id → producto.marca.
+export function integrarMarcaEnItemsLibres<T extends ItemFacturaCompra & { marca: string }>(items: T[]): T[] {
+  return items.map((it) =>
+    !it.productoId && it.marca.trim() ? { ...it, descripcion: `${it.descripcion.trim()} - ${it.marca.trim()}` } : it,
+  )
 }
 
 export type CargarFacturaCompraInput = {

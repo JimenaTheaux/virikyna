@@ -1,5 +1,5 @@
 // Punto de entrada del paquete compartido: tipos de base de datos (ver docs/06_estructura_de_datos.md)
-// más la lógica de negocio y wiring de auth que usan por igual Virikyna Local y Virikyna Inventario.
+// más la lógica de negocio, wiring de auth y componentes que usan las apps de Virikyna.
 
 export * from './types/database'
 export * from './lib/format'
@@ -23,3 +23,10 @@ export * from './src/components/DefectuososCard'
 export * from './src/components/ScanButton'
 export * from './src/components/ProductoBuscador'
 export * from './src/components/CodigoBarrasBox'
+// Primitivos de UI de escritorio (Local y Gestión) — virikyna-inventario usa BottomSheet y los suyos.
+export * from './src/components/Modal'
+export * from './src/components/ConfirmDialog'
+export * from './src/components/FormField'
+export { CargarFacturaCompraModal } from './src/components/CargarFacturaCompraModal'
+export * from './src/components/DropdownFlotante'
+export type { CrearProductoRender, ProductoCreadoFactura } from './src/components/ItemFacturaRow'

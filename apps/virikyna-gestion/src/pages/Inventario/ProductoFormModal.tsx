@@ -17,7 +17,7 @@ const IVA_DEFAULT = 21
 // Input compacto para que el formulario completo entre en una sola pantalla sin scroll interno.
 const inputCompacto = inputClass.replace('px-4 py-2.5', 'px-3 py-1.5').replace('text-body-md', 'text-[15px]')
 
-type ProductoCreado = { id: string; nombre: string; costo: number }
+type ProductoCreado = { id: string; nombre: string; costo: number; marca: string | null; codigo_barras: string | null }
 
 type Props = {
   producto?: ProductoConRelaciones
@@ -164,7 +164,7 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, onClos
           ...payload,
           codigo_interno: codigoBarrasLimpio ? null : generarCodigoInterno(),
         })
-        .select('id, nombre, costo')
+        .select('id, nombre, costo, marca, codigo_barras')
         .single()
       dbError = error
       creado = data ?? undefined
