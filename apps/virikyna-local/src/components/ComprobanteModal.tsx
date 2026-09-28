@@ -83,7 +83,7 @@ export function ComprobanteModal({ datos, onClose, footer }: Props) {
           <p>{new Date(datos.fecha).toLocaleString('es-AR')}</p>
         </div>
 
-        <div className="max-h-52 overflow-auto rounded-lg border border-line">
+        <div className="overflow-x-auto rounded-lg border border-line">
           <table className="w-full text-left font-sans text-body-md">
             <thead>
               <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">

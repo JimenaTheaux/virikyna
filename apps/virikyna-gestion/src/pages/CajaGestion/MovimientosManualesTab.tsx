@@ -288,7 +288,7 @@ export function MovimientosManualesTab() {
 
       <div>
         <p className="font-sans text-label-bold text-ink-soft">Últimos movimientos</p>
-        <div className="mt-2 max-h-[400px] overflow-auto rounded-lg border border-line">
+        <div className="mt-2 overflow-x-auto rounded-lg border border-line">
           <table className="w-full text-left font-sans text-body-md leading-5">
             <thead>
               <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">

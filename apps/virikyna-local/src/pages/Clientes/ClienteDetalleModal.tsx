@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ClienteSaldo, PagoCliente, Venta } from '@virikyna/shared'
-import { formatCurrency, formatFechaHora, friendlyError, nombresPorId } from '@virikyna/shared'
+import { formatCurrency, formatFechaHora, friendlyError, MostrarMas, nombresPorId, PAGINA_LISTA } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { Modal } from '../../components/Modal'
 import { RegistrarPagoClienteModal } from './RegistrarPagoClienteModal'
@@ -30,6 +30,8 @@ export function ClienteDetalleModal({ cliente, onClose, onChanged }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [modalPago, setModalPago] = useState(false)
+  const [ventasVisibles, setVentasVisibles] = useState(PAGINA_LISTA)
+  const [pagosVisibles, setPagosVisibles] = useState(PAGINA_LISTA)
 
   async function cargar() {
     setLoading(true)
@@ -112,15 +114,25 @@ export function ClienteDetalleModal({ cliente, onClose, onChanged }: Props) {
           <>
             <div>
               <p className="font-sans text-label-bold text-ink-soft">Ventas a cuenta corriente</p>
-              <div className="mt-2 max-h-[220px] overflow-auto rounded-lg border border-line">
+              <div className="mt-2 overflow-x-auto rounded-lg border border-line">
                 <table className="w-full text-left font-sans text-body-md leading-5">
+                  <thead>
+                    <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
+                      <th className="whitespace-nowrap px-3 py-2">Fecha</th>
+                      <th className="whitespace-nowrap px-3 py-2">Venta</th>
+                      <th className="whitespace-nowrap px-3 py-2">Estado</th>
+                      <th className="whitespace-nowrap px-3 py-2 text-right">Total</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {ventas.length === 0 && (
                       <tr>
-                        <td className="px-3 py-2 text-ink-soft">Sin ventas a cuenta corriente todavía.</td>
+                        <td className="px-3 py-2 text-ink-soft" colSpan={4}>
+                          Sin ventas a cuenta corriente todavía.
+                        </td>
                       </tr>
                     )}
-                    {ventas.map((v) => (
+                    {ventas.slice(0, ventasVisibles).map((v) => (
                       <tr key={v.id} className="border-b border-line last:border-0">
                         <td className="whitespace-nowrap px-3 py-2 text-ink-soft">{formatFechaHora(v.created_at)}</td>
                         <td className="px-3 py-2 text-ink">N° {v.numero}</td>
@@ -131,19 +143,35 @@ export function ClienteDetalleModal({ cliente, onClose, onChanged }: Props) {
                   </tbody>
                 </table>
               </div>
+              <div className="mt-2">
+                <MostrarMas
+                  restantes={ventas.length - ventasVisibles}
+                  onClick={() => setVentasVisibles((n) => n + PAGINA_LISTA)}
+                />
+              </div>
             </div>
 
             <div>
               <p className="font-sans text-label-bold text-ink-soft">Pagos recibidos</p>
-              <div className="mt-2 max-h-[220px] overflow-auto rounded-lg border border-line">
+              <div className="mt-2 overflow-x-auto rounded-lg border border-line">
                 <table className="w-full text-left font-sans text-body-md leading-5">
+                  <thead>
+                    <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
+                      <th className="whitespace-nowrap px-3 py-2">Fecha</th>
+                      <th className="whitespace-nowrap px-3 py-2">Aplicado a</th>
+                      <th className="whitespace-nowrap px-3 py-2">Usuario</th>
+                      <th className="whitespace-nowrap px-3 py-2 text-right">Monto</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {pagos.length === 0 && (
                       <tr>
-                        <td className="px-3 py-2 text-ink-soft">Sin pagos registrados todavía.</td>
+                        <td className="px-3 py-2 text-ink-soft" colSpan={4}>
+                          Sin pagos registrados todavía.
+                        </td>
                       </tr>
                     )}
-                    {pagos.map((p) => (
+                    {pagos.slice(0, pagosVisibles).map((p) => (
                       <tr key={p.id} className="border-b border-line last:border-0">
                         <td className="whitespace-nowrap px-3 py-2 text-ink-soft">{formatFechaHora(p.created_at)}</td>
                         <td className="px-3 py-2 text-ink-soft">
@@ -155,6 +183,12 @@ export function ClienteDetalleModal({ cliente, onClose, onChanged }: Props) {
                     ))}
                   </tbody>
                 </table>
+              </div>
+              <div className="mt-2">
+                <MostrarMas
+                  restantes={pagos.length - pagosVisibles}
+                  onClick={() => setPagosVisibles((n) => n + PAGINA_LISTA)}
+                />
               </div>
             </div>
           </>

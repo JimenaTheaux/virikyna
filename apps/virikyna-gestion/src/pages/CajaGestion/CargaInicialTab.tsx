@@ -106,7 +106,7 @@ export function CargaInicialTab() {
 
         <div>
           <p className="font-sans text-label-bold text-ink-soft">Saldos iniciales por cuenta</p>
-          <div className="mt-2 overflow-auto rounded-lg border border-line">
+          <div className="mt-2 overflow-x-auto rounded-lg border border-line">
             <table className="w-full text-left font-sans text-body-md leading-5">
               <tbody>
                 {movimientosIniciales.map((m, i) => (
@@ -122,7 +122,7 @@ export function CargaInicialTab() {
 
         <div>
           <p className="font-sans text-label-bold text-ink-soft">Deuda inicial con proveedores</p>
-          <div className="mt-2 overflow-auto rounded-lg border border-line">
+          <div className="mt-2 overflow-x-auto rounded-lg border border-line">
             <table className="w-full text-left font-sans text-body-md leading-5">
               <tbody>
                 {proveedores.filter((p) => p.saldo_inicial !== 0).length === 0 && (
@@ -145,7 +145,7 @@ export function CargaInicialTab() {
 
         <div>
           <p className="font-sans text-label-bold text-ink-soft">Saldo inicial de cuenta corriente de clientes</p>
-          <div className="mt-2 overflow-auto rounded-lg border border-line">
+          <div className="mt-2 overflow-x-auto rounded-lg border border-line">
             <table className="w-full text-left font-sans text-body-md leading-5">
               <tbody>
                 {clientes.filter((c) => c.saldo_inicial !== 0).length === 0 && (
@@ -197,7 +197,7 @@ export function CargaInicialTab() {
 
       <div>
         <p className="font-sans text-label-bold text-ink-soft">Deuda inicial con proveedores</p>
-        <div className="mt-2 max-h-[240px] overflow-auto rounded-lg border border-line">
+        <div className="mt-2 overflow-x-auto rounded-lg border border-line">
           <table className="w-full text-left font-sans text-body-md leading-5">
             <tbody>
               {proveedores.length === 0 && (
@@ -226,7 +226,7 @@ export function CargaInicialTab() {
 
       <div>
         <p className="font-sans text-label-bold text-ink-soft">Saldo inicial de cuenta corriente de clientes</p>
-        <div className="mt-2 max-h-[240px] overflow-auto rounded-lg border border-line">
+        <div className="mt-2 overflow-x-auto rounded-lg border border-line">
           <table className="w-full text-left font-sans text-body-md leading-5">
             <tbody>
               {clientes.length === 0 && (
