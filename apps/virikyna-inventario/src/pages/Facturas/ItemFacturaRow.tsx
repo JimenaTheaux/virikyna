@@ -177,7 +177,7 @@ export function ItemFacturaRow({ item, index, puedeEliminar, proveedores, rol, o
   }
 
   return (
-    <div className="rounded-lg border border-line bg-surface p-4">
+    <div className="rounded-lg border border-line bg-surface p-4 shadow-sm">
       <div className="flex items-center justify-between">
         <span className="font-sans text-label-bold text-ink-soft">Ítem {index + 1}</span>
         {puedeEliminar && (

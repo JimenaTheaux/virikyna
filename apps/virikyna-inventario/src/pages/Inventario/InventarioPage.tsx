@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import type { Proveedor } from '@virikyna/shared'
-import { formatCurrency, friendlyError, coincideBusquedaProducto } from '@virikyna/shared'
+import { formatCurrency, friendlyError, coincideBusquedaProducto, EstadoBadge } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { usePerfil } from '../../auth/AuthContext'
 import { IconBuscar, IconCamara, IconMas, IconPorcentaje } from '../../components/icons'
@@ -165,9 +165,9 @@ export function InventarioPage() {
                     {producto.proveedor?.razon_social ?? 'Sin proveedor'}
                   </p>
                 </div>
-                <span className={producto.estado === 'activo' ? 'text-success' : 'text-ink-soft'}>
+                <EstadoBadge variant={producto.estado === 'activo' ? 'green' : 'neutral'}>
                   {producto.estado === 'activo' ? 'Activo' : 'Inactivo'}
-                </span>
+                </EstadoBadge>
               </div>
               <div className="mt-3 flex items-end justify-between">
                 <div>
