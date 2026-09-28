@@ -3,7 +3,6 @@ import type { Proveedor } from '@virikyna/shared'
 import { formatCurrency, friendlyError, coincideBusquedaProducto } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { usePerfil } from '../../auth/AuthContext'
-import { buscarProductoPorCodigoBarras } from '../../lib/productos'
 import { IconBuscar, IconCamara, IconMas, IconPorcentaje } from '../../components/icons'
 import { ProductoFormSheet } from './ProductoFormSheet'
 import { ActualizarPreciosSheet } from './ActualizarPreciosSheet'
@@ -15,7 +14,7 @@ const SELECT_PRODUCTOS =
   '*, proveedor:proveedores(razon_social, margen_1_default, margen_2_default), stock_ubicaciones(ubicacion, cantidad)'
 
 type Modal =
-  | { tipo: 'nuevo'; codigoBarras?: string }
+  | { tipo: 'nuevo'; codigoBarras?: string; nombre?: string }
   | { tipo: 'editar'; producto: ProductoConRelaciones }
   | null
 
@@ -32,7 +31,6 @@ export function InventarioPage() {
   const [error, setError] = useState<string | null>(null)
   const [modal, setModal] = useState<Modal>(null)
   const [escaneando, setEscaneando] = useState(false)
-  const [buscandoEscaneo, setBuscandoEscaneo] = useState(false)
   const [actualizandoPrecios, setActualizandoPrecios] = useState(false)
   const [resultadoPrecios, setResultadoPrecios] = useState<string | null>(null)
 
@@ -64,17 +62,17 @@ export function InventarioPage() {
     return productos.filter((p) => coincideBusquedaProducto(p, q))
   }, [productos, busqueda])
 
-  async function handleEscaneo(codigo: string) {
+  // Escanear con la cámara llena el buscador y filtra la lista (igual que en Local y Gestión), en
+  // vez de saltar directo a editar/crear: si el producto existe aparece en la lista para tocarlo, y
+  // si no existe la lista vacía ofrece crearlo con ese código.
+  function handleEscaneo(codigo: string) {
     setEscaneando(false)
-    setBuscandoEscaneo(true)
-    const producto = await buscarProductoPorCodigoBarras(codigo)
-    setBuscandoEscaneo(false)
-    if (producto) {
-      setModal({ tipo: 'editar', producto: producto as ProductoConRelaciones })
-    } else {
-      setModal({ tipo: 'nuevo', codigoBarras: codigo })
-    }
+    setBusqueda(codigo)
   }
+
+  // Un número largo es casi seguro un código de barras; cualquier otro texto se toma como nombre.
+  const textoBusqueda = busqueda.trim()
+  const esCodigo = /^\d{6,}$/.test(textoBusqueda)
 
   if (!rol) return null
 
@@ -115,10 +113,6 @@ export function InventarioPage() {
         </button>
       </div>
 
-      {buscandoEscaneo && (
-        <p className="font-sans text-label-md text-ink-soft">Buscando producto por código...</p>
-      )}
-
       {error && <p className="rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>}
       {resultadoPrecios && (
         <p className="rounded bg-accent-light px-4 py-3 font-sans text-body-md text-accent-darker">
@@ -130,9 +124,27 @@ export function InventarioPage() {
         {loading && <p className="py-6 text-center font-sans text-body-md text-ink-soft">Cargando...</p>}
 
         {!loading && productosFiltrados.length === 0 && (
-          <p className="py-6 text-center font-sans text-body-md text-ink-soft">
-            {busqueda ? 'No hay productos que coincidan con la búsqueda.' : 'No hay productos cargados todavía.'}
-          </p>
+          <div className="flex flex-col items-center gap-3 py-6">
+            <p className="text-center font-sans text-body-md text-ink-soft">
+              {busqueda ? 'No hay productos que coincidan con la búsqueda.' : 'No hay productos cargados todavía.'}
+            </p>
+            {textoBusqueda && (
+              <button
+                type="button"
+                onClick={() =>
+                  setModal(
+                    esCodigo
+                      ? { tipo: 'nuevo', codigoBarras: textoBusqueda }
+                      : { tipo: 'nuevo', nombre: textoBusqueda },
+                  )
+                }
+                className="flex min-h-12 items-center gap-1 rounded border border-accent/60 px-4 font-sans text-label-bold text-accent-dark active:bg-accent-light"
+              >
+                <IconMas className="h-5 w-5" />
+                Crear producto {esCodigo ? 'con este código' : `"${textoBusqueda}"`}
+              </button>
+            )}
+          </div>
         )}
 
         {productosFiltrados.map((producto) => {
@@ -187,6 +199,7 @@ export function InventarioPage() {
           key={modal.tipo === 'editar' ? modal.producto.id : 'nuevo'}
           producto={modal.tipo === 'editar' ? modal.producto : undefined}
           codigoBarrasInicial={modal.tipo === 'nuevo' ? modal.codigoBarras : undefined}
+          nombreInicial={modal.tipo === 'nuevo' ? modal.nombre : undefined}
           proveedores={proveedores}
           rol={rol}
           onClose={() => setModal(null)}
