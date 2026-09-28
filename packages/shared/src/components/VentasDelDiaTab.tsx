@@ -1,9 +1,12 @@
 import { useEffect, useState, type ComponentType } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { FileText } from 'lucide-react'
 import { friendlyError } from '../../lib/supabaseErrors'
 import { formatCurrency, fechaHoyISO, formatFechaCortaLocal, formatHora } from '../../lib/format'
 import { emitirFacturaCReal } from '../../lib/arcaFacturacion'
 import type { Cliente, FacturaC, FormaPagoVenta, Producto, Venta, VentaItem, VentaPago } from '../../types/database'
+import { EstadoBadge } from './EstadoBadge'
+import { RowActionsMenu, type RowActionsMenuItem } from './RowActionsMenu'
 
 export type VentaConFactura = Venta & {
   factura_c: FacturaC | null
@@ -162,78 +165,66 @@ export function VentasDelDiaTab({
         </p>
       )}
 
-      <div className="mt-stack-md flex-1 overflow-auto rounded-lg border border-line">
-        <table className="w-full text-left font-sans text-body-md leading-5">
+      <div className="mt-stack-md flex-1 overflow-auto rounded-xl shadow-sm">
+        <table className="w-full text-left font-sans text-table-row">
           <thead>
-            <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-              <th className="whitespace-nowrap px-3 py-2">Fecha</th>
-              <th className="whitespace-nowrap px-3 py-2">Hora</th>
-              <th className="whitespace-nowrap px-3 py-2">Cliente</th>
-              <th className="whitespace-nowrap px-3 py-2">Medio de pago</th>
-              <th className="whitespace-nowrap px-3 py-2">Monto</th>
-              <th className="whitespace-nowrap px-3 py-2"></th>
+            <tr className="bg-accent-light text-table-head uppercase text-accent-dark">
+              <th className="whitespace-nowrap px-3 py-2.5">Fecha</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Hora</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Cliente</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Medio de pago</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Monto</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Estado</th>
+              <th className="whitespace-nowrap px-3 py-2.5"></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td className="px-4 py-4 text-ink-soft" colSpan={6}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={7}>
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && ventas.length === 0 && (
               <tr>
-                <td className="px-4 py-4 text-ink-soft" colSpan={6}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={7}>
                   Todavía no hay ventas hoy.
                 </td>
               </tr>
             )}
-            {ventas.map((venta) => (
-              <tr key={venta.id} className="border-b border-line last:border-0">
-                <td className="px-3 py-1.5 text-ink-soft">{formatFechaCortaLocal(venta.created_at)}</td>
-                <td className="px-3 py-1.5 text-ink-soft">{formatHora(venta.created_at)}</td>
-                <td className="px-3 py-1.5 text-ink-soft">
-                  {venta.cliente ? venta.cliente.razon_social ?? venta.cliente.nombre_fantasia : 'Consumidor final'}
-                </td>
-                <td className="px-3 py-1.5 text-ink-soft">{formaPagoLabel[venta.forma_pago]}</td>
-                <td className="px-3 py-1.5 font-sans text-label-bold text-ink">{formatCurrency(venta.total)}</td>
-                <td className="px-3 py-1.5">
-                  <div className="flex items-center justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => verDetalle(venta)}
-                      title="Ver detalle"
-                      aria-label={`Ver detalle de la venta N° ${venta.numero}`}
-                      className="rounded p-2 text-ink-soft hover:bg-accent-light hover:text-accent-darker"
-                    >
-                      <IconVerDetalle className="h-5 w-5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => verDetalle(venta)}
-                      title="Enviar comprobante"
-                      aria-label={`Enviar comprobante de la venta N° ${venta.numero}`}
-                      className="rounded p-2 text-ink-soft hover:bg-accent-light hover:text-accent-darker"
-                    >
-                      <IconEnviar className="h-5 w-5" />
-                    </button>
-                    {venta.estado === 'sin_facturar' ? (
-                      <button
-                        type="button"
-                        onClick={() => emitirFacturaC(venta)}
-                        disabled={emitiendoId === venta.id}
-                        className="rounded bg-accent px-3 py-1.5 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-50"
-                      >
-                        {emitiendoId === venta.id ? 'Emitiendo...' : 'Factura C'}
-                      </button>
-                    ) : venta.estado === 'facturado' ? (
-                      <span className="px-3 py-1.5 font-sans text-label-bold text-success">Facturada</span>
-                    ) : null}
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {ventas.map((venta) => {
+              const items: RowActionsMenuItem[] = [
+                { label: 'Ver detalle', icon: IconVerDetalle, onClick: () => verDetalle(venta) },
+                { label: 'Enviar comprobante', icon: IconEnviar, onClick: () => verDetalle(venta) },
+              ]
+              if (venta.estado === 'sin_facturar') {
+                items.push({
+                  label: emitiendoId === venta.id ? 'Emitiendo...' : 'Emitir Factura C',
+                  icon: FileText,
+                  onClick: () => emitirFacturaC(venta),
+                  disabled: emitiendoId === venta.id,
+                })
+              }
+              return (
+                <tr key={venta.id} className="border-b border-table-divider last:border-0 even:bg-table-row-alt">
+                  <td className="px-3 py-3 text-ink-soft">{formatFechaCortaLocal(venta.created_at)}</td>
+                  <td className="px-3 py-3 text-ink-soft">{formatHora(venta.created_at)}</td>
+                  <td className="px-3 py-3 text-ink-soft">
+                    {venta.cliente ? venta.cliente.razon_social ?? venta.cliente.nombre_fantasia : 'Consumidor final'}
+                  </td>
+                  <td className="px-3 py-3 text-ink-soft">{formaPagoLabel[venta.forma_pago]}</td>
+                  <td className="px-3 py-3 font-sans font-semibold text-ink">{formatCurrency(venta.total)}</td>
+                  <td className="px-3 py-3">
+                    {venta.estado === 'facturado' && <EstadoBadge variant="green">Facturada</EstadoBadge>}
+                    {venta.estado === 'sin_facturar' && <EstadoBadge variant="amber">Sin facturar</EstadoBadge>}
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    <RowActionsMenu ariaLabel={`Más acciones para la venta N° ${venta.numero}`} items={items} />
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>

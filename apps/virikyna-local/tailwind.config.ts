@@ -26,6 +26,17 @@ export default {
         line: '#E6E2EA',
         error: '#C0392B',
         success: '#4A6F6B',
+        // Badges de estado en tablas de listado (sección 5.2) — nombrados por semántica, no por
+        // color: ámbar = pendiente/atención, verde = ok/completo, rojo = error/anulado.
+        'badge-amber-bg': '#FFF1D6',
+        'badge-amber-text': '#8A6D00',
+        'badge-green-bg': '#E9F8EF',
+        'badge-green-text': '#2E9B5F',
+        'badge-red-bg': '#FBEAE7',
+        'badge-neutral-bg': '#F0F2F3',
+        // Tablas de listado (sección 5.2) — fila alternada y separador, más claros que `line`.
+        'table-row-alt': '#FAFBFB',
+        'table-divider': '#F0F2F3',
       },
       fontFamily: {
         // Títulos, totales, números protagonistas
@@ -44,6 +55,9 @@ export default {
         'body-md': ['16px', { lineHeight: '24px', fontWeight: '400' }],
         'label-bold': ['14px', { lineHeight: '20px', fontWeight: '700' }],
         'label-md': ['13px', { lineHeight: '18px', fontWeight: '500' }],
+        // Excepción acotada a tablas de listado con acciones por fila (sección 5.2) — no usar
+        // fuera de ese contexto, el piso de 16px sigue vigente para texto operativo general.
+        'table-head': ['10.5px', { lineHeight: '14px', fontWeight: '700', letterSpacing: '0.04em' }],
       },
       // Espaciado y forma (sección 4)
       borderRadius: {

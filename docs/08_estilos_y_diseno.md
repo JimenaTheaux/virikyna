@@ -107,6 +107,30 @@ mostrador. El contenedor de la tabla sigue con su propio `overflow-auto`: con da
 scroll interno de la tabla es esperable y correcto, lo que se elimina es el scroll innecesario con
 una cantidad normal de filas.
 
+## 5.2 Tablas de listado con acciones por fila (estilo "G")
+
+Rediseño explícito, pedido por la clienta con una referencia visual concreta (captura "G —
+Facturación: menú anclado"), para toda tabla de listado con acciones por fila en las 3 apps. Es
+una **excepción tipográfica acotada** al 5.1 — no se aplica al carrito de Ventas, formularios ni
+texto operativo general, que mantienen el piso de `body-md` (16px) de la sección 3.
+
+| Elemento | Valor |
+|---|---|
+| Contenedor | `rounded-xl` (usa el `radius-lg` de la sección 4), `shadow-sm` |
+| Header (`th`) | `bg-accent-light text-accent-dark uppercase`, tipografía `table-head` (10.5px/14px, peso 700, `letterSpacing` 0.04em) |
+| Fila (`tr`) | `py-3` (→ ~42px con `table-row`), pares `bg-table-row-alt`, separador `border-table-divider` |
+| Texto de fila | token `table-row` = el `label-md` ya existente (13px/18px) |
+| Badge de estado | pill `rounded-[6px] px-2 py-0.5`, criterio de color (no paleta libre): ámbar `badge-amber-bg`/`badge-amber-text` = pendiente/atención, verde `badge-green-bg`/`badge-green-text` = ok/completo, rojo `badge-red-bg`/`error` = error/anulado, neutro `badge-neutral-bg`/`ink-soft` = inactivo/sin estado — ver componente `EstadoBadge` en `packages/shared` |
+| Botón de acciones | "⋮" cuadrado `rounded` ~26×26px, fondo `table-divider` (`#F0F2F3`) — abre `RowActionsMenu` (`packages/shared`), portal anclado con flip hacia arriba si no hay espacio abajo, ítems ícono + texto, cierre en click afuera |
+
+**Regla de menú vs. ícono suelto:** si la fila tiene una sola acción posible, va como ícono suelto
+(sin menú); con 2 o más, todas dentro de `RowActionsMenu` — nunca mezclar ícono suelto + menú en
+la misma fila. Con cero acciones discretas, la fila puede seguir siendo clickeable a un detalle
+(como ya pasa en Facturas de compra).
+
+En Inventario (móvil) el botón "⋮" y cada ítem del menú usan el tamaño `touch` (mínimo 44×44px)
+en vez de los ~26px de escritorio.
+
 ## 6. Accesibilidad y contexto de uso (resumen — detalle en skill `pos-ux-ui-design`)
 
 - Contraste alto siempre; evitar grises medios en texto que importa.
