@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { HashRouter } from 'react-router-dom'
+import { createHashRouter, RouterProvider } from 'react-router-dom'
 import { disableNumberInputScroll } from '@virikyna/shared'
 import App from './App'
 import { AuthProvider } from './auth/AuthContext'
@@ -8,12 +8,22 @@ import './index.css'
 
 disableNumberInputScroll()
 
-ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
-  <React.StrictMode>
-    <HashRouter>
+// Router "de datos" (en vez de <HashRouter>) para poder usar useBlocker: la carga de factura
+// pide confirmación antes de descartar lo cargado al cambiar de pestaña o volver atrás. La ruta
+// comodín deja que App siga definiendo sus <Routes> como siempre.
+const router = createHashRouter([
+  {
+    path: '*',
+    element: (
       <AuthProvider>
         <App />
       </AuthProvider>
-    </HashRouter>
+    ),
+  },
+])
+
+ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
+  <React.StrictMode>
+    <RouterProvider router={router} />
   </React.StrictMode>,
 )
