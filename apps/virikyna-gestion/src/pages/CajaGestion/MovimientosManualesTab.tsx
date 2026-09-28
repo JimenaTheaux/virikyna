@@ -288,17 +288,17 @@ export function MovimientosManualesTab() {
 
       <div>
         <p className="font-sans text-label-bold text-ink-soft">Últimos movimientos</p>
-        <div className="mt-2 overflow-x-auto rounded-lg border border-line">
-          <table className="w-full text-left font-sans text-body-md leading-5">
+        <div className="mt-2 overflow-x-auto rounded-xl shadow-sm">
+          <table className="w-full text-left font-sans text-table-row">
             <thead>
-              <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-                <th className="min-w-[120px] whitespace-nowrap px-3 py-2">Fecha</th>
-                <th className="whitespace-nowrap px-3 py-2">Cuenta</th>
-                <th className="whitespace-nowrap px-3 py-2">Tipo</th>
-                <th className="whitespace-nowrap px-3 py-2">Descripción</th>
-                <th className="whitespace-nowrap px-3 py-2">Usuario</th>
-                <th className="whitespace-nowrap px-3 py-2 text-right">Monto</th>
-                <th className="whitespace-nowrap px-3 py-2"></th>
+              <tr className="bg-accent-light text-table-head uppercase text-accent-dark">
+                <th className="min-w-[120px] whitespace-nowrap px-3 py-2.5">Fecha</th>
+                <th className="whitespace-nowrap px-3 py-2.5">Cuenta</th>
+                <th className="whitespace-nowrap px-3 py-2.5">Tipo</th>
+                <th className="whitespace-nowrap px-3 py-2.5">Descripción</th>
+                <th className="whitespace-nowrap px-3 py-2.5">Usuario</th>
+                <th className="whitespace-nowrap px-3 py-2.5 text-right">Monto</th>
+                <th className="whitespace-nowrap px-3 py-2.5"></th>
               </tr>
             </thead>
             <tbody>
@@ -317,18 +317,18 @@ export function MovimientosManualesTab() {
                 </tr>
               )}
               {historial.map((mov) => (
-                <tr key={mov.id} className="border-b border-line last:border-0">
-                  <td className="whitespace-nowrap px-3 py-1.5 text-ink-soft">{formatFechaHora(mov.created_at)}</td>
-                  <td className="px-3 py-1.5 text-ink">
+                <tr key={mov.id} className="border-b border-table-divider last:border-0 even:bg-table-row-alt">
+                  <td className="whitespace-nowrap px-3 py-3 text-ink-soft">{formatFechaHora(mov.created_at)}</td>
+                  <td className="px-3 py-3 text-ink">
                     {cuentas.find((c) => c.id === mov.cuenta_id)?.nombre ?? '—'}
                   </td>
-                  <td className="px-3 py-1.5 text-ink-soft">{TIPO_MOVIMIENTO_CUENTA_LABEL[mov.tipo]}</td>
-                  <td className="px-3 py-1.5 text-ink-soft">{mov.descripcion ?? '—'}</td>
-                  <td className="px-3 py-1.5 text-ink-soft">{mov.usuario?.nombre ?? '—'}</td>
-                  <td className={`px-3 py-1.5 text-right ${mov.monto < 0 ? 'text-error' : 'text-success'}`}>
+                  <td className="px-3 py-3 text-ink-soft">{TIPO_MOVIMIENTO_CUENTA_LABEL[mov.tipo]}</td>
+                  <td className="px-3 py-3 text-ink-soft">{mov.descripcion ?? '—'}</td>
+                  <td className="px-3 py-3 text-ink-soft">{mov.usuario?.nombre ?? '—'}</td>
+                  <td className={`px-3 py-3 text-right font-semibold ${mov.monto < 0 ? 'text-error' : 'text-success'}`}>
                     {formatCurrency(mov.monto)}
                   </td>
-                  <td className="px-3 py-1.5 text-right">
+                  <td className="px-3 py-3 text-right">
                     {esMovimientoManualEditable(mov.tipo) && (
                       <button
                         type="button"

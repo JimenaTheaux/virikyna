@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Eye } from 'lucide-react'
+import { Eye, CheckCircle2 } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 import { friendlyError, nombresPorId } from '@virikyna/shared'
-import { formatCurrency, formatFechaHora, fechaHoyISO } from '@virikyna/shared'
+import { formatCurrency, formatFechaHora, fechaHoyISO, EstadoBadge, RowActionsMenu, type RowActionsMenuItem } from '@virikyna/shared'
 import { diferenciaLabel } from '../../lib/caja'
 import { CierreDetalleModal } from '../CierreCaja/CierreDetalleModal'
 import type { AperturaCaja, CierreCaja } from '@virikyna/shared'
@@ -115,17 +115,17 @@ export function TableroTab() {
 
       {error && <p className="rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>}
 
-      <div className="overflow-x-auto rounded-lg border border-line">
-        <table className="w-full text-left font-sans text-body-md leading-5">
+      <div className="overflow-x-auto rounded-xl shadow-sm">
+        <table className="w-full text-left font-sans text-table-row">
           <thead>
-            <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-              <th className="whitespace-nowrap px-3 py-2">Tipo</th>
-              <th className="whitespace-nowrap px-3 py-2">Hora</th>
-              <th className="whitespace-nowrap px-3 py-2">Usuario</th>
-              <th className="whitespace-nowrap px-3 py-2 text-right">Efectivo esperado</th>
-              <th className="whitespace-nowrap px-3 py-2">Diferencia</th>
-              <th className="whitespace-nowrap px-3 py-2">Estado</th>
-              <th className="whitespace-nowrap px-3 py-2"></th>
+            <tr className="bg-accent-light text-table-head uppercase text-accent-dark">
+              <th className="whitespace-nowrap px-3 py-2.5">Tipo</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Hora</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Usuario</th>
+              <th className="whitespace-nowrap px-3 py-2.5 text-right">Efectivo esperado</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Diferencia</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Estado</th>
+              <th className="whitespace-nowrap px-3 py-2.5"></th>
             </tr>
           </thead>
           <tbody>
@@ -145,44 +145,48 @@ export function TableroTab() {
             )}
             {cierres.map((cierre) => {
               const diferencia = diferenciaLabel(cierre.diferencia)
+              const necesitaValidar = cierre.tipo === 'z' && cierre.estado_validacion === 'pendiente_validacion'
+              const items: RowActionsMenuItem[] = necesitaValidar
+                ? [
+                    {
+                      label: validando === cierre.id ? 'Validando...' : 'Validar',
+                      icon: CheckCircle2,
+                      onClick: () => validar(cierre.id),
+                      disabled: validando === cierre.id,
+                    },
+                    { label: 'Ver detalle', icon: Eye, onClick: () => setVerDetalle(cierre) },
+                  ]
+                : []
               return (
-                <tr key={cierre.id} className="border-b border-line last:border-0">
-                  <td className="px-3 py-1.5">
+                <tr key={cierre.id} className="border-b border-table-divider last:border-0 even:bg-table-row-alt">
+                  <td className="px-3 py-3">
                     <span
                       className={
                         cierre.tipo === 'z'
-                          ? 'rounded-full bg-accent px-3 py-1 font-sans text-label-md text-white'
-                          : 'rounded-full bg-bg px-3 py-1 font-sans text-label-md text-ink-soft'
+                          ? 'rounded-[6px] bg-accent px-2 py-0.5 font-sans text-table-row font-semibold text-white'
+                          : 'rounded-[6px] bg-badge-neutral-bg px-2 py-0.5 font-sans text-table-row font-semibold text-ink-soft'
                       }
                     >
                       {cierre.tipo === 'z' ? 'Cierre Z' : 'Cierre X'}
                     </span>
                   </td>
-                  <td className="px-3 py-1.5 text-ink-soft">{formatFechaHora(cierre.created_at)}</td>
-                  <td className="px-3 py-1.5 text-ink-soft">{cierre.usuario?.nombre ?? '—'}</td>
-                  <td className="px-3 py-1.5 text-right text-ink">{formatCurrency(cierre.efectivo_esperado)}</td>
-                  <td className={`px-3 py-1.5 font-sans text-label-bold ${diferencia.className}`}>
-                    {diferencia.texto}
+                  <td className="px-3 py-3 text-ink-soft">{formatFechaHora(cierre.created_at)}</td>
+                  <td className="px-3 py-3 text-ink-soft">{cierre.usuario?.nombre ?? '—'}</td>
+                  <td className="px-3 py-3 text-right text-ink">{formatCurrency(cierre.efectivo_esperado)}</td>
+                  <td className={`px-3 py-3 font-sans font-semibold ${diferencia.className}`}>{diferencia.texto}</td>
+                  <td className="px-3 py-3">
+                    {cierre.tipo === 'z' ? (
+                      <EstadoBadge variant={cierre.estado_validacion === 'validado' ? 'green' : 'amber'}>
+                        {cierre.estado_validacion === 'validado' ? 'Validado' : 'Pendiente de validación'}
+                      </EstadoBadge>
+                    ) : (
+                      <span className="text-ink-soft">—</span>
+                    )}
                   </td>
-                  <td className="px-3 py-1.5 text-ink-soft">
-                    {cierre.tipo === 'z'
-                      ? cierre.estado_validacion === 'validado'
-                        ? 'Validado'
-                        : 'Pendiente de validación'
-                      : '—'}
-                  </td>
-                  <td className="px-3 py-1.5 text-right">
-                    <div className="flex justify-end gap-2">
-                      {cierre.tipo === 'z' && cierre.estado_validacion === 'pendiente_validacion' && (
-                        <button
-                          type="button"
-                          onClick={() => validar(cierre.id)}
-                          disabled={validando === cierre.id}
-                          className="rounded bg-accent px-3 py-1.5 font-sans text-label-bold text-white hover:bg-accent-dark disabled:opacity-60"
-                        >
-                          {validando === cierre.id ? 'Validando...' : 'Validar'}
-                        </button>
-                      )}
+                  <td className="px-3 py-3 text-right">
+                    {necesitaValidar ? (
+                      <RowActionsMenu ariaLabel={`Más acciones para el cierre de ${formatFechaHora(cierre.created_at)}`} items={items} />
+                    ) : (
                       <button
                         type="button"
                         onClick={() => setVerDetalle(cierre)}
@@ -192,7 +196,7 @@ export function TableroTab() {
                       >
                         <Eye size={18} strokeWidth={1.5} />
                       </button>
-                    </div>
+                    )}
                   </td>
                 </tr>
               )

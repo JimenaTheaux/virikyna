@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { friendlyError } from '@virikyna/shared'
 import { formatCurrency } from '@virikyna/shared'
 import { coincideBusquedaProducto } from '@virikyna/shared'
-import { ProductoBuscador } from '@virikyna/shared'
+import { ProductoBuscador, EstadoBadge } from '@virikyna/shared'
 import { ProductoFormModal } from './ProductoFormModal'
 import { ActualizarPreciosModal } from './ActualizarPreciosModal'
 import type { ProductoConRelaciones } from './types'
@@ -99,18 +99,18 @@ export function ProductosTab() {
         </p>
       )}
 
-      <div className="mt-stack-md flex-1 overflow-auto rounded-lg border border-line">
-        <table className="w-full text-left font-sans text-body-md leading-5">
+      <div className="mt-stack-md flex-1 overflow-auto rounded-xl shadow-sm">
+        <table className="w-full text-left font-sans text-table-row">
           <thead>
-            <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-              <th className="whitespace-nowrap px-3 py-2"></th>
-              <th className="whitespace-nowrap px-3 py-2">Nombre</th>
-              <th className="whitespace-nowrap px-3 py-2">Proveedor</th>
-              <th className="whitespace-nowrap px-3 py-2">Costo</th>
-              <th className="whitespace-nowrap px-3 py-2">Precio venta</th>
-              <th className="whitespace-nowrap px-3 py-2">Stock (Local/Dep.)</th>
-              <th className="whitespace-nowrap px-3 py-2">Estado</th>
-              <th className="whitespace-nowrap px-3 py-2"></th>
+            <tr className="bg-accent-light text-table-head uppercase text-accent-dark">
+              <th className="whitespace-nowrap px-3 py-2.5"></th>
+              <th className="whitespace-nowrap px-3 py-2.5">Nombre</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Proveedor</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Costo</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Precio venta</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Stock (Local/Dep.)</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Estado</th>
+              <th className="whitespace-nowrap px-3 py-2.5"></th>
             </tr>
           </thead>
           <tbody>
@@ -140,8 +140,8 @@ export function ProductosTab() {
               const stockDeposito =
                 producto.stock_ubicaciones.find((s) => s.ubicacion === 'deposito')?.cantidad ?? 0
               return (
-                <tr key={producto.id} className="border-b border-line last:border-0">
-                  <td className="px-3 py-1.5">
+                <tr key={producto.id} className="border-b border-table-divider last:border-0 even:bg-table-row-alt">
+                  <td className="px-3 py-3">
                     <input
                       type="checkbox"
                       checked={seleccion.has(producto.id)}
@@ -149,21 +149,21 @@ export function ProductosTab() {
                       className="h-4 w-4 accent-accent"
                     />
                   </td>
-                  <td className="px-3 py-1.5 text-ink">{producto.nombre}</td>
-                  <td className="px-3 py-1.5 text-ink-soft">{producto.proveedor?.razon_social ?? '—'}</td>
-                  <td className="px-3 py-1.5 text-ink">{formatCurrency(producto.costo)}</td>
-                  <td className="px-3 py-1.5 font-sans text-label-bold text-accent-darker">
+                  <td className="px-3 py-3 text-ink">{producto.nombre}</td>
+                  <td className="px-3 py-3 text-ink-soft">{producto.proveedor?.razon_social ?? '—'}</td>
+                  <td className="px-3 py-3 text-ink">{formatCurrency(producto.costo)}</td>
+                  <td className="px-3 py-3 font-sans font-semibold text-accent-darker">
                     {formatCurrency(producto.precio_venta)}
                   </td>
-                  <td className="px-3 py-1.5 text-ink-soft">
+                  <td className="px-3 py-3 text-ink-soft">
                     {stockLocal} / {stockDeposito}
                   </td>
-                  <td className="px-3 py-1.5">
-                    <span className={producto.estado === 'activo' ? 'text-success' : 'text-ink-soft'}>
+                  <td className="px-3 py-3">
+                    <EstadoBadge variant={producto.estado === 'activo' ? 'green' : 'neutral'}>
                       {producto.estado === 'activo' ? 'Activo' : 'Inactivo'}
-                    </span>
+                    </EstadoBadge>
                   </td>
-                  <td className="px-3 py-1.5 text-right">
+                  <td className="px-3 py-3 text-right">
                     <button
                       type="button"
                       onClick={() => setModal(producto)}

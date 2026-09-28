@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Eye } from 'lucide-react'
 import type { Auditoria, PerfilPublico, TipoAccionAuditoria } from '@virikyna/shared'
-import { formatFechaHora, friendlyError, nombresPorId } from '@virikyna/shared'
+import { formatFechaHora, friendlyError, nombresPorId, EstadoBadge } from '@virikyna/shared'
 import { supabase } from '../lib/supabaseClient'
 import { ACCION_LABEL, accionRevertible, tablaLabel } from '../lib/historial'
 import { DetalleAuditoriaModal } from './Historial/DetalleAuditoriaModal'
@@ -188,15 +188,15 @@ export function HistorialPage() {
         <p className="mt-stack-md rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>
       )}
 
-      <div className="mt-stack-md flex-1 overflow-auto rounded-lg border border-line">
-        <table className="w-full text-left font-sans text-body-md leading-5">
+      <div className="mt-stack-md flex-1 overflow-auto rounded-xl shadow-sm">
+        <table className="w-full text-left font-sans text-table-row">
           <thead>
-            <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-              <th className="min-w-[120px] whitespace-nowrap px-3 py-2">Fecha</th>
-              <th className="whitespace-nowrap px-3 py-2">Usuario</th>
-              <th className="whitespace-nowrap px-3 py-2">Módulo</th>
-              <th className="whitespace-nowrap px-3 py-2">Acción</th>
-              <th className="whitespace-nowrap px-3 py-2"></th>
+            <tr className="bg-accent-light text-table-head uppercase text-accent-dark">
+              <th className="min-w-[120px] whitespace-nowrap px-3 py-2.5">Fecha</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Usuario</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Módulo</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Acción</th>
+              <th className="whitespace-nowrap px-3 py-2.5"></th>
             </tr>
           </thead>
           <tbody>
@@ -218,24 +218,24 @@ export function HistorialPage() {
               const ventaEstado = fila.tabla_afectada === 'ventas' ? ventaEstados.get(fila.registro_id) : undefined
               const revertible = accionRevertible(fila, ventaEstado)
               return (
-                <tr key={fila.id} className="border-b border-line last:border-0">
-                  <td className="whitespace-nowrap px-3 py-1.5 text-ink-soft">{formatFechaHora(fila.created_at)}</td>
-                  <td className="px-3 py-1.5 text-ink-soft">{fila.usuario?.nombre ?? '—'}</td>
-                  <td className="px-3 py-1.5 text-ink">{tablaLabel(fila.tabla_afectada)}</td>
-                  <td className="px-3 py-1.5">
-                    <span
-                      className={
+                <tr key={fila.id} className="border-b border-table-divider last:border-0 even:bg-table-row-alt">
+                  <td className="whitespace-nowrap px-3 py-3 text-ink-soft">{formatFechaHora(fila.created_at)}</td>
+                  <td className="px-3 py-3 text-ink-soft">{fila.usuario?.nombre ?? '—'}</td>
+                  <td className="px-3 py-3 text-ink">{tablaLabel(fila.tabla_afectada)}</td>
+                  <td className="px-3 py-3">
+                    <EstadoBadge
+                      variant={
                         fila.accion === 'reversion'
-                          ? 'text-accent-dark'
+                          ? 'amber'
                           : fila.accion === 'anulacion' || fila.accion === 'eliminacion'
-                            ? 'text-error'
-                            : 'text-ink-soft'
+                            ? 'red'
+                            : 'green'
                       }
                     >
                       {ACCION_LABEL[fila.accion]}
-                    </span>
+                    </EstadoBadge>
                   </td>
-                  <td className="px-3 py-1.5 text-right">
+                  <td className="px-3 py-3 text-right">
                     <button
                       type="button"
                       onClick={() => setVerDetalle(fila)}
