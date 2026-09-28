@@ -67,16 +67,25 @@ export function useCamaraDisponible(): boolean {
   return disponible
 }
 
+// 'compact' (default): 36px, para formularios de escritorio ajustados a 1366x768 sin scroll.
+// 'touch': 48px, para pantallas de celular (Inventario) donde se toca con el dedo — el mínimo
+// recomendado es 44px. Elegirlo es responsabilidad de cada pantalla: acá no se autodetecta porque
+// una terminal de escritorio con pantalla táctil también reporta puntero "coarse".
+export type TamanoControl = 'compact' | 'touch'
+
 type Props = {
   onDetect: (codigo: string) => void
   // Sin cámara disponible el botón solo lleva el foco al campo para escanear con lector físico.
   onFocusCampo?: () => void
+  size?: TamanoControl
+  // Pisa las clases del botón (incluido el tamaño) — para casos que necesitan una medida propia,
+  // ej. igualar la altura de un input de la pantalla.
   className?: string
 }
 
 // Botón de escaneo: ícono de cámara en celular/tablet, ícono de código de barras (líneas) en
 // desktop. Si hay cámara la abre; si no, deja el foco en el campo para que escriba el lector físico.
-export function ScanButton({ onDetect, onFocusCampo, className }: Props) {
+export function ScanButton({ onDetect, onFocusCampo, size = 'compact', className }: Props) {
   const tactil = useDispositivoTactil()
   const hayCamara = useCamaraDisponible()
   const [escaneando, setEscaneando] = useState(false)
@@ -95,10 +104,16 @@ export function ScanButton({ onDetect, onFocusCampo, className }: Props) {
         aria-label="Escanear código de barras"
         className={
           className ??
-          'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded border border-accent/40 bg-accent-light text-accent-darker transition hover:bg-accent hover:text-white'
+          `flex flex-shrink-0 items-center justify-center rounded border border-accent/40 bg-accent-light text-accent-darker transition hover:bg-accent hover:text-white active:bg-accent active:text-white ${
+            size === 'touch' ? 'h-12 w-12' : 'h-9 w-9'
+          }`
         }
       >
-        {tactil ? <IconCamaraScan className="h-5 w-5" /> : <IconCodigoBarras className="h-5 w-5" />}
+        {tactil ? (
+          <IconCamaraScan className={size === 'touch' ? 'h-6 w-6' : 'h-5 w-5'} />
+        ) : (
+          <IconCodigoBarras className={size === 'touch' ? 'h-6 w-6' : 'h-5 w-5'} />
+        )}
       </button>
       {escaneando && (
         <Suspense fallback={null}>

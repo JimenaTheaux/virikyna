@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react'
-import { ScanButton } from './ScanButton'
+import { ScanButton, type TamanoControl } from './ScanButton'
 
 type Props = {
   value: string
   onChange: (value: string) => void
   placeholder?: string
   autoFocus?: boolean
+  size?: TamanoControl
 }
 
 // Buscador único de productos: acepta lector físico (el campo toma foco al montar y el escaneo
@@ -16,6 +17,7 @@ export function ProductoBuscador({
   onChange,
   placeholder = 'Buscar por nombre, marca o código de barras…',
   autoFocus = true,
+  size = 'compact',
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -48,10 +50,10 @@ export function ProductoBuscador({
             if (e.key === 'Enter') e.preventDefault()
           }}
           placeholder={placeholder}
-          className="h-10 w-full rounded border border-line bg-surface pl-9 pr-3 font-sans text-body-md text-ink outline-none focus:border-accent"
+          className={`${size === 'touch' ? 'h-12' : 'h-10'} w-full rounded border border-line bg-surface pl-9 pr-3 font-sans text-body-md text-ink outline-none focus:border-accent`}
         />
       </div>
-      <ScanButton onDetect={onChange} onFocusCampo={() => inputRef.current?.focus()} />
+      <ScanButton onDetect={onChange} onFocusCampo={() => inputRef.current?.focus()} size={size} />
     </div>
   )
 }

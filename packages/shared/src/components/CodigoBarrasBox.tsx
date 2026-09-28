@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ScanButton } from './ScanButton'
+import { ScanButton, type TamanoControl } from './ScanButton'
 
 export type ProductoDuplicado = { id: string; nombre: string }
 
@@ -12,6 +12,9 @@ type Props = {
   excluirId?: string
   onEditarExistente?: (id: string) => void
   autoFocus?: boolean
+  // 'touch' para pantallas de celular (input y botón de 48px); 'compact' (default) es el ajuste de
+  // escritorio para que el formulario de producto entre en 1366x768 sin scroll.
+  size?: TamanoControl
 }
 
 // Campo destacado "Código de barras" del formulario de producto: autofoco para el lector físico,
@@ -23,7 +26,9 @@ export function CodigoBarrasBox({
   excluirId,
   onEditarExistente,
   autoFocus = true,
+  size = 'compact',
 }: Props) {
+  const touch = size === 'touch'
   const inputRef = useRef<HTMLInputElement>(null)
   const [duplicado, setDuplicado] = useState<ProductoDuplicado | null>(null)
 
@@ -54,7 +59,7 @@ export function CodigoBarrasBox({
 
   return (
     <div
-      className={`rounded-lg border-2 bg-accent-light/40 px-3 py-1.5 ${duplicado ? 'border-error' : 'border-accent'}`}
+      className={`rounded-lg border-2 bg-accent-light/40 ${touch ? 'px-3 py-2' : 'px-3 py-1.5'} ${duplicado ? 'border-error' : 'border-accent'}`}
     >
       <label className="flex flex-col gap-1">
         <span className="font-sans text-label-bold text-ink">Código de barras</span>
@@ -68,9 +73,9 @@ export function CodigoBarrasBox({
               if (e.key === 'Enter') e.preventDefault()
             }}
             placeholder="Escaneá con el lector o tipeá el código…"
-            className="h-9 min-w-0 flex-1 rounded border border-line bg-surface px-3 font-sans text-body-md text-ink outline-none focus:border-accent"
+            className={`${touch ? 'h-12' : 'h-9'} min-w-0 flex-1 rounded border border-line bg-surface px-3 font-sans text-body-md text-ink outline-none focus:border-accent`}
           />
-          <ScanButton onDetect={onChange} onFocusCampo={() => inputRef.current?.focus()} />
+          <ScanButton onDetect={onChange} onFocusCampo={() => inputRef.current?.focus()} size={size} />
         </div>
       </label>
       {duplicado ? (
@@ -83,7 +88,7 @@ export function CodigoBarrasBox({
             <button
               type="button"
               onClick={() => onEditarExistente(duplicado.id)}
-              className="rounded bg-error px-2.5 py-1 font-sans text-label-bold text-white hover:opacity-90"
+              className={`rounded bg-error px-2.5 font-sans text-label-bold text-white hover:opacity-90 ${touch ? 'min-h-11' : 'py-1'}`}
             >
               Editar existente
             </button>

@@ -173,6 +173,7 @@ export function ProductoFormSheet({
           buscarPorCodigo={buscarProductoPorCodigo}
           excluirId={producto?.id}
           onEditarExistente={onEditarExistente}
+          size="touch"
         />
 
         <Field label="Nombre">
@@ -198,7 +199,9 @@ export function ProductoFormSheet({
           </select>
         </Field>
         <div className="rounded border border-line p-4">
-          <div className="grid grid-cols-3 gap-stack-sm">
+          {/* Costo solo y los dos márgenes en 2 columnas: 3 columnas a 360px dejan ~58px útiles por
+              campo y cortan valores de más de 6 caracteres. */}
+          <div className="flex flex-col gap-stack-sm">
             <Field label="Costo">
               <input
                 type="number"
@@ -210,34 +213,36 @@ export function ProductoFormSheet({
                 className={inputClass}
               />
             </Field>
-            <Field label="Margen 1 (%)">
-              <input
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                value={margen1}
-                disabled={!esAdmin}
-                onChange={(e) => {
-                  setMargenesAuto(false)
-                  setMargen1(e.target.value)
-                }}
-                className={inputClass}
-              />
-            </Field>
-            <Field label="Margen 2 (%)">
-              <input
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                value={margen2}
-                disabled={!esAdmin}
-                onChange={(e) => {
-                  setMargenesAuto(false)
-                  setMargen2(e.target.value)
-                }}
-                className={inputClass}
-              />
-            </Field>
+            <div className="grid grid-cols-2 gap-stack-sm">
+              <Field label="Margen 1 (%)">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  value={margen1}
+                  disabled={!esAdmin}
+                  onChange={(e) => {
+                    setMargenesAuto(false)
+                    setMargen1(e.target.value)
+                  }}
+                  className={inputClass}
+                />
+              </Field>
+              <Field label="Margen 2 (%)">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  value={margen2}
+                  disabled={!esAdmin}
+                  onChange={(e) => {
+                    setMargenesAuto(false)
+                    setMargen2(e.target.value)
+                  }}
+                  className={inputClass}
+                />
+              </Field>
+            </div>
           </div>
           {!esAdmin && (
             <p className="mt-2 font-sans text-label-md text-ink-soft">
@@ -281,7 +286,7 @@ export function ProductoFormSheet({
                   <button
                     type="button"
                     onClick={() => setAjusteUbicacion('local')}
-                    className="rounded px-3 py-1.5 font-sans text-label-bold text-accent-dark hover:bg-accent-light"
+                    className="min-h-11 rounded px-4 font-sans text-label-bold text-accent-dark active:bg-accent-light"
                   >
                     Ajustar
                   </button>
@@ -293,7 +298,7 @@ export function ProductoFormSheet({
                   <button
                     type="button"
                     onClick={() => setAjusteUbicacion('deposito')}
-                    className="rounded px-3 py-1.5 font-sans text-label-bold text-accent-dark hover:bg-accent-light"
+                    className="min-h-11 rounded px-4 font-sans text-label-bold text-accent-dark active:bg-accent-light"
                   >
                     Ajustar
                   </button>
