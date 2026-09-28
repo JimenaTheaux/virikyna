@@ -23,6 +23,8 @@ type Props = {
   producto?: ProductoConRelaciones
   proveedores: Proveedor[]
   nombreInicial?: string
+  // Código de barras con el que arranca un producto nuevo (ej. creado desde la celda de código de una factura).
+  codigoBarrasInicial?: string
   onClose: () => void
   onSaved: (creado?: ProductoCreado) => void
   // Desde el aviso de código duplicado: ir directo a editar el producto que ya existe.
@@ -33,10 +35,10 @@ type Props = {
 // Admin siempre — Virikyna Gestión es exclusiva de administradoras (docs/02_roles_y_permisos.md),
 // así que a diferencia de Virikyna Local acá no hace falta condicionar el margen ni el ajuste
 // de stock por rol: quien entró a esta app ya es admin.
-export function ProductoFormModal({ producto, proveedores, nombreInicial, onClose, onSaved, onStockChanged, onEditarExistente }: Props) {
+export function ProductoFormModal({ producto, proveedores, nombreInicial, codigoBarrasInicial, onClose, onSaved, onStockChanged, onEditarExistente }: Props) {
   const [nombre, setNombre] = useState(producto?.nombre ?? nombreInicial ?? '')
   const [descripcion, setDescripcion] = useState(producto?.descripcion ?? '')
-  const [codigoBarras, setCodigoBarras] = useState(producto?.codigo_barras ?? '')
+  const [codigoBarras, setCodigoBarras] = useState(producto?.codigo_barras ?? codigoBarrasInicial ?? '')
   const [proveedorId, setProveedorId] = useState(producto?.proveedor_id ?? '')
   const [marca, setMarca] = useState(producto?.marca ?? '')
   const [costo, setCosto] = useState(String(producto?.costo ?? ''))

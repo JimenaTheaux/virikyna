@@ -38,6 +38,8 @@ type Props = {
   proveedores: Proveedor[]
   rol: RolUsuario
   nombreInicial?: string
+  // Código de barras con el que arranca un producto nuevo (ej. creado desde la celda de código de una factura).
+  codigoBarrasInicial?: string
   onClose: () => void
   onSaved: (creado?: ProductoCreado) => void
   // Desde el aviso de código duplicado: ir directo a editar el producto que ya existe.
@@ -50,6 +52,7 @@ export function ProductoFormSheet({
   proveedores,
   rol,
   nombreInicial,
+  codigoBarrasInicial,
   onClose,
   onSaved,
   onStockChanged,
@@ -59,7 +62,7 @@ export function ProductoFormSheet({
 
   const [nombre, setNombre] = useState(producto?.nombre ?? nombreInicial ?? '')
   const [descripcion, setDescripcion] = useState(producto?.descripcion ?? '')
-  const [codigoBarras, setCodigoBarras] = useState(producto?.codigo_barras ?? '')
+  const [codigoBarras, setCodigoBarras] = useState(producto?.codigo_barras ?? codigoBarrasInicial ?? '')
   const [proveedorId, setProveedorId] = useState(producto?.proveedor_id ?? '')
   const [marca, setMarca] = useState(producto?.marca ?? '')
   const [costo, setCosto] = useState(String(producto?.costo ?? ''))

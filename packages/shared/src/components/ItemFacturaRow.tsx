@@ -22,6 +22,8 @@ export type ProductoCreadoFactura = {
 export type CrearProductoRender = (args: {
   proveedores: Proveedor[]
   nombreInicial: string
+  // Al crear desde la celda "Cód. barras" el código tipeado/escaneado va acá — nunca como nombre.
+  codigoBarrasInicial?: string
   onClose: () => void
   onSaved: (creado?: ProductoCreadoFactura) => void
 }) => ReactNode
@@ -64,6 +66,7 @@ export function ItemFacturaRow({
   const [query, setQuery] = useState('')
   const [campoActivo, setCampoActivo] = useState<'codigo' | 'producto' | null>(null)
   const [creandoProducto, setCreandoProducto] = useState(false)
+  const [crearInicial, setCrearInicial] = useState<{ nombre: string; codigoBarras?: string }>({ nombre: '' })
   const queryDebounced = useDebouncedValue(query, 200)
   const codigoRef = useRef<HTMLInputElement>(null)
   const productoRef = useRef<HTMLInputElement>(null)
@@ -128,11 +131,25 @@ export function ItemFacturaRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queryDebounced, campoActivo])
 
-  const nombreNuevoProducto = query.trim() || item.descripcion.trim()
+  // Desde la celda de código, lo tipeado es el código: el nombre queda vacío (o el que ya se hubiera
+  // escrito en "Producto") para que se complete en el formulario. Desde la celda de producto, lo
+  // tipeado es el nombre y el código se toma del ítem si ya lo tiene.
+  function abrirCrear(campo: 'codigo' | 'producto') {
+    const codigo = item.codigoBarras.trim() || undefined
+    setCrearInicial(
+      campo === 'codigo'
+        ? { nombre: item.descripcion.trim(), codigoBarras: codigo }
+        : { nombre: query.trim() || item.descripcion.trim(), codigoBarras: codigo },
+    )
+    setCreandoProducto(true)
+    setCampoActivo(null)
+  }
+
   const mostrarDropdownCodigo = campoActivo === 'codigo' && (resultados.length > 0 || query.trim().length >= 2)
   const mostrarDropdownProducto = campoActivo === 'producto' && (resultados.length > 0 || query.trim().length >= 2)
 
-  function sugerencias(anchorRef: RefObject<HTMLElement>) {
+  function sugerencias(campo: 'codigo' | 'producto', anchorRef: RefObject<HTMLElement>) {
+    const textoCrear = query.trim()
     return (
       <DropdownFlotante anchorRef={anchorRef}>
         {resultados.map((p) => (
@@ -150,13 +167,10 @@ export function ItemFacturaRow({
         ))}
         <button
           type="button"
-          onClick={() => {
-            setCreandoProducto(true)
-            setCampoActivo(null)
-          }}
+          onClick={() => abrirCrear(campo)}
           className="flex w-full items-center px-3 py-1.5 text-left font-sans text-label-md text-accent-dark hover:bg-accent-light"
         >
-          + Crear producto nuevo{nombreNuevoProducto ? ` "${nombreNuevoProducto}"` : ''}
+          + Crear producto nuevo{textoCrear ? ` ${campo === 'codigo' ? 'con código ' : ''}"${textoCrear}"` : ''}
         </button>
       </DropdownFlotante>
     )
@@ -176,7 +190,7 @@ export function ItemFacturaRow({
           placeholder="Escaneá o tipeá"
           className={cellInputClass}
         />
-        {mostrarDropdownCodigo && sugerencias(codigoRef)}
+        {mostrarDropdownCodigo && sugerencias('codigo', codigoRef)}
       </td>
       <td className="relative px-2 py-1.5 align-top">
         <input
@@ -190,7 +204,7 @@ export function ItemFacturaRow({
           placeholder="Buscar por código, nombre o marca..."
           className={cellInputClass}
         />
-        {mostrarDropdownProducto && sugerencias(productoRef)}
+        {mostrarDropdownProducto && sugerencias('producto', productoRef)}
       </td>
       <td className="px-2 py-1.5 align-top">
         <input
@@ -265,7 +279,8 @@ export function ItemFacturaRow({
       {creandoProducto &&
         crearProducto({
           proveedores,
-          nombreInicial: nombreNuevoProducto,
+          nombreInicial: crearInicial.nombre,
+          codigoBarrasInicial: crearInicial.codigoBarras,
           onClose: () => setCreandoProducto(false),
           onSaved: (creado) => {
             setCreandoProducto(false)
