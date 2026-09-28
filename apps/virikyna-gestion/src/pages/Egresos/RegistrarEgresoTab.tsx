@@ -64,7 +64,12 @@ export function RegistrarEgresoTab() {
     <form onSubmit={handleSubmit} className="rounded-lg border border-line p-4">
       <p className="font-sans text-label-bold text-ink-soft">Registrar egreso general</p>
       <p className="mt-1 font-sans text-body-md text-ink-soft">Sueldo, servicio u otro gasto sin proveedor.</p>
-      <div className="mt-3 grid grid-cols-3 gap-stack-md">
+      {/* Orden de un comprobante de gasto: cuándo, qué tipo, de qué se trata (obligatoria, ancha) y
+          recién después cuánto y cómo se pagó. 1 columna en pantallas chicas, 2 en md, 4 desde xl. */}
+      <div className="mt-3 grid grid-cols-1 gap-stack-md md:grid-cols-2 xl:grid-cols-4">
+        <Field label="Fecha">
+          <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className={inputClass} />
+        </Field>
         <Field label="Categoría">
           <select value={categoria} onChange={(e) => setCategoria(e.target.value as CategoriaEgreso)} className={selectClass}>
             {CATEGORIAS_EGRESO_GENERAL.map((c) => (
@@ -74,11 +79,18 @@ export function RegistrarEgresoTab() {
             ))}
           </select>
         </Field>
+        <div className="md:col-span-2">
+          <Field label="Descripción">
+            <input
+              value={descripcion}
+              onChange={(e) => setDescripcion(e.target.value)}
+              placeholder="Ej: Sueldo de septiembre, factura de luz"
+              className={`${inputClass} w-full`}
+            />
+          </Field>
+        </div>
         <Field label="Monto">
           <input type="number" step="0.01" value={monto} onChange={(e) => setMonto(e.target.value)} className={inputClass} />
-        </Field>
-        <Field label="Fecha">
-          <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className={inputClass} />
         </Field>
         <Field label="Forma de pago">
           <select value={formaPago} onChange={(e) => setFormaPago(e.target.value as FormaPagoEgreso)} className={selectClass}>
@@ -88,9 +100,6 @@ export function RegistrarEgresoTab() {
               </option>
             ))}
           </select>
-        </Field>
-        <Field label="Descripción">
-          <input value={descripcion} onChange={(e) => setDescripcion(e.target.value)} className={inputClass} />
         </Field>
       </div>
 

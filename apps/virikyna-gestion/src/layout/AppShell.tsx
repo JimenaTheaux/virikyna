@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { usePerfil, useAuth } from '../auth/AuthContext'
 import { Footer } from '@virikyna/shared'
 import virikynaWordmark from '@virikyna/shared/src/assets/virikyna-wordmark.png'
@@ -48,13 +50,38 @@ const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
   },
 ]
 
-function NavItemLink({ to, label, Icon }: NavItem) {
+// Menú lateral expandido (248px) desde 1280px de ancho; por debajo pasa solo a una barra de íconos
+// (72px) para no comerse ~1/4 de la pantalla en 1024px. El botón del encabezado permite forzar el
+// otro estado mientras dure la sesión; al cruzar el umbral vuelve a decidir solo por el ancho.
+const ANCHO_EXPANDIDO_PX = 1280
+
+function useSidebarColapsado() {
+  const [anchoSuficiente, setAnchoSuficiente] = useState(() => window.innerWidth >= ANCHO_EXPANDIDO_PX)
+  const [manual, setManual] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(min-width: ${ANCHO_EXPANDIDO_PX}px)`)
+    function alCambiar() {
+      setAnchoSuficiente(mq.matches)
+      setManual(null)
+    }
+    mq.addEventListener('change', alCambiar)
+    return () => mq.removeEventListener('change', alCambiar)
+  }, [])
+
+  const colapsado = manual ?? !anchoSuficiente
+  return { colapsado, alternar: () => setManual(!colapsado) }
+}
+
+function NavItemLink({ to, label, Icon, colapsado }: NavItem & { colapsado: boolean }) {
   return (
     <NavLink
       to={to}
+      title={colapsado ? label : undefined}
+      aria-label={colapsado ? label : undefined}
       className={({ isActive }) =>
         [
-          'flex items-center gap-3 rounded px-3 py-[10px] font-sans text-body-md',
+          `flex items-center rounded py-[10px] font-sans text-body-md ${colapsado ? 'justify-center px-0' : 'gap-3 px-3'}`,
           isActive
             ? 'bg-accent-light text-accent-darker font-medium'
             : 'text-ink-soft hover:bg-accent-light hover:text-accent-darker',
@@ -64,7 +91,7 @@ function NavItemLink({ to, label, Icon }: NavItem) {
       {({ isActive }) => (
         <>
           <Icon className="h-5 w-5 flex-shrink-0" filled={isActive} />
-          {label}
+          {!colapsado && label}
         </>
       )}
     </NavLink>
@@ -74,27 +101,42 @@ function NavItemLink({ to, label, Icon }: NavItem) {
 export function AppShell() {
   const { perfil } = usePerfil()
   const { signOut } = useAuth()
+  const { colapsado, alternar } = useSidebarColapsado()
 
   return (
     <div className="flex h-screen overflow-hidden bg-bg text-ink">
-      <aside className="flex w-[248px] flex-shrink-0 flex-col overflow-y-auto border-r border-line bg-surface">
-        <div className="flex items-center gap-3 border-b border-line px-6 py-6">
-          <img src={virikynaWordmark} alt="Virikyna" className="h-9 w-auto" />
+      <aside
+        className={`flex flex-shrink-0 flex-col overflow-y-auto border-r border-line bg-surface ${
+          colapsado ? 'w-[72px]' : 'w-[248px]'
+        }`}
+      >
+        <div
+          className={`flex items-center justify-center gap-3 border-b border-line py-6 ${colapsado ? 'px-2' : 'px-6'}`}
+        >
+          {colapsado ? (
+            <img src="/icons/icon-192.png" alt="Virikyna" className="h-9 w-9 rounded" />
+          ) : (
+            <img src={virikynaWordmark} alt="Virikyna" className="h-9 w-auto" />
+          )}
         </div>
         <nav className="flex-1 px-3 py-4">
           <div className="mb-6 flex flex-col gap-1">
             {TOP_ITEMS.map((item) => (
-              <NavItemLink key={item.to} {...item} />
+              <NavItemLink key={item.to} {...item} colapsado={colapsado} />
             ))}
           </div>
           {NAV_SECTIONS.map((section) => (
             <div key={section.title} className="mb-6 last:mb-0">
-              <p className="mb-2 px-3 font-sans text-label-md uppercase tracking-wide text-ink-soft">
-                {section.title}
-              </p>
+              {colapsado ? (
+                <div className="mx-2 mb-2 border-t border-line" aria-hidden="true" />
+              ) : (
+                <p className="mb-2 px-3 font-sans text-label-md uppercase tracking-wide text-ink-soft">
+                  {section.title}
+                </p>
+              )}
               <div className="flex flex-col gap-1">
                 {section.items.map((item) => (
-                  <NavItemLink key={item.to} {...item} />
+                  <NavItemLink key={item.to} {...item} colapsado={colapsado} />
                 ))}
               </div>
             </div>
@@ -102,24 +144,35 @@ export function AppShell() {
         </nav>
       </aside>
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex h-[64px] flex-shrink-0 items-center justify-end gap-3 border-b border-line bg-surface px-7 shadow-sm">
-          <div className="flex items-center gap-2 rounded-full bg-bg px-4 py-2 font-sans text-label-bold text-ink-soft">
-            Virikyna Gestión
-          </div>
-          {perfil && (
-            <div className="flex items-center gap-2 rounded-full bg-bg px-4 py-2 font-sans text-label-bold text-ink-soft">
-              {perfil.nombre} · Admin
-            </div>
-          )}
+        <header className="flex h-[64px] flex-shrink-0 items-center justify-between gap-3 border-b border-line bg-surface px-7 shadow-sm">
           <button
             type="button"
-            onClick={() => signOut()}
-            className="flex items-center gap-2 rounded px-3 py-2 font-sans text-label-bold text-ink-soft hover:bg-accent-light hover:text-accent-darker"
-            title="Cambiar de usuario"
+            onClick={alternar}
+            aria-label={colapsado ? 'Expandir menú' : 'Contraer menú'}
+            title={colapsado ? 'Expandir menú' : 'Contraer menú'}
+            className="flex h-11 w-11 items-center justify-center rounded text-ink-soft hover:bg-accent-light hover:text-accent-darker"
           >
-            <IconCambiarUsuario className="h-5 w-5" />
-            Cambiar de usuario
+            {colapsado ? <PanelLeftOpen size={20} strokeWidth={1.75} /> : <PanelLeftClose size={20} strokeWidth={1.75} />}
           </button>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 rounded-full bg-bg px-4 py-2 font-sans text-label-bold text-ink-soft">
+              Virikyna Gestión
+            </div>
+            {perfil && (
+              <div className="flex items-center gap-2 rounded-full bg-bg px-4 py-2 font-sans text-label-bold text-ink-soft">
+                {perfil.nombre} · Admin
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => signOut()}
+              className="flex items-center gap-2 rounded px-3 py-2 font-sans text-label-bold text-ink-soft hover:bg-accent-light hover:text-accent-darker"
+              title="Cambiar de usuario"
+            >
+              <IconCambiarUsuario className="h-5 w-5" />
+              Cambiar de usuario
+            </button>
+          </div>
         </header>
         <main className="flex-1 overflow-auto p-card md:pb-10">
           <Outlet />

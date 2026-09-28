@@ -58,8 +58,8 @@ export function DashboardPage() {
 
       <AperturasAlerta />
 
-      <div className="grid grid-cols-4 gap-gutter-grid">
-        <div className="col-span-2 rounded-lg bg-surface p-card shadow-sm">
+      <div className="grid grid-cols-2 gap-gutter-grid xl:grid-cols-4">
+        <div className="col-span-2 min-w-0 rounded-lg bg-surface p-card shadow-sm">
           <p className="font-sans text-label-bold uppercase text-ink-soft">Ventas de hoy</p>
           <p className="mt-2 font-display text-display-card text-accent-darker">
             {loading ? '—' : formatCurrency(hoy.total)}
@@ -70,11 +70,11 @@ export function DashboardPage() {
             </p>
           )}
         </div>
-        <div className="rounded-lg bg-surface p-card shadow-sm">
+        <div className="min-w-0 rounded-lg bg-surface p-card shadow-sm">
           <p className="font-sans text-label-bold uppercase text-ink-soft">Tickets hoy</p>
           <p className="mt-2 font-display text-headline-md text-accent-darker">{loading ? '—' : hoy.cantidad}</p>
         </div>
-        <div className="rounded-lg bg-surface p-card shadow-sm">
+        <div className="min-w-0 rounded-lg bg-surface p-card shadow-sm">
           <p className="font-sans text-label-bold uppercase text-ink-soft">Ticket promedio</p>
           <p className="mt-2 font-display text-headline-md text-accent-darker">
             {loading ? '—' : formatCurrency(ticketPromedio)}
@@ -82,8 +82,8 @@ export function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid flex-1 grid-cols-3 gap-gutter-grid">
-        <div className="col-span-2 rounded-lg bg-surface p-card shadow-sm">
+      <div className="grid flex-1 grid-cols-1 gap-gutter-grid lg:grid-cols-3">
+        <div className="min-w-0 rounded-lg bg-surface p-card shadow-sm lg:col-span-2">
           <WeeklySalesChart porDia={porDia} />
         </div>
 
@@ -93,7 +93,7 @@ export function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-gutter-grid">
+      <div className="grid grid-cols-1 gap-gutter-grid sm:grid-cols-3">
         {ACCESOS_RAPIDOS.map(({ to, label, Icon }) => (
           <Link
             key={to}

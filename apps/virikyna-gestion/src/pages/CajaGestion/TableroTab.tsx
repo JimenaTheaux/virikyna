@@ -115,7 +115,7 @@ export function TableroTab() {
 
       {error && <p className="rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>}
 
-      <div className="overflow-auto rounded-lg border border-line">
+      <div className="overflow-x-auto rounded-lg border border-line">
         <table className="w-full text-left font-sans text-body-md leading-5">
           <thead>
             <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">

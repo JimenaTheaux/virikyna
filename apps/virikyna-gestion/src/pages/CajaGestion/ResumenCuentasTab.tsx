@@ -56,14 +56,14 @@ export function ResumenCuentasTab() {
 
       {error && <p className="rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>}
 
-      <div className="grid grid-cols-3 gap-gutter-grid">
-        {loading && <p className="col-span-3 font-sans text-body-md text-ink-soft">Cargando...</p>}
+      <div className="grid grid-cols-1 gap-gutter-grid md:grid-cols-2 xl:grid-cols-3">
+        {loading && <p className="col-span-full font-sans text-body-md text-ink-soft">Cargando...</p>}
         {!loading && cuentas.length === 0 && !error && (
-          <p className="col-span-3 font-sans text-body-md text-ink-soft">Todavía no hay cuentas cargadas.</p>
+          <p className="col-span-full font-sans text-body-md text-ink-soft">Todavía no hay cuentas cargadas.</p>
         )}
         {!loading &&
           cuentas.map((cuenta) => (
-            <div key={cuenta.id} className="rounded-lg bg-surface p-card shadow-sm">
+            <div key={cuenta.id} className="min-w-0 rounded-lg bg-surface p-card shadow-sm">
               <p className="font-sans text-label-bold uppercase text-ink-soft">{cuenta.nombre}</p>
               <p className="mt-2 font-display text-display-card text-accent-darker">
                 {formatCurrency(cuenta.saldo_actual)}
@@ -73,8 +73,8 @@ export function ResumenCuentasTab() {
       </div>
 
       {!loading && (
-        <div className="grid grid-cols-3 gap-gutter-grid">
-          <div className="flex items-start justify-between rounded-lg bg-surface p-card shadow-sm">
+        <div className="grid grid-cols-1 gap-gutter-grid md:grid-cols-2 xl:grid-cols-3">
+          <div className="flex min-w-0 items-start justify-between rounded-lg bg-surface p-card shadow-sm">
             <div>
               <p className="font-sans text-label-bold uppercase text-ink-soft">Pendiente de pago</p>
               <p className="mt-2 font-display text-display-card text-error">{formatCurrency(pendientePago)}</p>
@@ -90,7 +90,7 @@ export function ResumenCuentasTab() {
             </button>
           </div>
 
-          <div className="flex items-start justify-between rounded-lg bg-surface p-card shadow-sm">
+          <div className="flex min-w-0 items-start justify-between rounded-lg bg-surface p-card shadow-sm">
             <div>
               <p className="font-sans text-label-bold uppercase text-ink-soft">Pendiente de cobro</p>
               <p className="mt-2 font-display text-display-card text-celeste">{formatCurrency(pendienteCobro)}</p>
@@ -106,7 +106,7 @@ export function ResumenCuentasTab() {
             </button>
           </div>
 
-          <div className="flex items-start justify-between rounded-lg bg-surface p-card shadow-sm">
+          <div className="flex min-w-0 items-start justify-between rounded-lg bg-surface p-card shadow-sm">
             <div>
               <p className="font-sans text-label-bold uppercase text-ink-soft">Cheques emitidos</p>
               <p className="mt-2 font-display text-display-card text-accent-darker">{formatCurrency(chequesEmitidos)}</p>
