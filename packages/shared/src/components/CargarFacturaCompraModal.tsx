@@ -198,6 +198,16 @@ export function CargarFacturaCompraModal({ supabase, crearProducto, onClose, onS
         id="form-factura-compra"
         onSubmit={handleSubmit}
         onChangeCapture={() => setDirty(true)}
+        // El lector de código de barras manda Enter al terminar cada lectura. En un <form> con
+        // botón submit, Enter en cualquier input dispara el envío implícito: con los ítems de
+        // arriba ya completos, escanear en una fila nueva guardaba la factura a medio cargar.
+        // Acá Enter en un campo nunca guarda — solo el botón "Guardar factura".
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && e.target instanceof HTMLInputElement) {
+            e.preventDefault()
+            e.stopPropagation()
+          }
+        }}
         className="flex flex-col gap-stack-md"
       >
         {/* Franja superior — datos del comprobante en una sola fila compacta */}
