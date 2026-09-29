@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Manual de usuario — Virikyna Gestión</title>
+<meta name="description" content="Manual de usuario de Virikyna Gestión: Caja Gestión, Inventario, Proveedores, Cuentas corrientes, Facturación, Egresos, Notas, Historial y Configuración." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --accent:#3FB9B9;
+    --accent-dark:#237878;
+    --accent-darker:#163F3F;
+    --accent-light:#E3F5F5;
+    --ink:#24242B;
+    --ink-soft:#6B6570;
+    --bg:#F7F6FA;
+    --surface:#FFFFFF;
+    --line:#E6E2EA;
+    --error:#C0392B;
+    --error-light:#FBEAE8;
+    --success:#4A6F6B;
+    --font-display:'Quicksand', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-body:'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --sidebar-w: 300px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#1B1B20; --surface:#242429; --line:#38383F; --ink:#EDEDF2; --ink-soft:#ABA8B4;
+      --accent-light:#173636; --error-light:#3A2320;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#1B1B20; --surface:#242429; --line:#38383F; --ink:#EDEDF2; --ink-soft:#ABA8B4;
+    --accent-light:#173636; --error-light:#3A2320;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-body); font-size:16px; line-height:1.55;}
+  h1,h2,h3,h4{font-family:var(--font-display); color:var(--accent-darker); margin:0 0 8px;}
+  a{color:var(--accent-dark);}
+  .layout{display:flex; min-height:100vh; align-items:flex-start;}
+
+  .sidebar{
+    width:var(--sidebar-w); flex-shrink:0; height:100vh; position:sticky; top:0;
+    background:var(--surface); border-right:1px solid var(--line);
+    display:flex; flex-direction:column; overflow-y:auto;
+  }
+  .sidebar-head{padding:22px 20px 14px; border-bottom:1px solid var(--line);}
+  .sidebar-head .brand{font-family:var(--font-display); font-weight:700; font-size:20px; color:var(--accent-darker); margin:0;}
+  .sidebar-head .sub{font-size:13px; color:var(--ink-soft); margin-top:2px;}
+  .search-wrap{padding:14px 16px; border-bottom:1px solid var(--line);}
+  #buscador{
+    width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:10px;
+    font-family:var(--font-body); font-size:14px; background:var(--bg); color:var(--ink); outline:none;
+  }
+  #buscador:focus{border-color:var(--accent);}
+  #buscador-info{font-size:12px; color:var(--ink-soft); margin-top:6px; min-height:14px;}
+  nav.toc{padding:10px 10px 24px; flex:1;}
+  nav.toc .grupo-titulo{
+    font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--ink-soft); padding:14px 10px 6px;
+  }
+  nav.toc a{
+    display:flex; align-items:center; gap:8px; text-decoration:none; color:var(--ink-soft);
+    font-size:14px; font-weight:500; padding:8px 10px; border-radius:8px; margin:1px 0;
+  }
+  nav.toc a .n{
+    flex-shrink:0; width:20px; height:20px; border-radius:50%; background:var(--bg); color:var(--ink-soft);
+    font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;
+  }
+  nav.toc a:hover{background:var(--accent-light); color:var(--accent-darker);}
+  nav.toc a:hover .n{background:var(--accent); color:#fff;}
+  nav.toc a.activo{background:var(--accent-light); color:var(--accent-darker); font-weight:700;}
+  nav.toc a.activo .n{background:var(--accent); color:#fff;}
+  nav.toc li.oculto-nav{display:none;}
+  nav.toc ul{list-style:none; margin:0; padding:0;}
+
+  main{flex:1; min-width:0; padding:40px 48px 100px; max-width:920px; margin:0 auto;}
+  .portada{margin-bottom:40px;}
+  .portada h1{font-size:34px;}
+  .portada p.lead{font-size:17px; color:var(--ink-soft); max-width:640px;}
+
+  section.screen{
+    background:var(--surface); border:1px solid var(--line); border-radius:16px;
+    padding:32px 36px; margin-bottom:32px; scroll-margin-top:24px;
+  }
+  section.screen.oculto{display:none;}
+  section.screen .kicker{font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--accent-dark);}
+  section.screen h2{font-size:26px; margin-top:2px;}
+  section.screen > p.intro{font-size:17px; color:var(--ink); margin-top:6px; margin-bottom:22px;}
+  section.screen h3{
+    font-size:15px; text-transform:uppercase; letter-spacing:.03em; color:var(--accent-dark);
+    margin-top:30px; margin-bottom:12px; padding-bottom:8px; border-bottom:2px solid var(--line);
+  }
+  section.screen h3:first-of-type{margin-top:6px;}
+
+  table.elementos{width:100%; border-collapse:collapse; font-size:15px;}
+  table.elementos th{
+    text-align:left; font-family:var(--font-body); font-size:12px; text-transform:uppercase; letter-spacing:.03em;
+    color:var(--ink-soft); padding:6px 10px; border-bottom:1px solid var(--line);
+  }
+  table.elementos td{padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top;}
+  table.elementos tr:last-child td{border-bottom:none;}
+  table.elementos td.campo{font-weight:700; color:var(--ink); white-space:nowrap;}
+
+  ol.pasos{margin:0; padding-left:0; list-style:none; counter-reset:paso;}
+  ol.pasos li{counter-increment:paso; position:relative; padding:6px 0 6px 40px; margin-bottom:4px; font-size:15px;}
+  ol.pasos li::before{
+    content:counter(paso); position:absolute; left:0; top:6px; width:26px; height:26px; border-radius:50%;
+    background:var(--accent); color:#fff; font-family:var(--font-display); font-weight:700; font-size:13px;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  ul.reglas{margin:0; padding-left:0; list-style:none;}
+  ul.reglas li{position:relative; padding:5px 0 5px 20px; font-size:15px;}
+  ul.reglas li::before{content:"•"; position:absolute; left:2px; color:var(--accent-dark); font-weight:700;}
+
+  .box{border-radius:12px; padding:16px 18px; margin:14px 0; font-size:14.5px;}
+  .box-rule{background:var(--accent-light); border-left:4px solid var(--accent);}
+  .box-warn{background:var(--error-light); border-left:4px solid var(--error);}
+  .box-warn strong{color:var(--error);}
+  .box-note{background:var(--bg); border-left:4px solid var(--ink-soft);}
+  .box p:first-child{margin-top:0;}
+  .box p:last-child{margin-bottom:0;}
+
+  .flow{display:flex; flex-wrap:wrap; align-items:stretch; gap:0; margin:18px 0 22px;}
+  .flow .step{
+    background:var(--bg); border:1.5px solid var(--line); border-radius:12px; padding:14px 16px;
+    min-width:150px; max-width:190px; flex:1 1 150px;
+  }
+  .flow .step .num{
+    display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%;
+    background:var(--accent-darker); color:#fff; font-family:var(--font-display); font-weight:700; font-size:12px;
+    margin-bottom:6px;
+  }
+  .flow .step .t{font-weight:700; font-size:14px; color:var(--ink); display:block;}
+  .flow .step .d{font-size:12.5px; color:var(--ink-soft); display:block; margin-top:3px;}
+  .flow .arrow{
+    flex:0 0 auto; display:flex; align-items:center; justify-content:center; color:var(--accent-dark);
+    font-size:20px; padding:0 6px; align-self:center;
+  }
+
+  .grid-cards{display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:14px; margin-top:24px;}
+  .grid-cards a{
+    display:block; text-decoration:none; background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    padding:16px 18px; color:var(--ink);
+  }
+  .grid-cards a:hover{border-color:var(--accent);}
+  .grid-cards .t{font-family:var(--font-display); font-weight:700; color:var(--accent-darker); font-size:16px;}
+  .grid-cards .d{font-size:13px; color:var(--ink-soft); margin-top:4px;}
+
+  footer.pie{text-align:center; padding:30px 0 10px; color:var(--ink-soft); font-size:13px;}
+
+  @media (max-width: 860px){
+    .layout{flex-direction:column;}
+    .sidebar{position:relative; width:100%; height:auto; max-height:none; border-right:none; border-bottom:1px solid var(--line);}
+    main{padding:24px 18px 80px; max-width:100%;}
+    section.screen{padding:20px;}
+  }
+
+  @media print{
+    .sidebar{display:none;}
+    main{max-width:100%; padding:0; margin:0;}
+    body{background:#fff;}
+    section.screen{border:none; box-shadow:none; page-break-before:always; border-radius:0; padding:0 0 24px;}
+    section.screen:first-of-type{page-break-before:auto;}
+    .portada{page-break-before:auto;}
+    a{color:var(--ink); text-decoration:none;}
+    .flow .arrow{display:none;}
+    .flow{flex-direction:column;}
+    .flow .step{max-width:100%;}
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <p class="brand">Virikyna Gestión</p>
+      <p class="sub">Manual de uso</p>
+    </div>
+    <div class="search-wrap">
+      <input type="search" id="buscador" placeholder="Buscar en el manual…" autocomplete="off" />
+      <p id="buscador-info"></p>
+    </div>
+    <nav class="toc">
+      <ul>
+        <li><a href="#inicio" data-nav><span class="n">·</span> Cómo usar este manual</a></li>
+      </ul>
+      <p class="grupo-titulo">Caja y cuentas</p>
+      <ul>
+        <li><a href="#caja-gestion" data-nav><span class="n">1</span> Caja Gestión</a></li>
+        <li><a href="#egresos" data-nav><span class="n">2</span> Egresos</a></li>
+      </ul>
+      <p class="grupo-titulo">Gestión del negocio</p>
+      <ul>
+        <li><a href="#inventario" data-nav><span class="n">3</span> Inventario</a></li>
+        <li><a href="#proveedores" data-nav><span class="n">4</span> Proveedores</a></li>
+        <li><a href="#cuentas-corrientes" data-nav><span class="n">5</span> Cuentas corrientes</a></li>
+        <li><a href="#facturacion" data-nav><span class="n">6</span> Facturación</a></li>
+        <li><a href="#notas" data-nav><span class="n">7</span> Notas</a></li>
+      </ul>
+      <p class="grupo-titulo">Cuenta</p>
+      <ul>
+        <li><a href="#historial" data-nav><span class="n">8</span> Historial y Auditoría</a></li>
+        <li><a href="#configuracion" data-nav><span class="n">9</span> Configuración</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+
+    <section class="portada" id="inicio">
+      <h1>Manual de uso — Virikyna Gestión</h1>
+      <p class="lead">
+        Guía de uso de <strong>Virikyna Gestión</strong>, el panel donde se administra el negocio: la
+        plata en las cuentas, el inventario, los proveedores, las cuentas corrientes de los clientes,
+        qué se factura, los egresos y los usuarios del sistema. Acá no se cobran ventas — eso se hace
+        desde la Caja (Virikyna Local); esta pantalla mira y ordena todo lo que ya pasó ahí.
+      </p>
+
+      <h3 style="margin-top:28px; border:none; padding-bottom:0;">Cómo usar este manual</h3>
+      <ul class="reglas">
+        <li>Usá el buscador de la izquierda para filtrar directamente las secciones que mencionan lo que estás buscando.</li>
+        <li>Cada pantalla tiene la misma estructura: qué es, sus elementos, el paso a paso de lo que se hace ahí y las cosas importantes a tener en cuenta.</li>
+        <li>Podés imprimir este manual o guardarlo como PDF desde el navegador (Ctrl+P / Cmd+P): cada pantalla arranca en una hoja nueva.</li>
+        <li>Este archivo funciona sin conexión a internet, salvo por la tipografía (si no carga, se usa una fuente del sistema equivalente).</li>
+      </ul>
+
+      <h3 style="border:none; padding-bottom:0;">Pantallas de este manual</h3>
+      <div class="grid-cards">
+        <a href="#caja-gestion"><span class="t">1. Caja Gestión</span><span class="d">Cuánta plata hay, validar cierres, carga inicial</span></a>
+        <a href="#egresos"><span class="t">2. Egresos</span><span class="d">Sueldos, servicios y otros gastos</span></a>
+        <a href="#inventario"><span class="t">3. Inventario</span><span class="d">Productos, precios y stock</span></a>
+        <a href="#proveedores"><span class="t">4. Proveedores</span><span class="d">Facturas de compra y pagos</span></a>
+        <a href="#cuentas-corrientes"><span class="t">5. Cuentas corrientes</span><span class="d">Clientes y sus saldos</span></a>
+        <a href="#facturacion"><span class="t">6. Facturación</span><span class="d">Emitir Factura C de las ventas</span></a>
+        <a href="#notas"><span class="t">7. Notas</span><span class="d">Mensajes internos</span></a>
+        <a href="#historial"><span class="t">8. Historial y Auditoría</span><span class="d">Qué se hizo, quién y cuándo</span></a>
+        <a href="#configuracion"><span class="t">9. Configuración</span><span class="d">Usuarios del sistema</span></a>
+      </div>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- 1. CAJA GESTIÓN -->
+    <!-- ======================================================= -->
+    <section class="screen" id="caja-gestion">
+      <p class="kicker">Pantalla 1</p>
+      <h2>Caja Gestión</h2>
+      <p class="intro">Panel general de la plata del negocio: cuánto hay en cada cuenta, validar los cierres de caja del día, la carga inicial del sistema y los movimientos manuales. Tiene cuatro pestañas.</p>
+
+      <h3>Pestaña "Resumen cuentas"</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">Tarjetas de cuentas</td><td>Cuánta plata hay ahora mismo en cada cuenta (efectivo, banco, etc.).</td></tr>
+        <tr><td class="campo">Pendiente de pago</td><td>Lo que se le debe a los proveedores en total. Con el ícono de detalle se ve el listado y se puede pagar directamente.</td></tr>
+        <tr><td class="campo">Pendiente de cobro</td><td>Lo que los clientes deben en cuenta corriente. Con el ícono de detalle se ve el listado y se puede cobrar directamente.</td></tr>
+        <tr><td class="campo">Cheques emitidos</td><td>Cheques y e-cheques entregados a proveedores, con su fecha de vencimiento.</td></tr>
+      </table>
+
+      <h3>Pestaña "Tablero de cierres"</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">Filtro de fechas</td><td>Acota el listado a un rango de días.</td></tr>
+        <tr><td class="campo">Listado de cierres</td><td>Todos los Cierre X y Cierre Z hechos desde la Caja, con la diferencia de efectivo de cada uno.</td></tr>
+        <tr><td class="campo">"Validar"</td><td>Confirma un Cierre Z pendiente — a partir de ahí queda cerrado para siempre.</td></tr>
+      </table>
+
+      <h3>Flujo paso a paso — validar el cierre del día</h3>
+      <ol class="pasos">
+        <li>Entrá a "Tablero de cierres" y ubicá el Cierre Z marcado como "Pendiente de validación".</li>
+        <li>Abrí "Ver detalle" para revisar las ventas, egresos, retiros y la diferencia de efectivo.</li>
+        <li>Si todo está en orden, tocá "Validar".</li>
+      </ol>
+
+      <h3>Pestaña "Carga inicial"</h3>
+      <p>Se usa una sola vez, al arrancar el sistema: los saldos de cada cuenta, la deuda inicial con proveedores y el saldo inicial de cuenta corriente de cada cliente. Una vez confirmada, queda visible pero no se puede repetir ni deshacer.</p>
+
+      <h3>Pestaña "Movimientos manuales"</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">Registrar movimiento manual</td><td>Carga un ingreso o un egreso puntual en una cuenta, con monto y descripción.</td></tr>
+        <tr><td class="campo">Transferir entre cuentas</td><td>Mueve plata de una cuenta a otra (por ejemplo, de efectivo a banco), generando un egreso en una y un ingreso en la otra.</td></tr>
+        <tr><td class="campo">Últimos movimientos</td><td>Historial de todos los movimientos de cuenta, con la opción de editar los que fueron cargados a mano.</td></tr>
+      </table>
+
+      <h3>Cosas importantes a tener en cuenta</h3>
+      <div class="box box-warn">
+        <p>Un <strong>Cierre Z ya validado no se puede reabrir ni editar</strong>. Si algo estaba mal, se deja una nota de corrección desde Historial y Auditoría, sin cambiar los números.</p>
+      </div>
+      <div class="box box-rule">
+        <p>Solo se pueden editar los movimientos <strong>cargados a mano</strong> (ingreso o egreso manual). Una venta, un pago, un cierre o un retiro no se editan desde acá — se corrigen desde donde se originaron.</p>
+      </div>
+      <div class="box box-rule">
+        <p>Editar un movimiento nunca borra el original: se agrega una corrección al lado, y ambos quedan visibles en el Historial.</p>
+      </div>
+      <div class="box box-note">
+        <p>El retiro de efectivo que hace un cajero desde la Caja es la única forma en que ese dinero pasa a estar disponible en las cuentas de acá — un Cierre Z por sí solo no mueve plata a ninguna cuenta.</p>
+      </div>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- 2. EGRESOS -->
+    <!-- ======================================================= -->
+    <section class="screen" id="egresos">
+      <p class="kicker">Pantalla 2</p>
+      <h2>Egresos</h2>
+      <p class="intro">Gastos generales del negocio que no son un pago a un proveedor puntual — sueldos, servicios u otros. Tiene dos pestañas: Registrar egreso e Historial.</p>
+
+      <h3>Elementos de la pantalla</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">Fecha</td><td>Arranca en el día de hoy pero se puede cambiar, por si el gasto fue unos días antes.</td></tr>
+        <tr><td class="campo">Categoría</td><td>Sueldo, Servicio u Otro.</td></tr>
+        <tr><td class="campo">Descripción</td><td>Obligatoria — de qué se trata el gasto.</td></tr>
+        <tr><td class="campo">Monto y Forma de pago</td><td>Efectivo, Transferencia, Cheque o E-cheq.</td></tr>
+        <tr><td class="campo">Historial</td><td>Todos los egresos, con filtro por origen (Gestión o Local, es decir los cargados desde la Caja) y por fecha.</td></tr>
+      </table>
+
+      <h3>Flujo paso a paso</h3>
+      <ol class="pasos">
+        <li>En "Registrar egreso", elegí la fecha y la categoría.</li>
+        <li>Escribí la descripción y cargá el monto y la forma de pago.</li>
+        <li>Confirmá. Podés revisarlo enseguida en la pestaña "Historial".</li>
+      </ol>
+
+      <h3>Cosas importantes a tener en cuenta</h3>
+      <ul class="reglas">
+        <li>Un pago a un proveedor no se carga desde acá — eso se hace desde Proveedores, para que quede vinculado a la factura correspondiente.</li>
+        <li>El Historial junta en una sola tabla los egresos cargados acá y los que un cajero registra desde la Caja durante su turno — se distinguen por la columna "Origen".</li>
+      </ul>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- 3. INVENTARIO -->
+    <!-- ======================================================= -->
+    <section class="screen" id="inventario">
+      <p class="kicker">Pantalla 3</p>
+      <h2>Inventario</h2>
+      <p class="intro">Catálogo completo de productos: precios, márgenes y stock por ubicación (Local y Depósito).</p>
+
+      <h3>Elementos de la pantalla</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">Buscador</td><td>Filtra por nombre, marca, código o proveedor.</td></tr>
+        <tr><td class="campo">"Actualizar precios"</td><td>Actualización masiva, ya sea por proveedor o por una selección puntual de productos tildados.</td></tr>
+        <tr><td class="campo">"+ Nuevo producto"</td><td>Abre la ficha de alta de producto.</td></tr>
+        <tr><td class="campo">Columna "Stock (Local/Dep.)"</td><td>Unidades disponibles en el local y en el depósito, por separado.</td></tr>
+      </table>
+
+      <h3>Elementos de la ficha de producto</h3>
+      <table class="elementos">
+        <tr><th>Campo</th><th>Qué significa</th></tr>
+        <tr><td class="campo">Código de barras</td><td>Se puede escanear o tipear. Si ya existe un producto con ese código, avisa antes de guardar y ofrece ir directo a editar el existente.</td></tr>
+        <tr><td class="campo">Proveedor</td><td>Al elegirlo en un producto nuevo, los márgenes 1 y 2 se autocompletan con los márgenes por defecto de ese proveedor.</td></tr>
+        <tr><td class="campo">Costo, Margen 1 y Margen 2</td><td>El precio de venta se calcula solo, en vivo: Costo × (1 + Margen 1) × (1 + Margen 2) × (1 + IVA 21%).</td></tr>
+        <tr><td class="campo">Stock mínimo</td><td>Umbral para la alerta de stock bajo.</td></tr>
+        <tr><td class="campo">Stock por ubicación</td><td>Local y Depósito por separado, con un botón "Ajustar" en cada uno.</td></tr>
+        <tr><td class="campo">Pestaña "Historial de precio"</td><td>Cada cambio de costo o margen, con fecha, usuario y el precio de venta antes/después.</td></tr>
+      </table>
+
+      <h3>Flujo paso a paso — actualización masiva de precios</h3>
+      <ol class="pasos">
+        <li>Tocá "Actualizar precios" (con o sin productos tildados de antes).</li>
+        <li>Elegí el modo: todos los productos de un proveedor, o una selección puntual.</li>
+        <li>Cargá el porcentaje: positivo para aumentar, negativo para bajar. Se aplica sobre el costo.</li>
+        <li>Aplicá — el precio de venta de cada producto afectado se recalcula solo.</li>
+      </ol>
+
+      <h3>Cosas importantes a tener en cuenta</h3>
+      <ul class="reglas">
+        <li>El precio de venta siempre incluye IVA 21% fijo — no es editable por producto.</li>
+        <li>Un producto marcado "Inactivo" se conserva para el historial (ventas viejas), pero deja de aparecer en las búsquedas de venta y de actualización de precios.</li>
+      </ul>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- 4. PROVEEDORES -->
+    <!-- ======================================================= -->
+    <section class="screen" id="proveedores">
+      <p class="kicker">Pantalla 4</p>
+      <h2>Proveedores</h2>
+      <p class="intro">Carga de facturas de compra, sus pagos, y los datos de contacto de cada proveedor con su saldo. Tiene dos pestañas: Facturas de compra y Proveedores.</p>
+
+      <h3>Elementos de la pantalla — Facturas de compra</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">Listado</td><td>Cada factura, remito u otro comprobante cargado, con proveedor, tipo y número, total y saldo pendiente.</td></tr>
+        <tr><td class="campo">"+ Nueva factura"</td><td>Abre la planilla de carga: datos del comprobante y una tabla de ítems, uno por fila (código de barras, producto, marca, cantidad, precio, descuento y a qué depósito entra). Al encontrar el producto se completan solos el nombre, la marca y el precio (último costo).</td></tr>
+        <tr><td class="campo">Detalle de factura</td><td>Ítems cargados, saldo pendiente e historial de pagos.</td></tr>
+        <tr><td class="campo">"Editar"</td><td>Corrige los datos descriptivos del comprobante (tipo, número, fecha, forma de pago) — los ítems y montos no se tocan acá.</td></tr>
+        <tr><td class="campo">"Anular"</td><td>Revierte por completo una factura cargada por error.</td></tr>
+        <tr><td class="campo">"+ Registrar pago"</td><td>Solo visible si queda saldo pendiente y la factura no está anulada.</td></tr>
+      </table>
+
+      <h3>Elementos de la pantalla — Proveedores</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">Listado</td><td>Razón social, CUIT, teléfono, márgenes por defecto y saldo actual de cada proveedor.</td></tr>
+        <tr><td class="campo">Ficha de proveedor</td><td>Datos de contacto y los márgenes 1 y 2 "por defecto" que heredan sus productos nuevos.</td></tr>
+        <tr><td class="campo">"Eliminar"</td><td>Borra un proveedor. Si ya tiene productos o facturas asociadas, el sistema lo rechaza.</td></tr>
+      </table>
+
+      <h3>Flujo paso a paso — cargar y pagar una factura de compra</h3>
+      <div class="flow">
+        <div class="step"><span class="num">1</span><span class="t">+ Nueva factura</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">2</span><span class="t">Datos del comprobante</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">3</span><span class="t">Cargar ítems</span><span class="d">Uno por fila</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">4</span><span class="t">Guardar</span><span class="d">Suma el stock</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">5</span><span class="t">Registrar pago(s)</span><span class="d">Hasta saldar</span></div>
+      </div>
+      <ol class="pasos">
+        <li>Tocá "+ Nueva factura" y elegí el proveedor y el tipo de comprobante.</li>
+        <li>Cargá letra, punto de venta, número, fecha y forma de pago.</li>
+        <li>Por cada producto, escaneá el código con el lector en la columna "Cód. barras", o buscalo por código, nombre o marca en la columna "Producto". Cargá cantidad, precio, descuento y a qué depósito entra.</li>
+        <li>Con "+ Agregar ítem" se suma una fila nueva y el cursor queda listo en su código de barras.</li>
+        <li>Guardá con el botón "Guardar factura" — el stock de cada producto se actualiza solo.</li>
+        <li>Cuando corresponda pagarla, abrí el detalle y tocá "+ Registrar pago" (se puede hacer en varias partes hasta saldar el total).</li>
+      </ol>
+
+      <h3>Escanear varios productos seguidos con el lector</h3>
+      <ol class="pasos">
+        <li>Hacé clic en la celda "Cód. barras" de la primera fila y escaneá.</li>
+        <li>Si el producto existe, la fila se completa y el cursor pasa solo al código de la fila siguiente (si era la última, se agrega una nueva).</li>
+        <li>Seguí escaneando sin tocar el mouse. Después ajustá la cantidad de cada fila si no es 1.</li>
+      </ol>
+
+      <h3>Si el código escaneado no aparece</h3>
+      <p>El sistema <strong>nunca</strong> da de alta un producto por su cuenta: debajo de la fila aparece un aviso con el número leído, y vos elegís qué hacer.</p>
+      <table class="elementos">
+        <tr><th>Aviso</th><th>Qué hacer</th></tr>
+        <tr><td class="campo">"No encontramos el código…"</td><td>Compará el número del aviso con el de la etiqueta. Si el producto ya está cargado, usá <strong>"Buscar por nombre"</strong> y elegilo de la lista. Si es mercadería nueva, <strong>"Crear producto nuevo"</strong> abre la ficha con el código ya cargado y, al guardarla, la fila queda vinculada a ese producto.</td></tr>
+        <tr><td class="campo">"…está inactivo"</td><td>El código es de un producto dado de baja. <strong>"Usarlo igual"</strong> lo carga en la factura de todos modos; <strong>"Buscar otro"</strong> permite elegir otro producto.</td></tr>
+        <tr><td class="campo">"Sin conexión…"</td><td>No se pudo consultar el catálogo. Cuando vuelva internet, usá <strong>"Reintentar"</strong>.</td></tr>
+      </table>
+      <div class="box box-note">
+        <p>Si al crear un producto nuevo desde la factura el código ya existe en el catálogo, la ficha lo avisa y ofrece <strong>"Usar este producto existente"</strong>: la fila queda vinculada a ese producto y no se crea uno repetido.</p>
+      </div>
+
+      <h3>Cosas importantes a tener en cuenta</h3>
+      <div class="box box-warn">
+        <p><strong>Anular una factura de compra no se puede deshacer</strong>, y revierte el stock que había sumado al cargarla. Si la factura ya tiene pagos registrados, primero hay que resolver esos pagos.</p>
+      </div>
+      <div class="box box-rule">
+        <p>La factura se guarda <strong>solo</strong> con el botón "Guardar factura". El Enter del lector (o del teclado) en cualquier celda no la guarda ni cierra la planilla.</p>
+      </div>
+      <div class="box box-rule">
+        <p>Si una fila tiene código, precio o marca cargados pero <strong>no tiene producto elegido</strong> (o tiene cantidad 0), la factura no se guarda: la fila se marca en rojo, aparece el aviso "El ítem N no tiene producto seleccionado" y la planilla va hasta esa fila. Elegí el producto o quitá la fila con la ✕. Las filas totalmente vacías se ignoran.</p>
+      </div>
+      <div class="box box-rule">
+        <p>Al guardar una factura, el saldo pendiente arranca siendo igual al total, aunque se haya elegido "Contado" — el pago siempre se carga como un paso aparte.</p>
+      </div>
+      <div class="box box-rule">
+        <p>El pago admite Efectivo, Transferencia, Cheque o E-cheq. Con cheque o e-cheq son obligatorios el número, la fecha de salida y la fecha de vencimiento.</p>
+      </div>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- 5. CUENTAS CORRIENTES -->
+    <!-- ======================================================= -->
+    <section class="screen" id="cuentas-corrientes">
+      <p class="kicker">Pantalla 5</p>
+      <h2>Cuentas corrientes</h2>
+      <p class="intro">Ficha de clientes y el estado de su cuenta corriente: cuánto deben, sus ventas a cuenta corriente y los pagos que fueron haciendo.</p>
+
+      <h3>Elementos de la pantalla</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">Listado</td><td>Nombre, CUIT, celular, saldo de cuenta corriente y estado de cada cliente.</td></tr>
+        <tr><td class="campo">"+ Nuevo cliente"</td><td>Alta de cliente. Solo hace falta cargar razón social o nombre de fantasía — el resto es opcional.</td></tr>
+        <tr><td class="campo">Condición frente al IVA</td><td>Necesaria para que la Factura C salga bien a nombre de ese cliente.</td></tr>
+        <tr><td class="campo">Ver detalle</td><td>Saldo actual, botón "Cobrar", historial de ventas a cuenta corriente y de pagos recibidos.</td></tr>
+        <tr><td class="campo">Eliminar</td><td>Solo para clientes activos. Si el cliente ya tiene historial, el sistema ofrece inactivarlo en su lugar.</td></tr>
+      </table>
+
+      <h3>Flujo paso a paso — cobrar una cuenta corriente</h3>
+      <ol class="pasos">
+        <li>Buscá al cliente y abrí "Ver detalle".</li>
+        <li>Tocá "Cobrar".</li>
+        <li>Cargá el monto y la forma de pago.</li>
+        <li>Elegí a qué se aplica: una venta puntual, o "Cuenta general".</li>
+        <li>Confirmá — el saldo del cliente se actualiza solo.</li>
+      </ol>
+
+      <h3>Cosas importantes a tener en cuenta</h3>
+      <ul class="reglas">
+        <li>El saldo mostrado siempre se calcula en el sistema (saldo inicial + ventas a cuenta corriente − pagos).</li>
+        <li>Un pago de cliente siempre es un medio de pago real y único — nunca "cuenta corriente" ni "combinado".</li>
+        <li>No hay un límite de crédito configurado por cliente.</li>
+      </ul>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- 6. FACTURACIÓN -->
+    <!-- ======================================================= -->
+    <section class="screen" id="facturacion">
+      <p class="kicker">Pantalla 6</p>
+      <h2>Facturación</h2>
+      <p class="intro">Acá se decide qué ventas cobradas en la Caja se facturan formalmente (Factura C) y cuándo. Tiene dos pestañas: Ventas del día y Facturación.</p>
+
+      <h3>Elementos de la pantalla</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">"Ventas del día"</td><td>Todas las ventas de hoy, con la opción de ver el detalle, enviarlo o emitir su Factura C.</td></tr>
+        <tr><td class="campo">Filtros de "Facturación"</td><td>Fecha, estado (Sin facturar / Facturada) y medio de pago.</td></tr>
+        <tr><td class="campo">Casillero por fila</td><td>Solo en ventas "Sin facturar" — permite tildar varias para emitirlas juntas.</td></tr>
+        <tr><td class="campo">"Emitir Factura C"</td><td>Emite Factura C para todas las ventas tildadas, una por una.</td></tr>
+      </table>
+
+      <h3>Flujo paso a paso — emitir Factura C</h3>
+      <ol class="pasos">
+        <li>Ubicá las ventas sin facturar, filtrando por fecha si hace falta.</li>
+        <li>Tildá una o varias.</li>
+        <li>Tocá "Emitir Factura C".</li>
+        <li>Al terminar, se muestra cuántas se emitieron bien y el detalle de las que fallaron, para reintentarlas después.</li>
+      </ol>
+
+      <h3>Cosas importantes a tener en cuenta</h3>
+      <ul class="reglas">
+        <li>Una Factura C siempre corresponde a una sola venta — nunca se agrupan varias en un mismo comprobante.</li>
+        <li>Si la venta tiene un cliente con CUIT cargado, la factura sale a ese CUIT; si no, sale como Consumidor Final.</li>
+        <li>Una vez emitida, una venta no se puede volver a facturar desde acá.</li>
+        <li>Esta pantalla no cobra ventas ni hace devoluciones — esas acciones se hacen desde la Caja (Virikyna Local).</li>
+      </ul>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- 7. NOTAS -->
+    <!-- ======================================================= -->
+    <section class="screen" id="notas">
+      <p class="kicker">Pantalla 7</p>
+      <h2>Notas</h2>
+      <p class="intro">Un tablero de mensajes internos tipo post-it, propio de esta app (no se mezcla con las notas que se cargan desde la Caja).</p>
+
+      <h3>Elementos de la pantalla</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">Tarjetas</td><td>Cada nota activa, con fecha, mensaje y quién la escribió.</td></tr>
+        <tr><td class="campo">"+ Nueva nota"</td><td>Abre un cuadro de texto simple para escribir el mensaje.</td></tr>
+        <tr><td class="campo">"Archivar"</td><td>Saca la nota de la vista principal sin borrarla.</td></tr>
+        <tr><td class="campo">"Ver archivadas"</td><td>Muestra las notas ya archivadas, tachadas.</td></tr>
+      </table>
+
+      <h3>Flujo paso a paso</h3>
+      <ol class="pasos">
+        <li>Tocá "+ Nueva nota".</li>
+        <li>Escribí el mensaje.</li>
+        <li>Guardá — aparece como una tarjeta nueva, arriba de todo.</li>
+        <li>Cuando ya no haga falta tenerla a la vista, tocá "Archivar".</li>
+      </ol>
+
+      <h3>Cosas importantes a tener en cuenta</h3>
+      <ul class="reglas">
+        <li>No hay edición ni borrado de una nota ya creada — solo se puede archivar.</li>
+        <li>Una nota archivada no se puede volver a activar desde acá.</li>
+      </ul>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- 8. HISTORIAL Y AUDITORÍA -->
+    <!-- ======================================================= -->
+    <section class="screen" id="historial">
+      <p class="kicker">Pantalla 8</p>
+      <h2>Historial y Auditoría</h2>
+      <p class="intro">Un registro de todo lo que se hizo en el sistema — quién lo hizo, cuándo, y la posibilidad de deshacer ciertas acciones cuando corresponde.</p>
+
+      <h3>Elementos de la pantalla</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">Filtros</td><td>Usuario, módulo, tipo de acción y rango de fechas.</td></tr>
+        <tr><td class="campo">Listado</td><td>Cada acción registrada, con fecha, usuario, módulo y tipo (Alta, Edición, Eliminación, Anulación, Reversión, Nota de corrección).</td></tr>
+        <tr><td class="campo">Ver detalle</td><td>Muestra los datos de antes y después de la acción, campo por campo.</td></tr>
+        <tr><td class="campo">"Revertible"</td><td>Aparece junto a las acciones que todavía se pueden deshacer.</td></tr>
+        <tr><td class="campo">"+ Nota de corrección"</td><td>Deja una aclaración sobre un Cierre Z ya validado, sin cambiar ningún número.</td></tr>
+      </table>
+
+      <h3>Flujo paso a paso — deshacer una acción</h3>
+      <ol class="pasos">
+        <li>Buscá la acción en el listado (con los filtros si hace falta).</li>
+        <li>Abrí "Ver detalle" — si la acción es revertible, aparece el botón correspondiente.</li>
+        <li>Confirmá. Si es una venta, hay que escribir el motivo de la anulación.</li>
+      </ol>
+
+      <h3>Cosas importantes a tener en cuenta</h3>
+      <div class="box box-warn">
+        <p>Revertir <strong>nunca borra ni pisa</strong> lo que pasó: siempre genera una acción nueva que compensa a la original. Ambas quedan visibles en el Historial.</p>
+      </div>
+      <div class="box box-rule">
+        <p>Una venta que ya tiene Factura C emitida <strong>no se puede anular</strong> desde acá — el botón directamente no aparece.</p>
+      </div>
+      <div class="box box-rule">
+        <p>No todas las acciones se pueden deshacer: solo aparece la opción cuando tiene sentido hacerlo desde este lugar (por ejemplo, un pago a proveedor generado automáticamente por otra acción se corrige desde ese pago, no desde acá).</p>
+      </div>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- 9. CONFIGURACIÓN -->
+    <!-- ======================================================= -->
+    <section class="screen" id="configuracion">
+      <p class="kicker">Pantalla 9</p>
+      <h2>Configuración</h2>
+      <p class="intro">Alta, edición y baja de los usuarios que entran al sistema (la Caja, el celular y esta misma app), y su rol.</p>
+
+      <h3>Elementos de la pantalla</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">Listado</td><td>Nombre, rol (Admin o Cajero) y estado (Activo o Desactivado) de cada usuario.</td></tr>
+        <tr><td class="campo">"+ Nuevo usuario"</td><td>Pide email, una contraseña inicial y el nombre y rol de la persona.</td></tr>
+        <tr><td class="campo">Editar</td><td>Cambia el nombre o el rol de un usuario ya creado — el email no se puede reasignar desde acá.</td></tr>
+        <tr><td class="campo">Blanquear contraseña</td><td>Reemplaza la contraseña actual por una nueva.</td></tr>
+        <tr><td class="campo">Desactivar / Reactivar</td><td>Bloquea o restablece el acceso de la persona al sistema.</td></tr>
+      </table>
+
+      <h3>Flujo paso a paso — dar de alta un usuario nuevo</h3>
+      <ol class="pasos">
+        <li>Tocá "+ Nuevo usuario".</li>
+        <li>Cargá el email y una contraseña inicial (mínimo 6 caracteres).</li>
+        <li>Cargá el nombre y elegí el rol (Cajero o Admin).</li>
+        <li>Guardá. Comunicale la contraseña a la persona por fuera del sistema.</li>
+      </ol>
+
+      <h3>Cosas importantes a tener en cuenta</h3>
+      <ul class="reglas">
+        <li>Al blanquear una contraseña, hay que avisarle la nueva a esa persona por afuera del sistema — no se envía sola.</li>
+        <li>Desactivar a alguien le bloquea el acceso sin borrar nada de su historial.</li>
+      </ul>
+    </section>
+
+    <footer class="pie">Manual de uso de Virikyna Gestión.</footer>
+
+  </main>
+</div>
+
+<script>
+(function(){
+  var input = document.getElementById('buscador');
+  var info = document.getElementById('buscador-info');
+  var secciones = Array.prototype.slice.call(document.querySelectorAll('section.screen'));
+  var navLinks = Array.prototype.slice.call(document.querySelectorAll('nav.toc a[data-nav]'));
+
+  function filtrar(){
+    var q = input.value.trim().toLowerCase();
+    var visibles = 0;
+    secciones.forEach(function(sec){
+      var match = !q || sec.textContent.toLowerCase().indexOf(q) !== -1;
+      sec.classList.toggle('oculto', !match);
+      if (match) visibles++;
+    });
+    navLinks.forEach(function(a){
+      var id = a.getAttribute('href').slice(1);
+      var li = a.closest('li');
+      if (id === 'inicio') { li.classList.remove('oculto-nav'); return; }
+      var match = !q || document.getElementById(id).textContent.toLowerCase().indexOf(q) !== -1;
+      li.classList.toggle('oculto-nav', !match);
+    });
+    info.textContent = q ? (visibles + ' pantalla' + (visibles === 1 ? '' : 's') + ' con coincidencias') : '';
+  }
+  input.addEventListener('input', filtrar);
+
+  var observer = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      var link = document.querySelector('nav.toc a[href="#' + entry.target.id + '"]');
+      if (!link) return;
+      if (entry.isIntersecting) {
+        navLinks.forEach(function(a){ a.classList.remove('activo'); });
+        link.classList.add('activo');
+      }
+    });
+  }, { rootMargin: '-15% 0px -70% 0px' });
+  secciones.concat(document.getElementById('inicio')).forEach(function(sec){ if (sec) observer.observe(sec); });
+})();
+</script>
+</body>
+</html>

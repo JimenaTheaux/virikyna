@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Manual de usuario — Virikyna Inventario</title>
+<meta name="description" content="Manual de usuario de Virikyna Inventario (celular): Inventario y Facturas de compra." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --accent:#3FB9B9;
+    --accent-dark:#237878;
+    --accent-darker:#163F3F;
+    --accent-light:#E3F5F5;
+    --ink:#24242B;
+    --ink-soft:#6B6570;
+    --bg:#F7F6FA;
+    --surface:#FFFFFF;
+    --line:#E6E2EA;
+    --error:#C0392B;
+    --error-light:#FBEAE8;
+    --success:#4A6F6B;
+    --font-display:'Quicksand', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-body:'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --sidebar-w: 300px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#1B1B20; --surface:#242429; --line:#38383F; --ink:#EDEDF2; --ink-soft:#ABA8B4;
+      --accent-light:#173636; --error-light:#3A2320;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#1B1B20; --surface:#242429; --line:#38383F; --ink:#EDEDF2; --ink-soft:#ABA8B4;
+    --accent-light:#173636; --error-light:#3A2320;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-body); font-size:16px; line-height:1.55;}
+  h1,h2,h3,h4{font-family:var(--font-display); color:var(--accent-darker); margin:0 0 8px;}
+  a{color:var(--accent-dark);}
+  .layout{display:flex; min-height:100vh; align-items:flex-start;}
+
+  .sidebar{
+    width:var(--sidebar-w); flex-shrink:0; height:100vh; position:sticky; top:0;
+    background:var(--surface); border-right:1px solid var(--line);
+    display:flex; flex-direction:column; overflow-y:auto;
+  }
+  .sidebar-head{padding:22px 20px 14px; border-bottom:1px solid var(--line);}
+  .sidebar-head .brand{font-family:var(--font-display); font-weight:700; font-size:20px; color:var(--accent-darker); margin:0;}
+  .sidebar-head .sub{font-size:13px; color:var(--ink-soft); margin-top:2px;}
+  .search-wrap{padding:14px 16px; border-bottom:1px solid var(--line);}
+  #buscador{
+    width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:10px;
+    font-family:var(--font-body); font-size:14px; background:var(--bg); color:var(--ink); outline:none;
+  }
+  #buscador:focus{border-color:var(--accent);}
+  #buscador-info{font-size:12px; color:var(--ink-soft); margin-top:6px; min-height:14px;}
+  nav.toc{padding:10px 10px 24px; flex:1;}
+  nav.toc a{
+    display:flex; align-items:center; gap:8px; text-decoration:none; color:var(--ink-soft);
+    font-size:14px; font-weight:500; padding:8px 10px; border-radius:8px; margin:1px 0;
+  }
+  nav.toc a .n{
+    flex-shrink:0; width:20px; height:20px; border-radius:50%; background:var(--bg); color:var(--ink-soft);
+    font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;
+  }
+  nav.toc a:hover{background:var(--accent-light); color:var(--accent-darker);}
+  nav.toc a:hover .n{background:var(--accent); color:#fff;}
+  nav.toc a.activo{background:var(--accent-light); color:var(--accent-darker); font-weight:700;}
+  nav.toc a.activo .n{background:var(--accent); color:#fff;}
+  nav.toc li.oculto-nav{display:none;}
+  nav.toc ul{list-style:none; margin:0; padding:0;}
+
+  main{flex:1; min-width:0; padding:40px 48px 100px; max-width:920px; margin:0 auto;}
+  .portada{margin-bottom:40px;}
+  .portada h1{font-size:34px;}
+  .portada p.lead{font-size:17px; color:var(--ink-soft); max-width:640px;}
+
+  .role-pill{
+    display:inline-flex; align-items:center; font-size:12px; font-weight:700; padding:3px 10px;
+    border-radius:999px; white-space:nowrap; line-height:1.6;
+  }
+  .role-both{background:var(--accent-light); color:var(--accent-darker);}
+  .role-admin{background:var(--error-light); color:var(--error);}
+  .legend{display:flex; flex-wrap:wrap; gap:10px; margin-top:20px;}
+  .legend .item{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink-soft);}
+
+  section.screen{
+    background:var(--surface); border:1px solid var(--line); border-radius:16px;
+    padding:32px 36px; margin-bottom:32px; scroll-margin-top:24px;
+  }
+  section.screen.oculto{display:none;}
+  section.screen .kicker{font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--accent-dark);}
+  section.screen h2{font-size:26px; margin-top:2px;}
+  section.screen > p.intro{font-size:17px; color:var(--ink); margin-top:6px; margin-bottom:22px;}
+  section.screen h3{
+    font-size:15px; text-transform:uppercase; letter-spacing:.03em; color:var(--accent-dark);
+    margin-top:30px; margin-bottom:12px; padding-bottom:8px; border-bottom:2px solid var(--line);
+  }
+  section.screen h3:first-of-type{margin-top:6px;}
+
+  table.elementos{width:100%; border-collapse:collapse; font-size:15px;}
+  table.elementos th{
+    text-align:left; font-family:var(--font-body); font-size:12px; text-transform:uppercase; letter-spacing:.03em;
+    color:var(--ink-soft); padding:6px 10px; border-bottom:1px solid var(--line);
+  }
+  table.elementos td{padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top;}
+  table.elementos tr:last-child td{border-bottom:none;}
+  table.elementos td.campo{font-weight:700; color:var(--ink); white-space:nowrap;}
+
+  ol.pasos{margin:0; padding-left:0; list-style:none; counter-reset:paso;}
+  ol.pasos li{counter-increment:paso; position:relative; padding:6px 0 6px 40px; margin-bottom:4px; font-size:15px;}
+  ol.pasos li::before{
+    content:counter(paso); position:absolute; left:0; top:6px; width:26px; height:26px; border-radius:50%;
+    background:var(--accent); color:#fff; font-family:var(--font-display); font-weight:700; font-size:13px;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  ul.reglas{margin:0; padding-left:0; list-style:none;}
+  ul.reglas li{position:relative; padding:5px 0 5px 20px; font-size:15px;}
+  ul.reglas li::before{content:"•"; position:absolute; left:2px; color:var(--accent-dark); font-weight:700;}
+
+  .box{border-radius:12px; padding:16px 18px; margin:14px 0; font-size:14.5px;}
+  .box-rule{background:var(--accent-light); border-left:4px solid var(--accent);}
+  .box-warn{background:var(--error-light); border-left:4px solid var(--error);}
+  .box-warn strong{color:var(--error);}
+  .box-note{background:var(--bg); border-left:4px solid var(--ink-soft);}
+  .box p:first-child{margin-top:0;}
+  .box p:last-child{margin-bottom:0;}
+
+  .flow{display:flex; flex-wrap:wrap; align-items:stretch; gap:0; margin:18px 0 22px;}
+  .flow .step{
+    background:var(--bg); border:1.5px solid var(--line); border-radius:12px; padding:14px 16px;
+    min-width:150px; max-width:190px; flex:1 1 150px;
+  }
+  .flow .step .num{
+    display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%;
+    background:var(--accent-darker); color:#fff; font-family:var(--font-display); font-weight:700; font-size:12px;
+    margin-bottom:6px;
+  }
+  .flow .step .t{font-weight:700; font-size:14px; color:var(--ink); display:block;}
+  .flow .step .d{font-size:12.5px; color:var(--ink-soft); display:block; margin-top:3px;}
+  .flow .arrow{
+    flex:0 0 auto; display:flex; align-items:center; justify-content:center; color:var(--accent-dark);
+    font-size:20px; padding:0 6px; align-self:center;
+  }
+
+  .grid-cards{display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:14px; margin-top:24px;}
+  .grid-cards a{
+    display:block; text-decoration:none; background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    padding:16px 18px; color:var(--ink);
+  }
+  .grid-cards a:hover{border-color:var(--accent);}
+  .grid-cards .t{font-family:var(--font-display); font-weight:700; color:var(--accent-darker); font-size:16px;}
+  .grid-cards .d{font-size:13px; color:var(--ink-soft); margin-top:4px;}
+
+  footer.pie{text-align:center; padding:30px 0 10px; color:var(--ink-soft); font-size:13px;}
+
+  @media (max-width: 860px){
+    .layout{flex-direction:column;}
+    .sidebar{position:relative; width:100%; height:auto; max-height:none; border-right:none; border-bottom:1px solid var(--line);}
+    main{padding:24px 18px 80px; max-width:100%;}
+    section.screen{padding:20px;}
+  }
+
+  @media print{
+    .sidebar{display:none;}
+    main{max-width:100%; padding:0; margin:0;}
+    body{background:#fff;}
+    section.screen{border:none; box-shadow:none; page-break-before:always; border-radius:0; padding:0 0 24px;}
+    section.screen:first-of-type{page-break-before:auto;}
+    .portada{page-break-before:auto;}
+    a{color:var(--ink); text-decoration:none;}
+    .flow .arrow{display:none;}
+    .flow{flex-direction:column;}
+    .flow .step{max-width:100%;}
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <p class="brand">Virikyna Inventario</p>
+      <p class="sub">Manual de uso</p>
+    </div>
+    <div class="search-wrap">
+      <input type="search" id="buscador" placeholder="Buscar en el manual…" autocomplete="off" />
+      <p id="buscador-info"></p>
+    </div>
+    <nav class="toc">
+      <ul>
+        <li><a href="#inicio" data-nav><span class="n">·</span> Cómo usar este manual</a></li>
+        <li><a href="#inventario" data-nav><span class="n">1</span> Inventario</a></li>
+        <li><a href="#facturas" data-nav><span class="n">2</span> Facturas de compra</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+
+    <section class="portada" id="inicio">
+      <h1>Manual de uso — Virikyna Inventario</h1>
+      <p class="lead">
+        Guía de uso de <strong>Virikyna Inventario</strong>, la app para el celular pensada para
+        moverse por el local o el depósito: cargar y editar productos con la cámara del teléfono, y
+        registrar una factura de un proveedor apenas llega la mercadería.
+      </p>
+
+      <div class="legend">
+        <div class="item"><span class="role-pill role-both">Cajero y Admin</span> pueden hacer esta acción</div>
+        <div class="item"><span class="role-pill role-admin">Solo Admin</span> acción restringida al administrador</div>
+      </div>
+
+      <h3 style="margin-top:28px; border:none; padding-bottom:0;">Cómo usar este manual</h3>
+      <ul class="reglas">
+        <li>Usá el buscador de la izquierda para filtrar directamente las secciones que mencionan lo que estás buscando.</li>
+        <li>Podés imprimir este manual o guardarlo como PDF desde el navegador.</li>
+        <li>Este archivo funciona sin conexión a internet, salvo por la tipografía (si no carga, se usa una fuente del sistema equivalente).</li>
+      </ul>
+
+      <h3 style="border:none; padding-bottom:0;">Pantallas de este manual</h3>
+      <div class="grid-cards">
+        <a href="#inventario"><span class="t">1. Inventario</span><span class="d">Productos, precios y stock, con cámara</span></a>
+        <a href="#facturas"><span class="t">2. Facturas de compra</span><span class="d">Cargar una factura de proveedor</span></a>
+      </div>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- 1. INVENTARIO -->
+    <!-- ======================================================= -->
+    <section class="screen" id="inventario">
+      <p class="kicker">Pantalla 1</p>
+      <h2>Inventario</h2>
+      <p class="intro">Catálogo de productos, precios y stock por ubicación (Local y Depósito), pensado para usar con una mano mientras se camina por el local.</p>
+
+      <h3>Elementos de la pantalla</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">Buscador</td><td>Filtra por nombre, marca o código, a medida que se escribe. Queda fijo arriba mientras se baja por la lista.</td></tr>
+        <tr><td class="campo">Botón de cámara</td><td>Escanea un código de barras: el número leído queda escrito en el buscador y la lista se filtra con ese producto, sin necesidad de tipearlo.</td></tr>
+        <tr><td class="campo">Botón de porcentaje</td><td>Abre la actualización masiva de precios.</td></tr>
+        <tr><td class="campo">Tarjetas de producto</td><td>Cada producto con su nombre, marca y código (o el código interno si no tiene código de barras), proveedor, estado, stock en Local/Depósito y precio de venta. Tocando la tarjeta se abre para editar.</td></tr>
+        <tr><td class="campo">Botón "+" (abajo a la derecha)</td><td>Da de alta un producto nuevo.</td></tr>
+      </table>
+
+      <h3>Elementos de la ficha de producto</h3>
+      <table class="elementos">
+        <tr><th>Campo</th><th>Qué significa</th></tr>
+        <tr><td class="campo">Código de barras</td><td>Es el primer campo. Se puede escanear con la cámara o tipear. Si ya existe un producto con ese código, avisa al instante y ofrece el botón "Editar existente" para ir a ese producto en vez de crear uno repetido.</td></tr>
+        <tr><td class="campo">Nombre</td><td>Obligatorio. Si se intenta guardar sin nombre, el aviso aparece debajo de este campo y la pantalla sube sola hasta él.</td></tr>
+        <tr><td class="campo">Proveedor</td><td>Al elegirlo en un producto nuevo, los márgenes se autocompletan con los del proveedor.</td></tr>
+        <tr><td class="campo">Costo, Margen 1 y Margen 2</td><td>El precio de venta se calcula solo: Costo × (1 + Margen 1) × (1 + Margen 2) × (1 + IVA 21%). <span class="role-pill role-admin">Solo Admin</span> puede editar los márgenes.</td></tr>
+        <tr><td class="campo">Stock mínimo</td><td>Umbral para la alerta de stock bajo.</td></tr>
+        <tr><td class="campo">Stock por ubicación</td><td>Local y Depósito por separado, con un botón "Ajustar" en cada uno.</td></tr>
+        <tr><td class="campo">Cancelar y Guardar</td><td>Quedan siempre visibles al pie de la ficha, aunque el formulario sea largo — no hace falta bajar hasta el final para guardar.</td></tr>
+      </table>
+
+      <h3>Flujo paso a paso — buscar y editar un producto con la cámara</h3>
+      <div class="flow">
+        <div class="step"><span class="num">1</span><span class="t">Tocar cámara</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">2</span><span class="t">Escanear el código</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">3</span><span class="t">Aparece en la lista</span><span class="d">o se ofrece crearlo</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">4</span><span class="t">Tocar para editar</span></div>
+      </div>
+      <ol class="pasos">
+        <li>Tocá el ícono de cámara y apuntá al código de barras del producto. Mantené el teléfono quieto un instante: la app lee el código más de una vez para confirmarlo antes de aceptarlo.</li>
+        <li>Si el producto existe, aparece en la lista de resultados — tocalo para abrir su ficha.</li>
+        <li>Si no existe, la lista queda vacía y aparece el botón "Crear producto con este código", con el código ya cargado en la ficha.</li>
+        <li>Completá o corregí los datos y guardá.</li>
+      </ol>
+      <div class="box box-note">
+        <p><strong>¿Escaneaste un producto que sabés que está cargado y no aparece?</strong> Compará el número que quedó escrito en el buscador con el de la etiqueta del producto. Si no coinciden, la cámara leyó mal: volvé a escanear con mejor luz (el botón 💡 prende la linterna) o buscalo por nombre. No lo des de alta de nuevo.</p>
+      </div>
+
+      <h3>Flujo paso a paso — actualización masiva de precios</h3>
+      <ol class="pasos">
+        <li>Tocá el botón de porcentaje.</li>
+        <li>Elegí el modo: todos los productos de un proveedor, o una selección puntual.</li>
+        <li>Cargá el porcentaje: positivo para aumentar, negativo para bajar.</li>
+        <li>Aplicá — el precio de venta de cada producto afectado se recalcula solo.</li>
+      </ol>
+
+      <h3>Cosas importantes a tener en cuenta</h3>
+      <div class="box box-rule">
+        <p><strong>Ajustar stock manualmente</strong> (sumar o restar unidades a mano) es <span class="role-pill role-admin">Solo Admin</span>. Siempre pide un motivo: Rotura, Pérdida, Corrección de conteo físico, u Otro con detalle.</p>
+      </div>
+      <div class="box box-rule">
+        <p>Editar <strong>Margen 1 y Margen 2</strong> de un producto también es <span class="role-pill role-admin">Solo Admin</span>. Como Cajero se puede dar de alta productos y cargar el costo, pero no fijar el margen de ganancia.</p>
+      </div>
+      <div class="box box-note">
+        <p>Un producto marcado "Inactivo" se conserva para el historial, pero deja de aparecer en las búsquedas de venta.</p>
+      </div>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- 2. FACTURAS DE COMPRA -->
+    <!-- ======================================================= -->
+    <section class="screen" id="facturas">
+      <p class="kicker">Pantalla 2</p>
+      <h2>Facturas de compra</h2>
+      <p class="intro">Registra una factura de un proveedor apenas llega la mercadería, actualizando el stock automáticamente por cada producto.</p>
+
+      <h3>Elementos de la pantalla</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">Datos del comprobante</td><td>Proveedor, tipo (Factura, Remito, Cupón, Nota de crédito o Nota de débito), letra, punto de venta, número, fecha y forma de pago (Contado o Cuenta corriente).</td></tr>
+        <tr><td class="campo">Ítems</td><td>Una tarjeta por producto, con los campos en este orden: código de barras (con botón de cámara), producto, marca, cantidad, precio unitario sin IVA, descuento y a qué depósito entra (Local o Depósito). Al encontrar el producto se completan solos el nombre, la marca y el precio (último costo).</td></tr>
+        <tr><td class="campo">Aviso de código</td><td>Aparece dentro de la tarjeta cuando un código escaneado no se pudo vincular a un producto: si no existe, si el producto está inactivo, o si no hay conexión. Ver más abajo qué hacer en cada caso.</td></tr>
+        <tr><td class="campo">Botón "Agregar ítem"</td><td>Debajo de la lista de ítems. Agrega una tarjeta nueva y deja el cursor listo en su código de barras.</td></tr>
+        <tr><td class="campo">Totales</td><td>Subtotal, descuento, IVA (21%), saldo pendiente y total, calculados en vivo a medida que se cargan los ítems.</td></tr>
+      </table>
+
+      <h3>Flujo paso a paso</h3>
+      <ol class="pasos">
+        <li>Elegí el proveedor y el tipo de comprobante.</li>
+        <li>Cargá letra, punto de venta, número, fecha y forma de pago.</li>
+        <li>Por cada producto, escaneá el código con la cámara (o tipealo) o buscalo por nombre o marca en el campo "Producto". Si lo encuentra, se completan solos el nombre, la marca y el precio.</li>
+        <li>Cargá cantidad, precio, descuento y a qué depósito entra.</li>
+        <li>Tocá "Agregar ítem" para el siguiente producto de la factura.</li>
+        <li>Revisá los totales y tocá "Guardar factura" — el stock de cada producto se actualiza solo.</li>
+      </ol>
+
+      <h3>Si el código escaneado no aparece</h3>
+      <p>La app <strong>nunca</strong> da de alta un producto por su cuenta: muestra un aviso dentro de la tarjeta con el número leído, y vos elegís qué hacer.</p>
+      <table class="elementos">
+        <tr><th>Aviso</th><th>Qué hacer</th></tr>
+        <tr><td class="campo">"No encontramos el código…"</td><td>Primero compará el número del aviso con el de la etiqueta. Si el producto ya está cargado, tocá <strong>"Buscar por nombre"</strong> y elegilo de la lista. Si de verdad es mercadería nueva, tocá <strong>"Crear producto nuevo"</strong>: se abre la ficha con el código ya cargado y, al guardarla, el ítem queda vinculado a ese producto.</td></tr>
+        <tr><td class="campo">"…está inactivo"</td><td>El código es de un producto dado de baja. Tocá <strong>"Usarlo igual"</strong> para cargarlo en la factura de todos modos, o <strong>"Buscar otro"</strong>.</td></tr>
+        <tr><td class="campo">"Sin conexión…"</td><td>No se pudo consultar el catálogo. Cuando vuelva internet, tocá <strong>"Reintentar"</strong>.</td></tr>
+      </table>
+      <div class="box box-note">
+        <p>Si al crear un producto nuevo desde la factura el código ya existe en el catálogo, la ficha lo avisa y ofrece el botón <strong>"Usar este producto existente"</strong>: el ítem queda vinculado a ese producto y no se crea uno repetido.</p>
+      </div>
+
+      <h3>Con lector de códigos Bluetooth</h3>
+      <ol class="pasos">
+        <li>Tocá el campo "Código de barras" del primer ítem y escaneá.</li>
+        <li>Si el producto existe, se completa y el cursor pasa solo al código del ítem siguiente (si era el último, se agrega uno nuevo).</li>
+        <li>Seguí escaneando: se pueden cargar varios productos seguidos sin tocar la pantalla. Después ajustá la cantidad de cada uno si no es 1.</li>
+      </ol>
+
+      <h3>Cosas importantes a tener en cuenta</h3>
+      <ul class="reglas">
+        <li>Si se sale de esta pantalla con datos cargados sin guardar, se pide confirmación antes de perderlos.</li>
+        <li>La factura se guarda <strong>solo</strong> con el botón "Guardar factura". Apretar Enter o "Ir" en el teclado (o el Enter del lector) desde cualquier campo no la guarda ni borra lo cargado.</li>
+        <li>Si un ítem tiene código, precio o marca cargados pero <strong>no tiene producto elegido</strong> (o tiene cantidad 0), la factura no se guarda: la tarjeta se marca en rojo con el aviso "El ítem N no tiene producto seleccionado" y la pantalla va hasta ella. Elegí el producto o quitá el ítem con el tachito. Las tarjetas totalmente vacías se ignoran.</li>
+        <li>Desde acá no se puede ver el listado de facturas ya cargadas, ni registrar un pago a proveedor — eso se hace desde la Caja o desde Gestión.</li>
+      </ul>
+    </section>
+
+    <footer class="pie">Manual de uso de Virikyna Inventario.</footer>
+
+  </main>
+</div>
+
+<script>
+(function(){
+  var input = document.getElementById('buscador');
+  var info = document.getElementById('buscador-info');
+  var secciones = Array.prototype.slice.call(document.querySelectorAll('section.screen'));
+  var navLinks = Array.prototype.slice.call(document.querySelectorAll('nav.toc a[data-nav]'));
+
+  function filtrar(){
+    var q = input.value.trim().toLowerCase();
+    var visibles = 0;
+    secciones.forEach(function(sec){
+      var match = !q || sec.textContent.toLowerCase().indexOf(q) !== -1;
+      sec.classList.toggle('oculto', !match);
+      if (match) visibles++;
+    });
+    navLinks.forEach(function(a){
+      var id = a.getAttribute('href').slice(1);
+      var li = a.closest('li');
+      if (id === 'inicio') { li.classList.remove('oculto-nav'); return; }
+      var match = !q || document.getElementById(id).textContent.toLowerCase().indexOf(q) !== -1;
+      li.classList.toggle('oculto-nav', !match);
+    });
+    info.textContent = q ? (visibles + ' pantalla' + (visibles === 1 ? '' : 's') + ' con coincidencias') : '';
+  }
+  input.addEventListener('input', filtrar);
+
+  var observer = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      var link = document.querySelector('nav.toc a[href="#' + entry.target.id + '"]');
+      if (!link) return;
+      if (entry.isIntersecting) {
+        navLinks.forEach(function(a){ a.classList.remove('activo'); });
+        link.classList.add('activo');
+      }
+    });
+  }, { rootMargin: '-15% 0px -70% 0px' });
+  secciones.concat(document.getElementById('inicio')).forEach(function(sec){ if (sec) observer.observe(sec); });
+})();
+</script>
+</body>
+</html>
