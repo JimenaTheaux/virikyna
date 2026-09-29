@@ -29,13 +29,15 @@ type Props = {
   onSaved: (creado?: ProductoCreado) => void
   // Desde el aviso de código duplicado: ir directo a editar el producto que ya existe.
   onEditarExistente?: (id: string) => void
+  // 'usar' desde la carga de factura: el aviso de duplicado ofrece usar el existente en el ítem.
+  accionExistente?: 'editar' | 'usar'
   onStockChanged: () => void
 }
 
 // Admin siempre — Virikyna Gestión es exclusiva de administradoras (docs/02_roles_y_permisos.md),
 // así que a diferencia de Virikyna Local acá no hace falta condicionar el margen ni el ajuste
 // de stock por rol: quien entró a esta app ya es admin.
-export function ProductoFormModal({ producto, proveedores, nombreInicial, codigoBarrasInicial, onClose, onSaved, onStockChanged, onEditarExistente }: Props) {
+export function ProductoFormModal({ producto, proveedores, nombreInicial, codigoBarrasInicial, onClose, onSaved, onStockChanged, onEditarExistente, accionExistente }: Props) {
   const [nombre, setNombre] = useState(producto?.nombre ?? nombreInicial ?? '')
   const [descripcion, setDescripcion] = useState(producto?.descripcion ?? '')
   const [codigoBarras, setCodigoBarras] = useState(producto?.codigo_barras ?? codigoBarrasInicial ?? '')
@@ -259,6 +261,7 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, codigo
             buscarPorCodigo={buscarProductoPorCodigo}
             excluirId={producto?.id}
             onEditarExistente={onEditarExistente}
+            accionExistente={accionExistente}
           />
 
           <div className="grid grid-cols-2 gap-2">

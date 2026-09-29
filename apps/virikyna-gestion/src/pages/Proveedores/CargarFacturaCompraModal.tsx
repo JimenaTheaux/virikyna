@@ -16,13 +16,15 @@ export function CargarFacturaCompraModal({ onClose, onSaved }: Props) {
       supabase={supabase}
       onClose={onClose}
       onSaved={onSaved}
-      crearProducto={({ proveedores, nombreInicial, codigoBarrasInicial, onClose: cerrar, onSaved: guardado }) => (
+      crearProducto={({ proveedores, nombreInicial, codigoBarrasInicial, onClose: cerrar, onSaved: guardado, onUsarExistente }) => (
         <ProductoFormModal
           proveedores={proveedores}
           nombreInicial={nombreInicial}
           codigoBarrasInicial={codigoBarrasInicial}
           onClose={cerrar}
           onSaved={guardado}
+          onEditarExistente={onUsarExistente}
+          accionExistente="usar"
           onStockChanged={() => {}}
         />
       )}

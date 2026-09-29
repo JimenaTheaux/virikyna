@@ -44,6 +44,8 @@ type Props = {
   onSaved: (creado?: ProductoCreado) => void
   // Desde el aviso de código duplicado: ir directo a editar el producto que ya existe.
   onEditarExistente?: (id: string) => void
+  // 'usar' desde la carga de factura: el aviso de duplicado ofrece usar el existente en el ítem.
+  accionExistente?: 'editar' | 'usar'
   onStockChanged: () => void
 }
 
@@ -57,6 +59,7 @@ export function ProductoFormSheet({
   onSaved,
   onStockChanged,
   onEditarExistente,
+  accionExistente,
 }: Props) {
   const esAdmin = rol === 'admin'
 
@@ -285,6 +288,7 @@ export function ProductoFormSheet({
             buscarPorCodigo={buscarProductoPorCodigo}
             excluirId={producto?.id}
             onEditarExistente={onEditarExistente}
+            accionExistente={accionExistente}
           />
 
           <div className="grid grid-cols-2 gap-2">

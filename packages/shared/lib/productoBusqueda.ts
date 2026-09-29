@@ -2,6 +2,10 @@
 // (ventas, inventario, carga de facturas de compra) — todos deben matchear por nombre, marca o
 // código de barras/interno, sin distinguir mayúsculas y por coincidencia parcial (contains).
 
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Producto } from '../types/database'
+import { friendlyError, isNetworkError } from './supabaseErrors'
+
 export type ProductoBuscable = {
   nombre: string
   marca?: string | null
@@ -69,6 +73,44 @@ export function digitoVerificadorEanValido(codigo: string): boolean {
   const verificador = digitos.pop()!
   const suma = digitos.reverse().reduce((acc, d, i) => acc + d * (i % 2 === 0 ? 3 : 1), 0)
   return (10 - (suma % 10)) % 10 === verificador
+}
+
+export type ResultadoCodigo =
+  | { tipo: 'encontrado'; producto: Producto }
+  | { tipo: 'inactivo'; producto: Producto }
+  | { tipo: 'no_encontrado' }
+  | { tipo: 'error'; mensaje: string }
+
+// Busca un producto por código de barras (o código interno), tolerando las variantes del mismo
+// código (ver variantesCodigoBarras). Distingue "no existe" de "no se pudo consultar": un error de
+// red tomado como "no existe" terminaba ofreciendo dar de alta un producto ya cargado.
+export async function resolverCodigoBarras(supabase: SupabaseClient, codigo: string): Promise<ResultadoCodigo> {
+  const variantes = variantesCodigoBarras(codigo)
+  if (variantes.length === 0) return { tipo: 'no_encontrado' }
+
+  for (const columna of ['codigo_barras', 'codigo_interno'] as const) {
+    const { data, error, status } = await supabase.from('productos').select('*').in(columna, variantes)
+    if (error) {
+      return {
+        tipo: 'error',
+        mensaje: isNetworkError(status)
+          ? 'Sin conexión — no se pudo buscar el código. Probá de nuevo cuando vuelva internet.'
+          : friendlyError(error),
+      }
+    }
+    const encontrados = (data ?? []) as Producto[]
+    if (encontrados.length === 0) continue
+    // Si hay más de uno (ej. el mismo producto cargado con y sin el 0), primero el activo y el que
+    // coincide exacto.
+    const exacto = normalizarCodigoBarras(codigo)
+    const producto = [...encontrados].sort(
+      (a, b) =>
+        Number(b.estado === 'activo') - Number(a.estado === 'activo') ||
+        Number(b[columna] === exacto) - Number(a[columna] === exacto),
+    )[0]
+    return producto.estado === 'activo' ? { tipo: 'encontrado', producto } : { tipo: 'inactivo', producto }
+  }
+  return { tipo: 'no_encontrado' }
 }
 
 export function armarFiltroBusquedaProducto(

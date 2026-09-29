@@ -71,6 +71,9 @@ export function CargarFacturaCompraModal({ supabase, crearProducto, onClose, onS
   const [confirmCerrar, setConfirmCerrar] = useState(false)
   // Ítems marcados por la última validación de "Guardar factura"; se desmarcan al editarlos.
   const [itemsConError, setItemsConError] = useState<Set<string>>(new Set())
+  // Fila que tiene que tomar el foco en "Cód. barras"; `n` cambia en cada pedido para que se pueda
+  // volver a enfocar la misma fila.
+  const [foco, setFoco] = useState<{ key: string; n: number } | null>(null)
 
   function pedirCierre() {
     if (dirty) {
@@ -96,6 +99,21 @@ export function CargarFacturaCompraModal({ supabase, crearProducto, onClose, onS
       return sig
     })
     setItems((prev) => prev.map((it) => (it.key === key ? { ...it, ...cambios } : it)))
+  }
+
+  function agregarItem() {
+    const nuevo = nuevoItemFacturaCompraUI()
+    setItems((prev) => [...prev, nuevo])
+    setFoco((prev) => ({ key: nuevo.key, n: (prev?.n ?? 0) + 1 }))
+  }
+
+  // Enter del lector en una fila que ya encontró su producto: sigue en la fila de abajo, o crea
+  // una nueva si era la última — para escanear varios ítems seguidos sin tocar el mouse.
+  function avanzarDesde(key: string) {
+    const i = items.findIndex((it) => it.key === key)
+    const siguiente = items[i + 1]
+    if (siguiente) setFoco((prev) => ({ key: siguiente.key, n: (prev?.n ?? 0) + 1 }))
+    else agregarItem()
   }
 
   function eliminarItem(key: string) {
@@ -371,6 +389,8 @@ export function CargarFacturaCompraModal({ supabase, crearProducto, onClose, onS
                 supabase={supabase}
                 crearProducto={crearProducto}
                 conError={itemsConError.has(item.key)}
+                focoCodigo={foco?.key === item.key ? foco.n : 0}
+                onAvanzar={() => avanzarDesde(item.key)}
                 onChange={(cambios) => actualizarItem(item.key, cambios)}
                 onEliminar={() => eliminarItem(item.key)}
               />
@@ -380,7 +400,7 @@ export function CargarFacturaCompraModal({ supabase, crearProducto, onClose, onS
 
         <button
           type="button"
-          onClick={() => setItems((prev) => [...prev, nuevoItemFacturaCompraUI()])}
+          onClick={agregarItem}
           className="self-start rounded px-3 py-2 font-sans text-label-bold text-accent-dark hover:bg-accent-light"
         >
           + Agregar ítem
