@@ -84,6 +84,33 @@ export function nuevoItemFacturaCompraUI(): ItemFacturaCompraUI {
   return { ...nuevoItemFacturaCompra(), marca: '', codigoBarras: '' }
 }
 
+export type ProblemaItemFacturaCompra = { key: string; numero: number; mensaje: string }
+
+// Ítems que el usuario empezó a cargar pero que itemsValidosFacturaCompra descartaría al guardar
+// — antes se perdían en silencio (ej. un código escaneado que no existía, con cantidad y precio
+// cargados, pero sin producto). Una fila totalmente en blanco (cantidad 1 por defecto) no cuenta:
+// esa se ignora como siempre. Se valida antes de guardar y bloquea hasta resolverlo.
+export function problemasItemsFacturaCompra(items: ItemFacturaCompraUI[]): ProblemaItemFacturaCompra[] {
+  const problemas: ProblemaItemFacturaCompra[] = []
+  items.forEach((it, i) => {
+    const numero = i + 1
+    const tieneProducto = it.descripcion.trim() !== ''
+    const empezado =
+      tieneProducto ||
+      it.codigoBarras.trim() !== '' ||
+      it.marca.trim() !== '' ||
+      (Number(it.precioUnitarioSinIva) || 0) > 0 ||
+      (Number(it.descuentoPorcentaje) || 0) > 0
+    if (!empezado) return
+    if (!tieneProducto) {
+      problemas.push({ key: it.key, numero, mensaje: `El ítem ${numero} no tiene producto seleccionado.` })
+    } else if (!(Number(it.cantidad) > 0)) {
+      problemas.push({ key: it.key, numero, mensaje: `El ítem ${numero} tiene cantidad 0 — completala o quitá el ítem.` })
+    }
+  })
+  return problemas
+}
+
 // Un ítem libre (sin producto_id) no tiene columna propia de marca en la factura — la pegamos
 // dentro de la descripción para no perderla. Un ítem vinculado al catálogo no la necesita ahí:
 // ya se recupera vía producto_id → producto.marca.

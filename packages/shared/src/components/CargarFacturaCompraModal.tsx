@@ -7,6 +7,7 @@ import {
   integrarMarcaEnItemsLibres,
   itemsValidosFacturaCompra,
   nuevoItemFacturaCompraUI,
+  problemasItemsFacturaCompra,
   type ItemFacturaCompraUI,
 } from '../../lib/facturasCompra'
 import { fechaHoyISO, formatCurrency } from '../../lib/format'
@@ -68,6 +69,8 @@ export function CargarFacturaCompraModal({ supabase, crearProducto, onClose, onS
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [confirmCerrar, setConfirmCerrar] = useState(false)
+  // Ítems marcados por la última validación de "Guardar factura"; se desmarcan al editarlos.
+  const [itemsConError, setItemsConError] = useState<Set<string>>(new Set())
 
   function pedirCierre() {
     if (dirty) {
@@ -86,6 +89,12 @@ export function CargarFacturaCompraModal({ supabase, crearProducto, onClose, onS
   }, [])
 
   function actualizarItem(key: string, cambios: Partial<ItemFacturaCompraUI>) {
+    setItemsConError((prev) => {
+      if (!prev.has(key)) return prev
+      const sig = new Set(prev)
+      sig.delete(key)
+      return sig
+    })
     setItems((prev) => prev.map((it) => (it.key === key ? { ...it, ...cambios } : it)))
   }
 
@@ -111,6 +120,17 @@ export function CargarFacturaCompraModal({ supabase, crearProducto, onClose, onS
     }
     if (!fechaComprobante) {
       setError('La fecha del comprobante es obligatoria.')
+      return
+    }
+    // Un ítem empezado pero incompleto se descartaba en silencio al guardar: ahora bloquea, se
+    // marca en rojo y se lleva la vista hasta el primero.
+    const problemas = problemasItemsFacturaCompra(items)
+    setItemsConError(new Set(problemas.map((p) => p.key)))
+    if (problemas.length > 0) {
+      setError(problemas.map((p) => p.mensaje).join(' '))
+      document
+        .querySelector(`[data-item-key="${problemas[0].key}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
     if (itemsValidosFacturaCompra(items).length === 0) {
@@ -350,6 +370,7 @@ export function CargarFacturaCompraModal({ supabase, crearProducto, onClose, onS
                 proveedores={proveedores}
                 supabase={supabase}
                 crearProducto={crearProducto}
+                conError={itemsConError.has(item.key)}
                 onChange={(cambios) => actualizarItem(item.key, cambios)}
                 onEliminar={() => eliminarItem(item.key)}
               />

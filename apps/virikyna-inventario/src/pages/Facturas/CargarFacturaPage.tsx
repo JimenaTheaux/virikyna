@@ -15,6 +15,7 @@ import {
   integrarMarcaEnItemsLibres,
   itemsValidosFacturaCompra,
   nuevoItemFacturaCompraUI,
+  problemasItemsFacturaCompra,
   type ItemFacturaCompraUI,
 } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
@@ -58,6 +59,11 @@ export function CargarFacturaPage() {
   const [aviso, setAviso] = useState<Aviso | null>(null)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
+  // Errores por ítem de la última validación de "Guardar factura" (key → mensaje).
+  const [erroresItems, setErroresItems] = useState<Record<string, string>>({})
+  // Ítem que tiene que tomar el foco en "Cód. barras"; `n` cambia en cada pedido para que se
+  // pueda volver a enfocar el mismo ítem.
+  const [foco, setFoco] = useState<{ key: string; n: number } | null>(null)
   const avisoRef = useRef<HTMLParagraphElement>(null)
 
   // Cambiar de pestaña (o volver atrás) con lo cargado sin guardar pide confirmación antes de
@@ -85,14 +91,39 @@ export function CargarFacturaPage() {
   }, [])
 
   // El mensaje se muestra arriba de la página, pero "Guardar factura" está al final del formulario:
-  // sin esto el resultado quedaba fuera de pantalla.
+  // sin esto el resultado quedaba fuera de pantalla. Si el error es de un ítem, la vista va a esa
+  // tarjeta (ItemFacturaRow) en vez de al mensaje general.
   useEffect(() => {
-    if (aviso) avisoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (aviso && Object.keys(erroresItems).length === 0) {
+      avisoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aviso])
 
   function actualizarItem(key: string, cambios: Partial<ItemFacturaCompraUI>) {
     setDirty(true)
+    setErroresItems((prev) => {
+      if (!(key in prev)) return prev
+      const { [key]: _resuelto, ...resto } = prev
+      return resto
+    })
     setItems((prev) => prev.map((it) => (it.key === key ? { ...it, ...cambios } : it)))
+  }
+
+  function agregarItem() {
+    const nuevo = nuevoItemFacturaCompraUI()
+    setDirty(true)
+    setItems((prev) => [...prev, nuevo])
+    setFoco((prev) => ({ key: nuevo.key, n: (prev?.n ?? 0) + 1 }))
+  }
+
+  // Enter del lector en un ítem que ya encontró su producto: sigue en el ítem de abajo, o crea
+  // uno nuevo si era el último.
+  function avanzarDesde(key: string) {
+    const i = items.findIndex((it) => it.key === key)
+    const siguiente = items[i + 1]
+    if (siguiente) setFoco((prev) => ({ key: siguiente.key, n: (prev?.n ?? 0) + 1 }))
+    else agregarItem()
   }
 
   function eliminarItem(key: string) {
@@ -118,6 +149,23 @@ export function CargarFacturaPage() {
     }
     if (!fechaComprobante) {
       setAviso({ tipo: 'error', texto: 'La fecha del comprobante es obligatoria.' })
+      return
+    }
+    // Un ítem empezado pero incompleto (ej. código escaneado sin producto) se descartaba en
+    // silencio al guardar: ahora bloquea y se marca en la tarjeta, que se trae a la vista sola.
+    const problemas = problemasItemsFacturaCompra(items)
+    setErroresItems(Object.fromEntries(problemas.map((p) => [p.key, p.mensaje])))
+    if (problemas.length > 0) {
+      document
+        .querySelector(`[data-item-key="${problemas[0].key}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setAviso({
+        tipo: 'error',
+        texto:
+          problemas.length === 1
+            ? problemas[0].mensaje
+            : `Hay ${problemas.length} ítems incompletos (${problemas.map((p) => p.numero).join(', ')}): completalos o quitalos.`,
+      })
       return
     }
     if (itemsValidosFacturaCompra(items).length === 0) {
@@ -156,6 +204,7 @@ export function CargarFacturaPage() {
     setMostrarFechaFiscal(false)
     setFormaPago('contado')
     setItems([nuevoItemFacturaCompraUI()])
+    setErroresItems({})
   }
 
   if (!rol) return null
@@ -181,7 +230,18 @@ export function CargarFacturaPage() {
         </p>
       )}
 
-      <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
+      <form
+        onSubmit={handleSubmit}
+        onChangeCapture={() => setDirty(true)}
+        // Mismo freno que la planilla de Local/Gestión (commit 97b6a92): Enter en un campo nunca
+        // envía la factura — ni el Enter del lector físico ni el "Ir" del teclado del celular, desde
+        // ningún campo (antes solo lo frenaban Cód. barras y Producto, y desde Cantidad/Precio/etc.
+        // se guardaba la factura a medio cargar y se vaciaba el formulario). Solo guarda el botón.
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && e.target instanceof HTMLInputElement) e.preventDefault()
+        }}
+        className="flex flex-col gap-stack-md"
+      >
         <Field label="Proveedor">
           <select value={proveedorId} onChange={(e) => setProveedorId(e.target.value)} className={selectClass}>
             <option value="">Elegí un proveedor</option>
@@ -287,18 +347,18 @@ export function CargarFacturaPage() {
               puedeEliminar={items.length > 1}
               proveedores={proveedores}
               rol={rol}
+              error={erroresItems[item.key]}
+              focoCodigo={foco?.key === item.key ? foco.n : 0}
               onChange={(cambios) => actualizarItem(item.key, cambios)}
               onEliminar={() => eliminarItem(item.key)}
+              onAvanzar={() => avanzarDesde(item.key)}
             />
           ))}
         </div>
 
         <button
           type="button"
-          onClick={() => {
-            setDirty(true)
-            setItems((prev) => [...prev, nuevoItemFacturaCompraUI()])
-          }}
+          onClick={agregarItem}
           className="flex min-h-12 items-center justify-center gap-1 rounded border border-dashed border-accent/60 font-sans text-label-bold text-accent-dark active:bg-accent-light"
         >
           <IconMas className="h-5 w-5" />

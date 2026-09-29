@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
+import { digitoVerificadorEanValido, normalizarCodigoBarras } from '../../lib/productoBusqueda'
 
 const svgProps = {
   viewBox: '0 0 24 24',
@@ -49,6 +50,26 @@ interface ConstraintsTorch extends MediaTrackConstraintSet {
 
 interface DetectorResultado {
   rawValue: string
+  format?: string
+}
+
+// Una sola lectura de un solo cuadro de video no alcanza: con movimiento, poca luz o el código
+// torcido, el decoder a veces devuelve un número parcial o equivocado (sobre todo ITF y Code 39,
+// que "encuentran" pedazos de un EAN-13). Ese número no existía en el catálogo y el celular
+// terminaba ofreciendo dar de alta un producto que ya estaba cargado. Por eso se exige el mismo
+// valor en varios cuadros seguidos, y los EAN/UPC además tienen que pasar el dígito verificador.
+const FORMATOS_EAN = ['ean_13', 'ean_8', 'upc_a']
+const FORMATOS_DEBILES = ['itf', 'code_39']
+
+function lecturasNecesarias(format: string | undefined): number {
+  return format && FORMATOS_DEBILES.includes(format) ? 3 : 2
+}
+
+function lecturaValida(codigo: string, format: string | undefined): boolean {
+  if (!codigo) return false
+  // Sin formato informado (algunos polyfills), se valida como EAN si tiene la forma de uno.
+  const esEan = format ? FORMATOS_EAN.includes(format) : /^(\d{8}|\d{12}|\d{13})$/.test(codigo)
+  return esEan ? digitoVerificadorEanValido(codigo) : true
 }
 interface DetectorBarcode {
   detect(video: HTMLVideoElement): Promise<DetectorResultado[]>
@@ -156,6 +177,10 @@ export default function BarcodeScanner({ onDetect, onClose }: Props) {
         const detector = new DetectorCtor({ formats: FORMATOS })
         setEstado('listo')
 
+        // Lectura candidata y cuántos cuadros seguidos la vieron (ver lecturasNecesarias).
+        let candidato: string | null = null
+        let repeticiones = 0
+
         const detectar = async () => {
           if (cancelled) return
           if (detectando) {
@@ -165,9 +190,15 @@ export default function BarcodeScanner({ onDetect, onClose }: Props) {
           detectando = true
           try {
             const resultados = await detector.detect(videoEl)
-            if (!cancelled && resultados.length > 0) {
-              onDetectRef.current(resultados[0].rawValue)
-              return
+            const lectura = resultados[0]
+            const codigo = lectura ? normalizarCodigoBarras(lectura.rawValue) : ''
+            if (!cancelled && lectura && lecturaValida(codigo, lectura.format)) {
+              repeticiones = codigo === candidato ? repeticiones + 1 : 1
+              candidato = codigo
+              if (repeticiones >= lecturasNecesarias(lectura.format)) {
+                onDetectRef.current(codigo)
+                return
+              }
             }
           } catch {
             // Sin resultado en este frame (o el video todavía no tiene data) — reintenta.
@@ -236,7 +267,7 @@ export default function BarcodeScanner({ onDetect, onClose }: Props) {
           type="button"
           onClick={onClose}
           aria-label="Cerrar escáner"
-          className="rounded-full bg-white/10 p-2 text-white"
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white"
         >
           <IconCerrar className="h-6 w-6" />
         </button>

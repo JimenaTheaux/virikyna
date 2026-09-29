@@ -37,6 +37,8 @@ type Props = {
   puedeEliminar: boolean
   proveedores: Proveedor[]
   crearProducto: CrearProductoRender
+  // Ítem marcado por la validación de "Guardar factura" (ej. sin producto seleccionado).
+  conError?: boolean
   onChange: (cambios: Partial<ItemFacturaCompraUI>) => void
   onEliminar: () => void
 }
@@ -59,6 +61,7 @@ export function ItemFacturaRow({
   puedeEliminar,
   proveedores,
   crearProducto,
+  conError = false,
   onChange,
   onEliminar,
 }: Props) {
@@ -177,7 +180,10 @@ export function ItemFacturaRow({
   }
 
   return (
-    <tr className="border-b border-line last:border-b-0 hover:bg-bg/60">
+    <tr
+      data-item-key={item.key}
+      className={`border-b border-line last:border-b-0 ${conError ? 'bg-error/10 outline outline-2 -outline-offset-2 outline-error' : 'hover:bg-bg/60'}`}
+    >
       <td className="relative px-2 py-1.5 align-top">
         <input
           ref={codigoRef}
