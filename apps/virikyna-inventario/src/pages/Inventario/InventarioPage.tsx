@@ -27,6 +27,8 @@ export function InventarioPage() {
   const [productos, setProductos] = useState<ProductoConRelaciones[]>([])
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [busqueda, setBusqueda] = useState('')
+  // true mientras lo que hay en el buscador vino de la cámara (se apaga apenas se tipea).
+  const [vieneDeEscaneo, setVieneDeEscaneo] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [modal, setModal] = useState<Modal>(null)
@@ -68,16 +70,20 @@ export function InventarioPage() {
   function handleEscaneo(codigo: string) {
     setEscaneando(false)
     setBusqueda(codigo)
+    setVieneDeEscaneo(true)
   }
 
-  // Un número largo es casi seguro un código de barras; cualquier otro texto se toma como nombre.
+  // Lo escaneado es siempre un código (aunque sea alfanumérico, Code 128/39, o corto). Tipeado a
+  // mano, un número largo es casi seguro un código; cualquier otro texto se toma como nombre.
   const textoBusqueda = busqueda.trim()
-  const esCodigo = /^\d{6,}$/.test(textoBusqueda)
+  const esCodigo = vieneDeEscaneo || /^\d{6,}$/.test(textoBusqueda)
 
   if (!rol) return null
 
   return (
-    <div className="flex h-full flex-col gap-stack-md">
+    // Un solo scroll (el de <main> en AppShell): la lista crece con la página. El buscador queda
+    // pegado arriba con sticky en vez de tener la lista su propio scroll anidado.
+    <div className="flex flex-col gap-stack-md">
       <div className="flex items-start justify-between gap-2">
         <div>
           <h1 className="font-display text-headline-lg text-accent-darker">Inventario</h1>
@@ -93,12 +99,15 @@ export function InventarioPage() {
         </button>
       </div>
 
-      <div className="flex gap-2">
+      <div className="sticky -top-stack-md z-10 -mx-stack-md flex gap-2 bg-bg px-stack-md py-2">
         <div className="relative flex-1">
           <IconBuscar className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-soft" />
           <input
             value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
+            onChange={(e) => {
+              setBusqueda(e.target.value)
+              setVieneDeEscaneo(false)
+            }}
             placeholder="Buscar por nombre, marca o código..."
             className="w-full rounded border border-line bg-surface py-3.5 pl-11 pr-4 font-sans text-body-md text-ink outline-none focus:border-accent"
           />
@@ -107,7 +116,7 @@ export function InventarioPage() {
           type="button"
           onClick={() => setEscaneando(true)}
           aria-label="Escanear código de barras"
-          className="flex items-center justify-center rounded border border-line bg-surface px-4 text-accent-dark hover:bg-accent-light"
+          className="flex min-w-12 items-center justify-center rounded border border-line bg-surface px-4 text-accent-dark hover:bg-accent-light"
         >
           <IconCamara className="h-6 w-6" />
         </button>
@@ -120,7 +129,7 @@ export function InventarioPage() {
         </p>
       )}
 
-      <div className="flex-1 space-y-3 overflow-y-auto">
+      <div className="space-y-3">
         {loading && <p className="py-6 text-center font-sans text-body-md text-ink-soft">Cargando...</p>}
 
         {!loading && productosFiltrados.length === 0 && (
@@ -151,6 +160,7 @@ export function InventarioPage() {
           const stockLocal = producto.stock_ubicaciones.find((s) => s.ubicacion === 'local')?.cantidad ?? 0
           const stockDeposito =
             producto.stock_ubicaciones.find((s) => s.ubicacion === 'deposito')?.cantidad ?? 0
+          const codigo = producto.codigo_barras || producto.codigo_interno
           return (
             <button
               key={producto.id}
@@ -159,8 +169,13 @@ export function InventarioPage() {
               className="w-full rounded-lg border border-line bg-surface p-4 text-left shadow-sm active:bg-bg"
             >
               <div className="flex items-start justify-between gap-2">
-                <div>
+                <div className="min-w-0">
                   <p className="font-sans text-label-bold text-ink">{producto.nombre}</p>
+                  {(producto.marca || codigo) && (
+                    <p className="break-all font-sans text-label-md text-ink">
+                      {[producto.marca, codigo].filter(Boolean).join(' · ')}
+                    </p>
+                  )}
                   <p className="font-sans text-label-md text-ink-soft">
                     {producto.proveedor?.razon_social ?? 'Sin proveedor'}
                   </p>
