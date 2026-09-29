@@ -76,12 +76,13 @@ export function ProductoBusqueda({ inputRef, onAgregar }: Props) {
         setHighlighted((h) => (h - 1 + resultados.length) % resultados.length)
       }
     } else if (e.key === 'Enter') {
-      // Si hay resultados, este Enter agrega el producto y no debe llegar al atajo global de "Cobrar".
-      // Si el buscador está vacío/sin resultados, dejamos que el evento burbujee: ahí Enter sí cobra.
-      if (resultados.length) {
+      // Con texto en el buscador, Enter nunca llega al atajo global de "Cobrar": si hay resultados
+      // agrega el producto; si todavía no llegaron (el lector manda su Enter antes de que termine la
+      // búsqueda) no hace nada. Solo con el buscador vacío dejamos que burbujee: ahí Enter sí cobra.
+      if (texto.trim()) {
         e.preventDefault()
         e.stopPropagation()
-        agregar(resultados[highlighted] ?? resultados[0])
+        if (resultados.length) agregar(resultados[highlighted] ?? resultados[0])
       }
     } else if (e.key === 'Escape') {
       // Con texto cargado, Escape solo limpia el buscador. Vacío, burbujea al atajo global (cancela la venta).
