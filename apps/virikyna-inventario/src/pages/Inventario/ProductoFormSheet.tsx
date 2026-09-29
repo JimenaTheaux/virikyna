@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { PostgrestError } from '@supabase/supabase-js'
 import type { EstadoProducto, Proveedor, RolUsuario, UbicacionStock } from '@virikyna/shared'
 import {
@@ -27,8 +27,10 @@ type Props = {
   nombreInicial?: string
   onClose: () => void
   onSaved: (creado?: ProductoCreado) => void
-  // Desde el aviso de código duplicado: ir directo a editar el producto que ya existe.
+  // Desde el aviso de código duplicado: ir directo a editar el producto que ya existe (catálogo) o
+  // usarlo en el ítem (carga de factura, con accionExistente="usar").
   onEditarExistente?: (id: string) => void
+  accionExistente?: 'editar' | 'usar'
   onStockChanged: () => void
 }
 
@@ -46,6 +48,7 @@ export function ProductoFormSheet({
   onSaved,
   onStockChanged,
   onEditarExistente,
+  accionExistente = 'editar',
 }: Props) {
   const esAdmin = rol === 'admin'
 
@@ -63,6 +66,12 @@ export function ProductoFormSheet({
   const [stock, setStock] = useState(producto?.stock_ubicaciones ?? [])
   const [ajusteUbicacion, setAjusteUbicacion] = useState<UbicacionStock | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Errores de un campo puntual: se muestran debajo de ese campo y se lleva la vista hasta él
+  // (antes el mensaje aparecía solo abajo, junto a los botones, lejos del campo que falló).
+  const [errorNombre, setErrorNombre] = useState<string | null>(null)
+  const [errorCodigo, setErrorCodigo] = useState<string | null>(null)
+  const nombreRef = useRef<HTMLInputElement>(null)
+  const codigoBoxRef = useRef<HTMLDivElement>(null)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [confirmCerrar, setConfirmCerrar] = useState(false)
@@ -99,10 +108,14 @@ export function ProductoFormSheet({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
+    setErrorNombre(null)
+    setErrorCodigo(null)
 
     const nombreLimpio = nombre.trim()
     if (!nombreLimpio) {
-      setError('El nombre es obligatorio.')
+      setErrorNombre('El nombre es obligatorio.')
+      nombreRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      nombreRef.current?.focus({ preventScroll: true })
       return
     }
     if (costoNum < 0) {
@@ -147,6 +160,12 @@ export function ProductoFormSheet({
     setSaving(false)
 
     if (dbError) {
+      // codigo_barras es UNIQUE en la base: en vez del mensaje genérico, decir qué campo choca.
+      if (dbError.code === '23505' && codigoBarrasLimpio) {
+        setErrorCodigo('Ya existe otro producto con este código de barras.')
+        codigoBoxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        return
+      }
       setError(friendlyError(dbError))
       return
     }
@@ -162,22 +181,67 @@ export function ProductoFormSheet({
   const stockDeposito = stock.find((s) => s.ubicacion === 'deposito')?.cantidad ?? 0
 
   return (
-    <BottomSheet title={producto ? 'Editar producto' : 'Nuevo producto'} onClose={pedirCierre}>
-      <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
-        <CodigoBarrasBox
-          value={codigoBarras}
-          onChange={(v) => {
-            setCodigoBarras(v)
-            setDirty(true)
-          }}
-          buscarPorCodigo={buscarProductoPorCodigo}
-          excluirId={producto?.id}
-          onEditarExistente={onEditarExistente}
-          size="touch"
-        />
+    <BottomSheet
+      title={producto ? 'Editar producto' : 'Nuevo producto'}
+      onClose={pedirCierre}
+      footer={
+        <div className="flex flex-col gap-2">
+          {error && <ErrorText>{error}</ErrorText>}
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={pedirCierre}
+              className="min-h-12 rounded border border-line px-4 font-sans text-label-bold text-ink-soft active:bg-bg"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              form="form-producto"
+              disabled={saving}
+              className="min-h-12 rounded bg-accent px-4 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-60"
+            >
+              {saving ? 'Guardando...' : 'Guardar'}
+            </button>
+          </div>
+        </div>
+      }
+    >
+      <form
+        id="form-producto"
+        onSubmit={handleSubmit}
+        onChangeCapture={() => setDirty(true)}
+        className="flex flex-col gap-stack-md"
+      >
+        <div ref={codigoBoxRef} className="scroll-mt-4">
+          <CodigoBarrasBox
+            value={codigoBarras}
+            onChange={(v) => {
+              setCodigoBarras(v)
+              setErrorCodigo(null)
+              setDirty(true)
+            }}
+            buscarPorCodigo={buscarProductoPorCodigo}
+            excluirId={producto?.id}
+            onEditarExistente={onEditarExistente}
+            accionExistente={accionExistente}
+            size="touch"
+          />
+          {errorCodigo && <p className="mt-1 font-sans text-label-md text-error">{errorCodigo}</p>}
+        </div>
 
         <Field label="Nombre">
-          <input value={nombre} onChange={(e) => setNombre(e.target.value)} className={inputClass} />
+          <input
+            ref={nombreRef}
+            value={nombre}
+            onChange={(e) => {
+              setNombre(e.target.value)
+              setErrorNombre(null)
+            }}
+            aria-invalid={errorNombre ? true : undefined}
+            className={`${inputClass} ${errorNombre ? '!border-error' : ''}`}
+          />
+          {errorNombre && <span className="font-sans text-label-md text-error">{errorNombre}</span>}
         </Field>
 
         <Field label="Marca">
@@ -313,24 +377,6 @@ export function ProductoFormSheet({
           </div>
         )}
 
-        {error && <ErrorText>{error}</ErrorText>}
-
-        <div className="mt-stack-md flex flex-col gap-3">
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded bg-accent px-4 py-4 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-60"
-          >
-            {saving ? 'Guardando...' : 'Guardar'}
-          </button>
-          <button
-            type="button"
-            onClick={pedirCierre}
-            className="rounded px-4 py-3 font-sans text-label-bold text-ink-soft hover:bg-bg"
-          >
-            Cancelar
-          </button>
-        </div>
       </form>
 
       {producto && ajusteUbicacion && (

@@ -11,6 +11,9 @@ type Props = {
   // Al editar, el propio producto no cuenta como duplicado.
   excluirId?: string
   onEditarExistente?: (id: string) => void
+  // 'editar' (default): desde el catálogo, el botón lleva a editar el existente. 'usar': desde la
+  // carga de una factura, el botón vincula el ítem al producto existente en vez de crear otro.
+  accionExistente?: 'editar' | 'usar'
   autoFocus?: boolean
   // 'touch' para pantallas de celular (input y botón de 48px); 'compact' (default) es el ajuste de
   // escritorio para que el formulario de producto entre en 1366x768 sin scroll.
@@ -25,6 +28,7 @@ export function CodigoBarrasBox({
   buscarPorCodigo,
   excluirId,
   onEditarExistente,
+  accionExistente = 'editar',
   autoFocus = true,
   size = 'compact',
 }: Props) {
@@ -81,8 +85,10 @@ export function CodigoBarrasBox({
       {duplicado ? (
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 font-sans text-label-md text-error">
           <span>
-            Ya existe un producto con este código: <strong>{duplicado.nombre}</strong>. ¿Querés editarlo en vez de
-            crear uno nuevo?
+            Ya existe un producto con este código: <strong>{duplicado.nombre}</strong>.{' '}
+            {accionExistente === 'usar'
+              ? '¿Querés usar ese producto en vez de crear uno nuevo?'
+              : '¿Querés editarlo en vez de crear uno nuevo?'}
           </span>
           {onEditarExistente && (
             <button
@@ -90,7 +96,7 @@ export function CodigoBarrasBox({
               onClick={() => onEditarExistente(duplicado.id)}
               className={`rounded bg-error px-2.5 font-sans text-label-bold text-white hover:opacity-90 ${touch ? 'min-h-11' : 'py-1'}`}
             >
-              Editar existente
+              {accionExistente === 'usar' ? 'Usar este producto existente' : 'Editar existente'}
             </button>
           )}
         </div>
