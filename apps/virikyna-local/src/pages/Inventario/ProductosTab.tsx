@@ -104,17 +104,29 @@ export function ProductosTab() {
       )}
 
       <div className="mt-stack-md flex-1 overflow-auto rounded-xl shadow-sm">
-        <table className="w-full text-left font-sans text-table-row">
+        {/* table-fixed + colgroup: columnas cortas con ancho fijo (rem), Nombre y Proveedor se
+            reparten el resto — sin scroll horizontal en ningún ancho (ver FacturacionTab). */}
+        <table className="w-full table-fixed text-left font-sans text-table-row max-xl:[&_td]:px-2 max-xl:[&_th]:px-2">
+          <colgroup>
+            <col className="w-8 xl:w-10" />
+            <col />
+            <col className="xl:w-[20%]" />
+            <col className="w-[7.75rem] xl:w-[8.5rem]" />
+            <col className="w-[7.75rem] xl:w-[8.5rem]" />
+            <col className="w-20 xl:w-28" />
+            <col className="w-[6.5rem]" />
+            <col className="w-[4.5rem]" />
+          </colgroup>
           <thead>
             <tr className="bg-accent-light text-table-head uppercase text-accent-dark">
-              <th className="whitespace-nowrap px-3 py-2.5"></th>
-              <th className="whitespace-nowrap px-3 py-2.5">Nombre</th>
-              <th className="whitespace-nowrap px-3 py-2.5">Proveedor</th>
-              <th className="whitespace-nowrap px-3 py-2.5">Costo</th>
-              <th className="whitespace-nowrap px-3 py-2.5">Precio venta</th>
-              <th className="whitespace-nowrap px-3 py-2.5">Stock (Local/Dep.)</th>
-              <th className="whitespace-nowrap px-3 py-2.5">Estado</th>
-              <th className="whitespace-nowrap px-3 py-2.5"></th>
+              <th className="px-3 py-2.5"></th>
+              <th className="px-3 py-2.5">Nombre</th>
+              <th className="px-3 py-2.5">Proveedor</th>
+              <th className="px-3 py-2.5">Costo</th>
+              <th className="px-3 py-2.5">Precio venta</th>
+              <th className="px-3 py-2.5">Stock (Local/Dep.)</th>
+              <th className="px-3 py-2.5">Estado</th>
+              <th className="px-3 py-2.5"></th>
             </tr>
           </thead>
           <tbody>
@@ -153,10 +165,12 @@ export function ProductosTab() {
                       className="h-4 w-4 accent-accent"
                     />
                   </td>
-                  <td className="px-3 py-3 text-ink">{producto.nombre}</td>
-                  <td className="px-3 py-3 text-ink-soft">{producto.proveedor?.razon_social ?? '—'}</td>
-                  <td className="px-3 py-3 text-ink">{formatCurrency(producto.costo)}</td>
-                  <td className="px-3 py-3 font-sans font-semibold text-accent-darker">
+                  <td className="px-3 py-3 text-ink [overflow-wrap:anywhere]">{producto.nombre}</td>
+                  <td className="px-3 py-3 text-ink-soft [overflow-wrap:anywhere]">
+                    {producto.proveedor?.razon_social ?? '—'}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-3 text-ink">{formatCurrency(producto.costo)}</td>
+                  <td className="whitespace-nowrap px-3 py-3 font-sans font-semibold text-accent-darker">
                     {formatCurrency(producto.precio_venta)}
                   </td>
                   <td className="px-3 py-3 text-ink-soft">
