@@ -58,6 +58,9 @@ export default {
         // Excepción acotada a tablas de listado con acciones por fila (sección 5.2) — no usar
         // fuera de ese contexto, el piso de 16px sigue vigente para texto operativo general.
         'table-head': ['10.5px', { lineHeight: '14px', fontWeight: '700', letterSpacing: '0.04em' }],
+        // Texto de fila de las tablas de listado estilo "G" (docs/08, sección 5.2): 13px/18px, regular —
+        // las celdas que destacan (montos, badges) suman font-semibold aparte.
+        'table-row': ['13px', { lineHeight: '18px', fontWeight: '400' }],
       },
       // Espaciado y forma (sección 4)
       borderRadius: {

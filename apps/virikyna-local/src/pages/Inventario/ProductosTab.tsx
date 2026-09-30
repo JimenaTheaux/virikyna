@@ -111,10 +111,10 @@ export function ProductosTab() {
             <col className="w-8 xl:w-10" />
             <col />
             <col className="xl:w-[20%]" />
-            <col className="w-[7.75rem] xl:w-[8.5rem]" />
-            <col className="w-[7.75rem] xl:w-[8.5rem]" />
-            <col className="w-20 xl:w-28" />
-            <col className="w-[6.5rem]" />
+            <col className="w-[6.75rem] xl:w-[7.5rem]" />
+            <col className="w-[6.75rem] xl:w-[7.5rem]" />
+            <col className="w-20 xl:w-24" />
+            <col className="w-24" />
             <col className="w-[4.5rem]" />
           </colgroup>
           <thead>

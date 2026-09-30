@@ -49,6 +49,9 @@ export default {
         'label-bold': ['14px', { lineHeight: '20px', fontWeight: '700' }],
         'label-md': ['13px', { lineHeight: '18px', fontWeight: '500' }],
         'table-head': ['10.5px', { lineHeight: '14px', fontWeight: '700', letterSpacing: '0.04em' }],
+        // Texto de fila de las tablas de listado estilo "G" (docs/08, sección 5.2): 13px/18px, regular —
+        // las celdas que destacan (montos, badges) suman font-semibold aparte.
+        'table-row': ['13px', { lineHeight: '18px', fontWeight: '400' }],
       },
       borderRadius: {
         DEFAULT: '12px',

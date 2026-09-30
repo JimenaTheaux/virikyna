@@ -64,8 +64,10 @@ Sistema de diseño validado con la clienta — **Opción 3**: Quicksand (título
 | `body-md` | 16px / 24px, peso 400 | DM Sans | Texto general, formularios |
 | `label-bold` | 14px / 20px, peso 700 | DM Sans | Botones, encabezados de tabla |
 | `label-md` | 13px / 18px, peso 500 | DM Sans | Metadatos, notas secundarias |
+| `table-row` | 13px / 18px, peso 400 | DM Sans | Texto de fila de tablas de listado estilo "G" (solo ahí — ver 5.2) |
+| `table-head` | 10.5px / 14px, peso 700, `letterSpacing` 0.04em | DM Sans | Encabezado de tablas de listado estilo "G" (solo ahí — ver 5.2) |
 
-**Nunca bajar de `body-md` (16px) para texto operativo** — es el piso de legibilidad para esta app, no el tamaño por defecto del navegador.
+**Nunca bajar de `body-md` (16px) para texto operativo** — es el piso de legibilidad para esta app, no el tamaño por defecto del navegador. Única excepción: `table-row` / `table-head` en las tablas de listado de la sección 5.2.
 
 ## 4. Espaciado y forma
 
@@ -119,7 +121,8 @@ texto operativo general, que mantienen el piso de `body-md` (16px) de la secció
 | Contenedor | `rounded-xl` (usa el `radius-lg` de la sección 4), `shadow-sm` |
 | Header (`th`) | `bg-accent-light text-accent-dark uppercase`, tipografía `table-head` (10.5px/14px, peso 700, `letterSpacing` 0.04em) |
 | Fila (`tr`) | `py-3` (→ ~42px con `table-row`), pares `bg-table-row-alt`, separador `border-table-divider` |
-| Texto de fila | token `table-row` = el `label-md` ya existente (13px/18px) |
+| Texto de fila | token `table-row` (13px/18px, peso 400), definido en el `tailwind.config.ts` de las 3 apps — va en el `<table>` y lo heredan todas las celdas; montos y badges suman `font-semibold` aparte |
+| Ancho de columnas | `table-fixed` + `<colgroup>`: columnas de contenido corto y constante (N°, fecha, montos, estado, checkbox, acciones) con ancho fijo en `rem`, medido sobre el contenido más largo real (ej. `$ 1.234.567,89`, badge "Sin facturar"); columnas de texto variable (cliente, nombre, proveedor, motivo) sin ancho o con `%`, se reparten el resto. Debajo de `xl` (1280px) el padding de celda baja a `px-2` (`max-xl:[&_td]:px-2 max-xl:[&_th]:px-2` en el `<table>`) |
 | Badge de estado | pill `rounded-[6px] px-2 py-0.5`, criterio de color (no paleta libre): ámbar `badge-amber-bg`/`badge-amber-text` = pendiente/atención, verde `badge-green-bg`/`badge-green-text` = ok/completo, rojo `badge-red-bg`/`error` = error/anulado, neutro `badge-neutral-bg`/`ink-soft` = inactivo/sin estado — ver componente `EstadoBadge` en `packages/shared` |
 | Botón de acciones | "⋮" cuadrado `rounded` ~26×26px, fondo `table-divider` (`#F0F2F3`) — abre `RowActionsMenu` (`packages/shared`), portal anclado con flip hacia arriba si no hay espacio abajo, ítems ícono + texto, cierre en click afuera |
 
@@ -127,6 +130,14 @@ texto operativo general, que mantienen el piso de `body-md` (16px) de la secció
 (sin menú); con 2 o más, todas dentro de `RowActionsMenu` — nunca mezclar ícono suelto + menú en
 la misma fila. Con cero acciones discretas, la fila puede seguir siendo clickeable a un detalle
 (como ya pasa en Facturas de compra).
+
+**Sin scroll horizontal en ningún ancho.** La tabla mide siempre el 100% de su contenedor: nunca
+`whitespace-nowrap` en columnas de texto variable (esas llevan `[overflow-wrap:anywhere]`), nunca
+`min-w-[...px]` por columna. Validar en 1024px (mínimo de la ventana de Local), 1280px (1920×1080
+con escala de Windows al 150%, caso típico de monitor grande en el local), 1366px, 1920px y 2560px —
+"se ve bien en la notebook" no alcanza: el ancho que importa es el efectivo en CSS, después de la
+escala de Windows, no la resolución física del monitor. El detalle largo de una fila (ej. ítems de
+una devolución) va en un modal "Ver detalle", no dentro de la celda.
 
 En Inventario (móvil) el botón "⋮" y cada ítem del menú usan el tamaño `touch` (mínimo 44×44px)
 en vez de los ~26px de escritorio.

@@ -254,16 +254,16 @@ export function FacturacionTab() {
             el contenido más largo: fecha+hora, "$ 1.234.567,89", badge "Sin facturar") y Cliente /
             Medio de pago se reparten el resto — la tabla mide siempre el 100% del contenedor, sin
             scroll horizontal, en cualquier resolución o escala de Windows. Debajo de 1280px el
-            padding baja a px-2 y la hora pasa abajo de la fecha, para no aplastar Cliente. */}
+            padding baja a px-2 para no aplastar Cliente. */}
         <table className="w-full table-fixed text-left font-sans text-table-row max-xl:[&_td]:px-2 max-xl:[&_th]:px-2">
           <colgroup>
             <col className="w-8 xl:w-10" />
-            <col className="w-[4.5rem]" />
-            <col className="w-[6.75rem] xl:w-[10.5rem]" />
+            <col className="w-16" />
+            <col className="w-[7.5rem] xl:w-[9rem]" />
             <col />
             <col className="xl:w-[15%]" />
-            <col className="w-[7.75rem] xl:w-[8.5rem]" />
-            <col className="w-[7.75rem] xl:w-[8.5rem]" />
+            <col className="w-[6.75rem] xl:w-[7.5rem]" />
+            <col className="w-[6.75rem] xl:w-[7.5rem]" />
             <col className="w-14" />
           </colgroup>
           <thead>

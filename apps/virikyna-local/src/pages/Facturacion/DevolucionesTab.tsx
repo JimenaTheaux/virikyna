@@ -104,12 +104,12 @@ export function DevolucionesTab() {
             Motivo se lleva el resto. El detalle de ítems vive en "Ver detalle", no en la fila. */}
         <table className="w-full table-fixed text-left font-sans text-table-row max-xl:[&_td]:px-2 max-xl:[&_th]:px-2">
           <colgroup>
-            <col className="w-[4.5rem]" />
-            <col className="w-[6.75rem] xl:w-[10.5rem]" />
+            <col className="w-16" />
+            <col className="w-[7.5rem] xl:w-[9rem]" />
             <col className="w-[5.5rem]" />
             <col />
             <col className="w-[8.5rem]" />
-            <col className="w-[6.5rem]" />
+            <col className="w-24" />
             <col className="w-14" />
           </colgroup>
           <thead>

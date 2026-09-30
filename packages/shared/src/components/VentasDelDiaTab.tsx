@@ -171,12 +171,12 @@ export function VentasDelDiaTab({
             scroll horizontal en ningún ancho. Debajo de 1280px el padding baja a px-2. */}
         <table className="w-full table-fixed text-left font-sans text-table-row max-xl:[&_td]:px-2 max-xl:[&_th]:px-2">
           <colgroup>
-            <col className="w-[6.75rem] xl:w-[7.5rem]" />
-            <col className="w-16" />
+            <col className="w-[6.25rem]" />
+            <col className="w-14" />
             <col />
             <col className="xl:w-[15%]" />
-            <col className="w-[7.75rem] xl:w-[8.5rem]" />
-            <col className="w-[7.75rem] xl:w-[8.5rem]" />
+            <col className="w-[6.75rem] xl:w-[7.5rem]" />
+            <col className="w-[6.75rem] xl:w-[7.5rem]" />
             <col className="w-14" />
           </colgroup>
           <thead>
