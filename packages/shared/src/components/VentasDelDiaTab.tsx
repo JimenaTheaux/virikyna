@@ -166,16 +166,28 @@ export function VentasDelDiaTab({
       )}
 
       <div className="mt-stack-md flex-1 overflow-auto rounded-xl shadow-sm">
-        <table className="w-full text-left font-sans text-table-row">
+        {/* table-fixed + colgroup: columnas cortas con ancho fijo (en rem, medido sobre el contenido
+            más largo), Cliente y Medio de pago se reparten el resto — 100% del contenedor, sin
+            scroll horizontal en ningún ancho. Debajo de 1280px el padding baja a px-2. */}
+        <table className="w-full table-fixed text-left font-sans text-table-row max-xl:[&_td]:px-2 max-xl:[&_th]:px-2">
+          <colgroup>
+            <col className="w-[6.75rem] xl:w-[7.5rem]" />
+            <col className="w-16" />
+            <col />
+            <col className="xl:w-[15%]" />
+            <col className="w-[7.75rem] xl:w-[8.5rem]" />
+            <col className="w-[7.75rem] xl:w-[8.5rem]" />
+            <col className="w-14" />
+          </colgroup>
           <thead>
             <tr className="bg-accent-light text-table-head uppercase text-accent-dark">
-              <th className="whitespace-nowrap px-3 py-2.5">Fecha</th>
-              <th className="whitespace-nowrap px-3 py-2.5">Hora</th>
-              <th className="whitespace-nowrap px-3 py-2.5">Cliente</th>
-              <th className="whitespace-nowrap px-3 py-2.5">Medio de pago</th>
-              <th className="whitespace-nowrap px-3 py-2.5">Monto</th>
-              <th className="whitespace-nowrap px-3 py-2.5">Estado</th>
-              <th className="whitespace-nowrap px-3 py-2.5"></th>
+              <th className="px-3 py-2.5">Fecha</th>
+              <th className="px-3 py-2.5">Hora</th>
+              <th className="px-3 py-2.5">Cliente</th>
+              <th className="px-3 py-2.5">Medio de pago</th>
+              <th className="px-3 py-2.5">Monto</th>
+              <th className="px-3 py-2.5">Estado</th>
+              <th className="px-3 py-2.5"></th>
             </tr>
           </thead>
           <tbody>
@@ -208,13 +220,13 @@ export function VentasDelDiaTab({
               }
               return (
                 <tr key={venta.id} className="border-b border-table-divider last:border-0 even:bg-table-row-alt">
-                  <td className="px-3 py-3 text-ink-soft">{formatFechaCortaLocal(venta.created_at)}</td>
-                  <td className="px-3 py-3 text-ink-soft">{formatHora(venta.created_at)}</td>
-                  <td className="px-3 py-3 text-ink-soft">
+                  <td className="whitespace-nowrap px-3 py-3 text-ink-soft">{formatFechaCortaLocal(venta.created_at)}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-ink-soft">{formatHora(venta.created_at)}</td>
+                  <td className="px-3 py-3 text-ink-soft [overflow-wrap:anywhere]">
                     {venta.cliente ? venta.cliente.razon_social ?? venta.cliente.nombre_fantasia : 'Consumidor final'}
                   </td>
-                  <td className="px-3 py-3 text-ink-soft">{formaPagoLabel[venta.forma_pago]}</td>
-                  <td className="px-3 py-3 font-sans font-semibold text-ink">{formatCurrency(venta.total)}</td>
+                  <td className="px-3 py-3 text-ink-soft [overflow-wrap:anywhere]">{formaPagoLabel[venta.forma_pago]}</td>
+                  <td className="whitespace-nowrap px-3 py-3 font-sans font-semibold text-ink">{formatCurrency(venta.total)}</td>
                   <td className="px-3 py-3">
                     {venta.estado === 'facturado' && <EstadoBadge variant="green">Facturada</EstadoBadge>}
                     {venta.estado === 'sin_facturar' && <EstadoBadge variant="amber">Sin facturar</EstadoBadge>}

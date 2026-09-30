@@ -17,7 +17,7 @@ type Props = {
 export function EstadoBadge({ children, variant }: Props) {
   return (
     <span
-      className={`inline-block rounded-[6px] px-2 py-0.5 font-sans text-table-row font-semibold ${VARIANT_CLASSES[variant]}`}
+      className={`inline-block whitespace-nowrap rounded-[6px] px-2 py-0.5 font-sans text-table-row font-semibold ${VARIANT_CLASSES[variant]}`}
     >
       {children}
     </span>
