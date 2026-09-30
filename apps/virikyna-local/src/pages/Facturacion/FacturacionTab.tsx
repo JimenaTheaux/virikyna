@@ -3,7 +3,7 @@ import { Eye, ArrowLeftRight } from 'lucide-react'
 import type { EstadoComprobante, FormaPagoVenta } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { friendlyError, emitirFacturaCReal } from '@virikyna/shared'
-import { formatCurrency, formatFechaHora } from '@virikyna/shared'
+import { formatCurrency, formatFechaCortaLocal, formatHora } from '@virikyna/shared'
 import { EstadoBadge, RowActionsMenu } from '@virikyna/shared'
 import { FORMA_PAGO_LABEL, type DatosComprobante } from '../../lib/comprobante'
 import { ComprobanteModal } from '../../components/ComprobanteModal'
@@ -163,79 +163,82 @@ export function FacturacionTab() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1">
-          <span className="font-sans text-label-md text-ink-soft">Desde</span>
-          <input
-            type="date"
-            value={fechaDesde}
-            onChange={(e) => setFechaDesde(e.target.value)}
-            className="rounded border border-line bg-surface px-3 py-2 font-sans text-body-md text-ink outline-none focus:border-accent"
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="font-sans text-label-md text-ink-soft">Hasta</span>
-          <input
-            type="date"
-            value={fechaHasta}
-            onChange={(e) => setFechaHasta(e.target.value)}
-            className="rounded border border-line bg-surface px-3 py-2 font-sans text-body-md text-ink outline-none focus:border-accent"
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="font-sans text-label-md text-ink-soft">N° de ticket o cliente</span>
-          <input
-            type="search"
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Ej. 1234 o Pérez"
-            className="w-[170px] rounded border border-line bg-surface px-3 py-2 font-sans text-body-md text-ink outline-none focus:border-accent"
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="font-sans text-label-md text-ink-soft">Estado</span>
-          <select
-            value={estadoFiltro}
-            onChange={(e) => setEstadoFiltro(e.target.value as EstadoFiltro)}
-            className="rounded border border-line bg-surface px-3 py-2 font-sans text-body-md text-ink outline-none focus:border-accent"
-          >
-            <option value="todas">Todas</option>
-            <option value="sin_facturar">Sin facturar</option>
-            <option value="facturado">Facturada</option>
-          </select>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="font-sans text-label-md text-ink-soft">Medio de pago</span>
-          <select
-            value={formaPagoFiltro}
-            onChange={(e) => setFormaPagoFiltro(e.target.value as 'todas' | FormaPagoVenta)}
-            className="rounded border border-line bg-surface px-3 py-2 font-sans text-body-md text-ink outline-none focus:border-accent"
-          >
-            <option value="todas">Todos</option>
-            {Object.entries(FORMA_PAGO_LABEL).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <div className="ml-auto flex items-center gap-3">
-          {seleccion.size > 0 && (
-            <p className="font-sans text-body-md text-ink-soft">
-              {seleccion.size} seleccionado{seleccion.size === 1 ? '' : 's'} · {formatCurrency(totalSeleccionado)}
-            </p>
-          )}
-          <button
-            type="button"
-            onClick={emitirFacturas}
-            disabled={seleccion.size === 0 || emitiendo}
-            className="rounded bg-accent px-4 py-3 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-50"
-          >
-            {emitiendo ? 'Emitiendo...' : 'Emitir Factura C'}
-          </button>
+      {/* Filtros y "Emitir Factura C" en la misma fila: los filtros se achican (y solo si de verdad
+          no entran, bajan a una segunda línea DENTRO de su bloque), el botón queda siempre a la
+          derecha alineado con los inputs — nunca solo en una línea aparte. */}
+      <div className="flex items-end gap-3">
+        <div className="flex min-w-0 flex-1 flex-wrap items-end gap-2">
+          <label className="flex w-[9.5rem] flex-col gap-1">
+            <span className="font-sans text-label-md text-ink-soft">Desde</span>
+            <input
+              type="date"
+              value={fechaDesde}
+              onChange={(e) => setFechaDesde(e.target.value)}
+              className="w-full rounded border border-line bg-surface px-3 py-2 font-sans text-body-md text-ink outline-none focus:border-accent"
+            />
+          </label>
+          <label className="flex w-[9.5rem] flex-col gap-1">
+            <span className="font-sans text-label-md text-ink-soft">Hasta</span>
+            <input
+              type="date"
+              value={fechaHasta}
+              onChange={(e) => setFechaHasta(e.target.value)}
+              className="w-full rounded border border-line bg-surface px-3 py-2 font-sans text-body-md text-ink outline-none focus:border-accent"
+            />
+          </label>
+          <label className="flex min-w-[8rem] max-w-[16rem] flex-1 flex-col gap-1">
+            <span className="whitespace-nowrap font-sans text-label-md text-ink-soft">N° de ticket o cliente</span>
+            <input
+              type="search"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Ej. 1234 o Pérez"
+              className="w-full rounded border border-line bg-surface px-3 py-2 font-sans text-body-md text-ink outline-none focus:border-accent"
+            />
+          </label>
+          <label className="flex w-[8rem] flex-col gap-1">
+            <span className="font-sans text-label-md text-ink-soft">Estado</span>
+            <select
+              value={estadoFiltro}
+              onChange={(e) => setEstadoFiltro(e.target.value as EstadoFiltro)}
+              className="w-full rounded border border-line bg-surface px-3 py-2 font-sans text-body-md text-ink outline-none focus:border-accent"
+            >
+              <option value="todas">Todas</option>
+              <option value="sin_facturar">Sin facturar</option>
+              <option value="facturado">Facturada</option>
+            </select>
+          </label>
+          <label className="flex w-[10rem] flex-col gap-1">
+            <span className="font-sans text-label-md text-ink-soft">Medio de pago</span>
+            <select
+              value={formaPagoFiltro}
+              onChange={(e) => setFormaPagoFiltro(e.target.value as 'todas' | FormaPagoVenta)}
+              className="w-full rounded border border-line bg-surface px-3 py-2 font-sans text-body-md text-ink outline-none focus:border-accent"
+            >
+              <option value="todas">Todos</option>
+              {Object.entries(FORMA_PAGO_LABEL).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
+
+        <button
+          type="button"
+          onClick={emitirFacturas}
+          disabled={seleccion.size === 0 || emitiendo}
+          className="min-h-[42px] shrink-0 whitespace-nowrap rounded bg-accent px-4 py-2 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-50"
+        >
+          {emitiendo ? 'Emitiendo...' : 'Emitir Factura C'}
+        </button>
       </div>
+      {seleccion.size > 0 && (
+        <p className="mt-2 text-right font-sans text-body-md text-ink-soft">
+          {seleccion.size} seleccionado{seleccion.size === 1 ? '' : 's'} · {formatCurrency(totalSeleccionado)}
+        </p>
+      )}
 
       {error && (
         <p className="mt-stack-md rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>
@@ -247,17 +250,32 @@ export function FacturacionTab() {
       )}
 
       <div className="mt-stack-md flex-1 overflow-auto rounded-xl shadow-sm">
-        <table className="w-full text-left font-sans text-table-row">
+        {/* table-fixed + colgroup: columnas de contenido corto con ancho fijo (en rem, medido sobre
+            el contenido más largo: fecha+hora, "$ 1.234.567,89", badge "Sin facturar") y Cliente /
+            Medio de pago se reparten el resto — la tabla mide siempre el 100% del contenedor, sin
+            scroll horizontal, en cualquier resolución o escala de Windows. Debajo de 1280px el
+            padding baja a px-2 y la hora pasa abajo de la fecha, para no aplastar Cliente. */}
+        <table className="w-full table-fixed text-left font-sans text-table-row max-xl:[&_td]:px-2 max-xl:[&_th]:px-2">
+          <colgroup>
+            <col className="w-8 xl:w-10" />
+            <col className="w-[4.5rem]" />
+            <col className="w-[6.75rem] xl:w-[10.5rem]" />
+            <col />
+            <col className="xl:w-[15%]" />
+            <col className="w-[7.75rem] xl:w-[8.5rem]" />
+            <col className="w-[7.75rem] xl:w-[8.5rem]" />
+            <col className="w-14" />
+          </colgroup>
           <thead>
             <tr className="bg-accent-light text-table-head uppercase text-accent-dark">
-              <th className="whitespace-nowrap px-3 py-2.5"></th>
-              <th className="whitespace-nowrap px-3 py-2.5">N°</th>
-              <th className="min-w-[120px] whitespace-nowrap px-3 py-2.5">Fecha</th>
-              <th className="whitespace-nowrap px-3 py-2.5">Cliente</th>
-              <th className="whitespace-nowrap px-3 py-2.5">Medio de pago</th>
-              <th className="whitespace-nowrap px-3 py-2.5">Total</th>
-              <th className="whitespace-nowrap px-3 py-2.5">Estado</th>
-              <th className="whitespace-nowrap px-3 py-2.5"></th>
+              <th className="px-3 py-2.5"></th>
+              <th className="px-3 py-2.5">N°</th>
+              <th className="px-3 py-2.5">Fecha</th>
+              <th className="px-3 py-2.5">Cliente</th>
+              <th className="px-3 py-2.5">Medio de pago</th>
+              <th className="px-3 py-2.5">Total</th>
+              <th className="px-3 py-2.5">Estado</th>
+              <th className="px-3 py-2.5"></th>
             </tr>
           </thead>
           <tbody>
@@ -288,12 +306,16 @@ export function FacturacionTab() {
                   )}
                 </td>
                 <td className="px-3 py-3 text-ink">{venta.numero}</td>
-                <td className="whitespace-nowrap px-3 py-3 text-ink-soft">{formatFechaHora(venta.created_at)}</td>
                 <td className="px-3 py-3 text-ink-soft">
+                  {/* Fecha y hora en una línea si entran; si la columna es angosta, la hora baja. */}
+                  <span className="whitespace-nowrap">{formatFechaCortaLocal(venta.created_at)}</span>{' '}
+                  <span className="whitespace-nowrap">{formatHora(venta.created_at)}</span>
+                </td>
+                <td className="px-3 py-3 text-ink-soft [overflow-wrap:anywhere]">
                   {venta.cliente ? venta.cliente.razon_social ?? venta.cliente.nombre_fantasia : 'Consumidor final'}
                 </td>
-                <td className="px-3 py-3 text-ink-soft">{FORMA_PAGO_LABEL[venta.forma_pago]}</td>
-                <td className="px-3 py-3 font-sans font-semibold text-ink">{formatCurrency(venta.total)}</td>
+                <td className="px-3 py-3 text-ink-soft [overflow-wrap:anywhere]">{FORMA_PAGO_LABEL[venta.forma_pago]}</td>
+                <td className="whitespace-nowrap px-3 py-3 font-sans font-semibold text-ink">{formatCurrency(venta.total)}</td>
                 <td className="px-3 py-3">
                   <EstadoBadge variant={venta.estado === 'facturado' ? 'green' : 'amber'}>
                     {ESTADO_LABEL[venta.estado === 'facturado' ? 'facturado' : 'sin_facturar']}
