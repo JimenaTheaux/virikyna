@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Manual de usuario — Virikyna Local</title>
+<meta name="description" content="Manual de usuario de Virikyna Local (la Caja): Ventas, Facturación, Devolución/Cambio, Inventario, Proveedores, Cuentas corrientes, Cierre de Caja y Notas." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --accent:#3FB9B9;
+    --accent-dark:#237878;
+    --accent-darker:#163F3F;
+    --accent-light:#E3F5F5;
+    --verde-agua:#86CAC2;
+    --amarillo:#F6F19D;
+    --rosa:#ECABCE;
+    --celeste:#73CAE9;
+    --violeta:#B192C4;
+    --ink:#24242B;
+    --ink-soft:#6B6570;
+    --bg:#F7F6FA;
+    --surface:#FFFFFF;
+    --line:#E6E2EA;
+    --error:#C0392B;
+    --error-light:#FBEAE8;
+    --success:#4A6F6B;
+    --font-display:'Quicksand', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-body:'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --sidebar-w: 300px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#1B1B20; --surface:#242429; --line:#38383F; --ink:#EDEDF2; --ink-soft:#ABA8B4;
+      --accent-light:#173636; --error-light:#3A2320;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#1B1B20; --surface:#242429; --line:#38383F; --ink:#EDEDF2; --ink-soft:#ABA8B4;
+    --accent-light:#173636; --error-light:#3A2320;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-body); font-size:16px; line-height:1.55;
+  }
+  h1,h2,h3,h4{font-family:var(--font-display); color:var(--accent-darker); margin:0 0 8px;}
+  a{color:var(--accent-dark);}
+  .layout{display:flex; min-height:100vh; align-items:flex-start;}
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    width:var(--sidebar-w); flex-shrink:0; height:100vh; position:sticky; top:0;
+    background:var(--surface); border-right:1px solid var(--line);
+    display:flex; flex-direction:column; overflow-y:auto;
+  }
+  .sidebar-head{padding:22px 20px 14px; border-bottom:1px solid var(--line);}
+  .sidebar-head .brand{font-family:var(--font-display); font-weight:700; font-size:20px; color:var(--accent-darker); margin:0;}
+  .sidebar-head .sub{font-size:13px; color:var(--ink-soft); margin-top:2px;}
+  .search-wrap{padding:14px 16px; border-bottom:1px solid var(--line);}
+  #buscador{
+    width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:10px;
+    font-family:var(--font-body); font-size:14px; background:var(--bg); color:var(--ink); outline:none;
+  }
+  #buscador:focus{border-color:var(--accent);}
+  #buscador-info{font-size:12px; color:var(--ink-soft); margin-top:6px; min-height:14px;}
+  nav.toc{padding:10px 10px 24px; flex:1;}
+  nav.toc .grupo-titulo{
+    font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--ink-soft); padding:14px 10px 6px;
+  }
+  nav.toc a{
+    display:flex; align-items:center; gap:8px; text-decoration:none; color:var(--ink-soft);
+    font-size:14px; font-weight:500; padding:8px 10px; border-radius:8px; margin:1px 0;
+  }
+  nav.toc a .n{
+    flex-shrink:0; width:20px; height:20px; border-radius:50%; background:var(--bg); color:var(--ink-soft);
+    font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;
+  }
+  nav.toc a:hover{background:var(--accent-light); color:var(--accent-darker);}
+  nav.toc a:hover .n{background:var(--accent); color:#fff;}
+  nav.toc a.activo{background:var(--accent-light); color:var(--accent-darker); font-weight:700;}
+  nav.toc a.activo .n{background:var(--accent); color:#fff;}
+  nav.toc li.oculto-nav{display:none;}
+  nav.toc ul{list-style:none; margin:0; padding:0;}
+  nav.toc a.confirmar{color:var(--error);}
+  nav.toc a.confirmar .n{background:var(--error-light); color:var(--error);}
+
+  /* ---------- Main ---------- */
+  main{flex:1; min-width:0; padding:40px 48px 100px; max-width:920px; margin:0 auto;}
+  .portada{margin-bottom:40px;}
+  .portada h1{font-size:34px;}
+  .portada p.lead{font-size:17px; color:var(--ink-soft); max-width:640px;}
+  .meta-pill{
+    display:inline-flex; align-items:center; gap:6px; background:var(--accent-light); color:var(--accent-darker);
+    font-size:13px; font-weight:700; padding:5px 12px; border-radius:999px; margin-top:10px;
+  }
+  .legend{display:flex; flex-wrap:wrap; gap:10px; margin-top:20px;}
+  .legend .item{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink-soft);}
+
+  .role-pill{
+    display:inline-flex; align-items:center; font-size:12px; font-weight:700; padding:3px 10px;
+    border-radius:999px; white-space:nowrap; line-height:1.6;
+  }
+  .role-both{background:var(--accent-light); color:var(--accent-darker);}
+  .role-admin{background:var(--error-light); color:var(--error);}
+
+  section.screen{
+    background:var(--surface); border:1px solid var(--line); border-radius:16px;
+    padding:32px 36px; margin-bottom:32px; scroll-margin-top:24px;
+  }
+  section.screen.oculto{display:none;}
+  section.screen .kicker{
+    font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--accent-dark);
+  }
+  section.screen h2{font-size:26px; margin-top:2px;}
+  section.screen > p.intro{font-size:17px; color:var(--ink); margin-top:6px; margin-bottom:22px;}
+  section.screen h3{
+    font-size:15px; text-transform:uppercase; letter-spacing:.03em; color:var(--accent-dark);
+    margin-top:30px; margin-bottom:12px; padding-bottom:8px; border-bottom:2px solid var(--line);
+  }
+  section.screen h3:first-of-type{margin-top:6px;}
+
+  table.elementos{width:100%; border-collapse:collapse; font-size:15px;}
+  table.elementos th{
+    text-align:left; font-family:var(--font-body); font-size:12px; text-transform:uppercase; letter-spacing:.03em;
+    color:var(--ink-soft); padding:6px 10px; border-bottom:1px solid var(--line);
+  }
+  table.elementos td{padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top;}
+  table.elementos tr:last-child td{border-bottom:none;}
+  table.elementos td.campo{font-weight:700; color:var(--ink); white-space:nowrap;}
+
+  ol.pasos{margin:0; padding-left:0; list-style:none; counter-reset:paso;}
+  ol.pasos li{
+    counter-increment:paso; position:relative; padding:6px 0 6px 40px; margin-bottom:4px; font-size:15px;
+  }
+  ol.pasos li::before{
+    content:counter(paso); position:absolute; left:0; top:6px; width:26px; height:26px; border-radius:50%;
+    background:var(--accent); color:#fff; font-family:var(--font-display); font-weight:700; font-size:13px;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  ul.reglas{margin:0; padding-left:0; list-style:none;}
+  ul.reglas li{
+    position:relative; padding:5px 0 5px 20px; font-size:15px;
+  }
+  ul.reglas li::before{content:"•"; position:absolute; left:2px; color:var(--accent-dark); font-weight:700;}
+
+  .box{border-radius:12px; padding:16px 18px; margin:14px 0; font-size:14.5px;}
+  .box-rule{background:var(--accent-light); border-left:4px solid var(--accent);}
+  .box-warn{background:var(--error-light); border-left:4px solid var(--error);}
+  .box-warn strong{color:var(--error);}
+  .box-note{background:var(--bg); border-left:4px solid var(--ink-soft);}
+  .box p:first-child{margin-top:0;}
+  .box p:last-child{margin-bottom:0;}
+
+  kbd{
+    display:inline-block; min-width:22px; text-align:center; font-family:var(--font-body); font-weight:700;
+    font-size:12.5px; color:var(--ink); background:var(--surface); border:1px solid var(--line);
+    border-bottom-width:2px; border-radius:6px; padding:3px 7px;
+  }
+  table.atajos{width:100%; border-collapse:collapse; font-size:14.5px;}
+  table.atajos td{padding:8px 10px; border-bottom:1px solid var(--line);}
+  table.atajos tr:last-child td{border-bottom:none;}
+  table.atajos td.tecla{width:90px;}
+
+  /* ---------- Diagramas de flujo ---------- */
+  .flow{display:flex; flex-wrap:wrap; align-items:stretch; gap:0; margin:18px 0 22px;}
+  .flow .step{
+    background:var(--bg); border:1.5px solid var(--line); border-radius:12px; padding:14px 16px;
+    min-width:150px; max-width:190px; flex:1 1 150px;
+  }
+  .flow .step .num{
+    display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%;
+    background:var(--accent-darker); color:#fff; font-family:var(--font-display); font-weight:700; font-size:12px;
+    margin-bottom:6px;
+  }
+  .flow .step .t{font-weight:700; font-size:14px; color:var(--ink); display:block;}
+  .flow .step .d{font-size:12.5px; color:var(--ink-soft); display:block; margin-top:3px;}
+  .flow .arrow{
+    flex:0 0 auto; display:flex; align-items:center; justify-content:center; color:var(--accent-dark);
+    font-size:20px; padding:0 6px; align-self:center;
+  }
+
+  /* ---------- Índice de pantallas cards en portada ---------- */
+  .grid-cards{display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:14px; margin-top:24px;}
+  .grid-cards a{
+    display:block; text-decoration:none; background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    padding:16px 18px; color:var(--ink);
+  }
+  .grid-cards a:hover{border-color:var(--accent);}
+  .grid-cards .t{font-family:var(--font-display); font-weight:700; color:var(--accent-darker); font-size:16px;}
+  .grid-cards .d{font-size:13px; color:var(--ink-soft); margin-top:4px;}
+
+  .confirmar-list{list-style:none; margin:0; padding:0;}
+  .confirmar-list li{
+    background:var(--error-light); border-left:4px solid var(--error); border-radius:10px;
+    padding:16px 18px; margin-bottom:14px;
+  }
+  .confirmar-list .num{
+    display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%;
+    background:var(--error); color:#fff; font-weight:700; font-size:12px; margin-right:8px; font-family:var(--font-display);
+  }
+  .confirmar-list p{margin:8px 0 0 30px; font-size:14.5px; color:var(--ink);}
+  .confirmar-list p.pregunta{font-style:italic; color:var(--ink-soft);}
+
+  footer.pie{
+    text-align:center; padding:30px 0 10px; color:var(--ink-soft); font-size:13px;
+  }
+
+  @media (max-width: 860px){
+    .layout{flex-direction:column;}
+    .sidebar{position:relative; width:100%; height:auto; max-height:none; border-right:none; border-bottom:1px solid var(--line);}
+    main{padding:24px 18px 80px; max-width:100%;}
+    section.screen{padding:20px;}
+  }
+
+  /* ---------- Impresión ---------- */
+  @media print{
+    .sidebar{display:none;}
+    main{max-width:100%; padding:0; margin:0;}
+    body{background:#fff;}
+    section.screen{
+      border:none; box-shadow:none; page-break-before:always; border-radius:0; padding:0 0 24px;
+    }
+    section.screen:first-of-type{page-break-before:auto;}
+    .portada{page-break-before:auto;}
+    a{color:var(--ink); text-decoration:none;}
+    .flow .arrow{display:none;}
+    .flow{flex-direction:column;}
+    .flow .step{max-width:100%;}
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <p class="brand">Virikyna Local</p>
+      <p class="sub">Manual de usuario</p>
+    </div>
+    <div class="search-wrap">
+      <input type="search" id="buscador" placeholder="Buscar en el manual…" autocomplete="off" />
+      <p id="buscador-info"></p>
+    </div>
+    <nav class="toc">
+      <ul>
+        <li><a href="#inicio" data-nav><span class="n">·</span> Cómo usar este manual</a></li>
+      </ul>
+      <p class="grupo-titulo">Operación diaria</p>
+      <ul>
+        <li><a href="#ventas" data-nav><span class="n">1</span> Ventas</a></li>
+        <li><a href="#facturacion" data-nav><span class="n">2</span> Facturación</a></li>
+        <li><a href="#devolucion" data-nav><span class="n">3</span> Devolución / Cambio</a></li>
+      </ul>
+      <p class="grupo-titulo">Gestión</p>
+      <ul>
+        <li><a href="#inventario" data-nav><span class="n">4</span> Inventario</a></li>
+        <li><a href="#proveedores" data-nav><span class="n">5</span> Proveedores</a></li>
+        <li><a href="#cuentas-corrientes" data-nav><span class="n">6</span> Cuentas corrientes</a></li>
+        <li><a href="#cierre-caja" data-nav><span class="n">7</span> Cierre de Caja</a></li>
+        <li><a href="#notas" data-nav><span class="n">8</span> Notas</a></li>
+      </ul>
+      <p class="grupo-titulo">Para Jimena</p>
+      <ul>
+        <li><a href="#confirmar" data-nav class="confirmar"><span class="n">!</span> Puntos a confirmar</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+
+    <section class="portada" id="inicio">
+      <h1>Manual de usuario — Virikyna Local</h1>
+      <p class="lead">
+        Esta es la guía de uso de <strong>Virikyna Local</strong> ("la Caja"), la app de escritorio
+        con la que se trabaja en el mostrador: ventas, facturación, inventario, proveedores, cuentas
+        corrientes y cierre de caja. 
+      </p>
+
+      <div class="legend">
+        <div class="item"><span class="role-pill role-both">Cajero y Admin</span> pueden hacer esta acción</div>
+        <div class="item"><span class="role-pill role-admin">Solo Admin</span> acción restringida al administrador</div>
+        <div class="item"><span style="color:var(--error); font-weight:700;">⬤</span> acción irreversible o que requiere atención</div>
+      </div>
+
+      <h3 style="margin-top:28px; border:none; padding-bottom:0;">Cómo usar este manual</h3>
+      <ul class="reglas">
+        <li>Usá el buscador de la izquierda para filtrar directamente las secciones que mencionan lo que estás buscando (por ejemplo "cheque", "descuento" o "plazo").</li>
+        <li>Cada pantalla tiene la misma estructura: qué es, sus elementos, el paso a paso de lo que se hace ahí, las reglas importantes a tener en cuenta y — si tiene — sus atajos de teclado.</li>
+        <li>Podés imprimir este manual o guardarlo como PDF desde el navegador (Ctrl+P / Cmd+P): cada pantalla arranca en una hoja nueva.</li>
+        <li>Este archivo funciona sin conexión a internet, salvo por la tipografía (si no carga, se usa una fuente del sistema equivalente).</li>
+      </ul>
+
+      <h3 style="border:none; padding-bottom:0;">Pantallas de este manual</h3>
+      <div class="grid-cards">
+        <a href="#ventas"><span class="t">1. Ventas</span><span class="d">Cobrar, tickets en espera, descuentos y pagos combinados</span></a>
+        <a href="#facturacion"><span class="t">2. Facturación</span><span class="d">Ventas del día, emitir Factura C</span></a>
+        <a href="#devolucion"><span class="t">3. Devolución / Cambio</span><span class="d">Devolver o cambiar productos de una venta ya hecha</span></a>
+        <a href="#inventario"><span class="t">4. Inventario</span><span class="d">Productos, precios y stock</span></a>
+        <a href="#proveedores"><span class="t">5. Proveedores</span><span class="d">Facturas de compra y pagos</span></a>
+        <a href="#cuentas-corrientes"><span class="t">6. Cuentas corrientes</span><span class="d">Clientes y sus saldos</span></a>
+        <a href="#cierre-caja"><span class="t">7. Cierre de Caja</span><span class="d">Apertura, Cierre X, Cierre Z, retiros</span></a>
+        <a href="#notas"><span class="t">8. Notas</span><span class="d">Mensajes internos entre el equipo</span></a>
+      </div>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- 1. VENTAS -->
+    <!-- ======================================================= -->
+    <section class="screen" id="ventas">
+      <p class="kicker">Pantalla 1 · Operación diaria</p>
+      <h2>Ventas</h2>
+      <p class="intro">Es la pantalla de cobro en el mostrador: buscar productos, armar el carrito, elegir cómo paga el cliente y cobrar. Es la primera pantalla que ve un cajero al iniciar sesión.</p>
+
+      <h3>Elementos de la pantalla</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">Barra de tickets (arriba)</td><td>Muestra cada venta en curso como una "pestaña" independiente. El botón "+ Nuevo ticket" abre otra venta en paralelo sin perder la actual. Máximo 5 tickets abiertos al mismo tiempo.</td></tr>
+        <tr><td class="campo">Buscador de productos</td><td>Campo grande arriba a la izquierda. Acepta tipeo (nombre, marca o código) y también lectura directa con el lector de código de barras.</td></tr>
+        <tr><td class="campo">Carrito</td><td>Lista de productos agregados al ticket activo, con código, nombre, cantidad (editable con + / − o tipeando) e importe. El botón "✕" saca la fila.</td></tr>
+        <tr><td class="campo">Selector de cliente</td><td>Botón arriba a la derecha ("Consumidor final" por defecto). Si se elige un cliente con cuenta corriente activa, se habilita esa forma de pago para este ticket.</td></tr>
+        <tr><td class="campo">Panel de la derecha</td><td>Muestra el total a pagar, la forma de pago, una nota opcional para el ticket, los botones de Descuento/Recargo/Cancelar y el botón "COBRAR".</td></tr>
+        <tr><td class="campo">Forma de pago</td><td>Efectivo, Transferencia, QR, Débito, Crédito, Cuenta corriente (solo si hay cliente elegido) o Pago combinado (hasta 2 medios).</td></tr>
+        <tr><td class="campo">Nota (opcional)</td><td>Texto libre asociado a esa venta puntual (por ejemplo una aclaración interna). Queda guardado con la venta.</td></tr>
+      </table>
+
+      <h3>Flujo paso a paso — cobrar una venta</h3>
+      <div class="flow">
+        <div class="step"><span class="num">1</span><span class="t">Buscar producto</span><span class="d">Tipear o escanear código</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">2</span><span class="t">Se arma el carrito</span><span class="d">Ajustar cantidades</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">3</span><span class="t">Elegir forma de pago</span><span class="d">Con teclado o click</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">4</span><span class="t">COBRAR (Enter)</span><span class="d">Confirmar total</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">5</span><span class="t">Confirmar precio final</span><span class="d">Editable, con Enter</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">6</span><span class="t">Comprobante</span><span class="d">Imprimir / enviar</span></div>
+      </div>
+      <ol class="pasos">
+        <li>Buscá el producto por nombre, marca o código (o escaneálo con el lector) y elegilo de la lista de resultados — se agrega al carrito con cantidad 1. Si ya estaba en el carrito, le suma 1 en vez de duplicar la fila.</li>
+        <li>Ajustá cantidades con los botones + / − o tipeando el número directamente en el carrito.</li>
+        <li>Si corresponde, elegí un cliente (arriba a la derecha) para poder vender a cuenta corriente, cargá una nota, y aplicá Descuento y/o Recargo si hace falta.</li>
+        <li>Elegí la forma de pago (con el mouse o con las teclas E / T / Q / Z / C) o armá un Pago combinado.</li>
+        <li>Tocá "COBRAR" (o Enter). Se abre la confirmación con el precio final a cobrar precargado — podés editarlo si el cajero redondea el monto a mano.</li>
+        <li>Confirmá (Enter o el botón). Se guarda la venta, el ticket se cierra solo y se abre el comprobante para imprimir, descargar o enviar por Gmail/WhatsApp.</li>
+      </ol>
+
+      <h3>Tickets en espera</h3>
+      <ul class="reglas">
+        <li>Cada ticket es una venta completamente independiente: carrito, cliente, descuento/recargo y nota propios.</li>
+        <li>Hasta <strong>5 tickets</strong> abiertos a la vez — al llegar al límite, "+ Nuevo ticket" se deshabilita hasta cerrar o eliminar alguno.</li>
+        <li>El menú "⋮" de cada ticket permite <strong>Cerrar/Cobrar</strong> (salta directo a confirmar esa venta) o <strong>Eliminar</strong> (pide confirmación, porque se pierde todo lo cargado).</li>
+        <li>Los tickets abiertos se guardan automáticamente en la computadora (no en la nube): si se cierra la app o hay un corte de luz, al volver a abrir siguen ahí. Esto es por terminal — no se ven desde otra PC.</li>
+      </ul>
+
+      <h3>Cuestiones lógicas importantes</h3>
+      <div class="box box-rule">
+        <p><strong>Descuento y Recargo</strong> son dos porcentajes independientes que se aplican sobre el mismo subtotal y se pueden combinar entre sí (el orden en que se cargan no cambia el resultado final). Descuento admite de 0% a 100%; Recargo, de 0% a 999%.</p>
+      </div>
+      <div class="box box-rule">
+        <p><strong>Pago combinado:</strong> reparte el total entre exactamente <strong>2 medios de pago distintos</strong> (Efectivo, Transferencia, QR, Débito o Crédito — la cuenta corriente nunca combina). Los dos montos tienen que sumar exactamente el total; si se completa uno, el otro se autocompleta con lo que falta.</p>
+      </div>
+      <div class="box box-rule">
+        <p><strong>Precio final a cobrar:</strong> al confirmar la venta se puede editar el monto final por si el cajero redondea a mano (por ejemplo, cobrar $4.500 en vez de $4.487). Este valor — no el precio de lista — es el que queda registrado como lo realmente cobrado, y es el que se usa después en los cierres de caja. Si la venta era con pago combinado, el sistema reparte esa diferencia proporcionalmente entre los medios elegidos.</p>
+      </div>
+      <div class="box box-note">
+        <p>No hay un límite de crédito configurado por cliente: se puede seguir vendiendo a cuenta corriente sin tope, sea cual sea el saldo que ya tenga, y el sistema no avisa si el saldo es alto.</p>
+      </div>
+      <div class="box box-note">
+        <p>Ventas, Facturación, Inventario, Proveedores, Cuentas corrientes, Cierre de Caja y Notas están disponibles igual para <span class="role-pill role-both">Cajero y Admin</span> — no hay restricciones de rol dentro de la pantalla de Ventas en sí.</p>
+      </div>
+
+      <h3>Atajos de teclado</h3>
+      <table class="atajos">
+        <tr><td class="tecla"><kbd>E</kbd></td><td>Forma de pago: Efectivo</td></tr>
+        <tr><td class="tecla"><kbd>T</kbd></td><td>Forma de pago: Transferencia</td></tr>
+        <tr><td class="tecla"><kbd>Q</kbd></td><td>Forma de pago: QR</td></tr>
+        <tr><td class="tecla"><kbd>Z</kbd></td><td>Forma de pago: Tarjeta débito</td></tr>
+        <tr><td class="tecla"><kbd>C</kbd></td><td>Forma de pago: Tarjeta crédito</td></tr>
+        <tr><td class="tecla"><kbd>D</kbd></td><td>Abre el modal de Descuento</td></tr>
+        <tr><td class="tecla"><kbd>R</kbd></td><td>Abre el modal de Recargo</td></tr>
+        <tr><td class="tecla"><kbd>Esc</kbd></td><td>Si se está confirmando una venta: cancela esa confirmación. Si no: vacía el ticket activo (carrito, cliente, descuento, todo).</td></tr>
+        <tr><td class="tecla"><kbd>Enter</kbd></td><td>Inicia el cobro del ticket activo, o confirma la venta si ya se está en la pantalla de confirmación. Con texto en el buscador, Enter nunca cobra: agrega el producto encontrado (o no hace nada si todavía no apareció) — así el Enter que manda el lector al escanear no abre el cobro por error.</td></tr>
+      </table>
+      <div class="box box-note">
+        <p>Estos atajos de una sola letra se desactivan mientras se está escribiendo en un campo de texto (salvo el buscador de productos y el campo de precio final), y mientras hay cualquier modal abierto — así no se disparan sin querer al tipear una nota, por ejemplo.</p>
+      </div>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- 2. FACTURACIÓN -->
+    <!-- ======================================================= -->
+    <section class="screen" id="facturacion">
+      <p class="kicker">Pantalla 2 · Operación diaria</p>
+      <h2>Facturación</h2>
+      <p class="intro">Acá se decide qué comprobantes se facturan formalmente (Factura C) y cuándo. Cobrar una venta y facturarla son dos pasos separados: toda venta queda primero como un comprobante interno ("Comprobante X"), y desde acá se elige cuáles emitir como Factura C.</p>
+      <p>Tiene tres pestañas: <strong>Ventas del día</strong>, <strong>Facturación</strong> y <strong>Devoluciones</strong>.</p>
+
+      <h3>Elementos de la pantalla — pestaña "Ventas del día"</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">Listado</td><td>Todas las ventas registradas hoy, con fecha, hora, cliente, medio de pago, monto y estado (Sin facturar / Facturada).</td></tr>
+        <tr><td class="campo">Menú de acciones (fila)</td><td>Ver detalle, Enviar comprobante, y — si aún no tiene Factura C — "Emitir Factura C" para esa venta puntual.</td></tr>
+      </table>
+
+      <h3>Elementos de la pantalla — pestaña "Facturación"</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">Filtros (Desde/Hasta, N° de ticket o cliente, Estado, Medio de pago)</td><td>Acotan el listado a un período o búsqueda concreta.</td></tr>
+        <tr><td class="campo">Casillero por fila</td><td>Solo aparece en ventas "Sin facturar" — permite tildar varias para emitirlas juntas.</td></tr>
+        <tr><td class="campo">Botón "Emitir Factura C"</td><td>Emite Factura C para todas las ventas tildadas, una por una.</td></tr>
+        <tr><td class="campo">Menú de acciones (fila)</td><td>Ver comprobante/factura, y "Devolución / Cambio" para esa venta.</td></tr>
+      </table>
+
+      <h3>Elementos de la pantalla — pestaña "Devoluciones"</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">Filtro Desde/Hasta</td><td>Rango de fechas del listado (por defecto, la última semana).</td></tr>
+        <tr><td class="campo">Listado</td><td>Cada devolución/cambio registrado, en una fila compacta: número, fecha, venta original, motivo, diferencia de dinero (monto y a favor de quién: "Paga el cliente" / "A favor del cliente" / "Sin diferencia") y estado (Activa / Anulada).</td></tr>
+        <tr><td class="campo">"Ver detalle" (ícono de ojo, o dentro del menú ⋮)</td><td>Abre el detalle completo: ítems devueltos (y si reingresaron al stock o quedaron como defectuosos), ítems nuevos si fue un cambio, motivo, observaciones, quién la registró y con qué medio se cobró o devolvió la diferencia.</td></tr>
+        <tr><td class="campo">"Anular" (menú ⋮)</td><td><span class="role-pill role-admin">Solo Admin</span> — deshace una devolución cargada por error.</td></tr>
+      </table>
+
+      <h3>Flujo paso a paso — emitir Factura C</h3>
+      <ol class="pasos">
+        <li>Andá a la pestaña "Facturación" (o "Ventas del día" para una sola venta puntual).</li>
+        <li>Ubicá la venta — filtrando por fecha, número de ticket o nombre de cliente si hace falta.</li>
+        <li>Tildá una o varias ventas con estado "Sin facturar".</li>
+        <li>Tocá "Emitir Factura C". El sistema pide un CAE a ARCA para cada venta tildada, una por una — nunca se agrupan varias ventas en una sola factura.</li>
+        <li>Al terminar, se muestra cuántas se emitieron bien y el detalle de las que fallaron (si las hubo), para reintentarlas después.</li>
+      </ol>
+
+      <h3>Cuestiones lógicas importantes</h3>
+      <div class="box box-warn">
+        <p><strong>Hoy, "Emitir Factura C" se conecta a ARCA en modo de pruebas (homologación), no en modo real.</strong> El CAE que devuelve no es un comprobante fiscal válido todavía — es el mismo circuito técnico que se usará en producción, pero conectado al ambiente de test de ARCA. Ver el punto correspondiente en "Puntos a confirmar con Jimena" más abajo.</p>
+      </div>
+      <div class="box box-rule">
+        <p>Una Factura C siempre corresponde a <strong>una sola venta</strong> — nunca se agrupan varias ventas en un mismo comprobante, aunque se tilden juntas para emitir.</p>
+      </div>
+      <div class="box box-rule">
+        <p>Si la venta tiene un cliente con CUIT cargado, la factura sale a ese CUIT; si no, sale como Consumidor Final. La "Condición frente al IVA" del cliente (cargada en Cuentas corrientes) también viaja a ARCA en cada factura.</p>
+      </div>
+      <div class="box box-rule">
+        <p>Una vez que una venta tiene Factura C emitida, no se puede volver a facturar ni desemitir desde acá. Si después se hace una devolución sobre esa venta, la devolución queda solo como registro interno — no genera una nota de crédito fiscal.</p>
+      </div>
+      <div class="box box-note">
+        <p>"Ver comprobante" / "Enviar comprobante" abren la misma ventana en Ventas del día, Facturación y en Ventas: se puede descargar como PDF o imagen, o enviarse por Gmail o WhatsApp. En ambos casos el archivo se descarga solo y hay que adjuntarlo a mano — Gmail y WhatsApp Web no dejan adjuntar automáticamente desde un link.</p>
+      </div>
+      <div class="box box-note">
+        <p>Anular una devolución cargada por error es <span class="role-pill role-admin">Solo Admin</span>, pide un motivo obligatorio, y revierte el stock que esa devolución había movido — la venta original nunca se toca.</p>
+      </div>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- 3. DEVOLUCIÓN / CAMBIO -->
+    <!-- ======================================================= -->
+    <section class="screen" id="devolucion">
+      <p class="kicker">Pantalla 3 · Operación diaria</p>
+      <h2>Devolución / Cambio de productos</h2>
+      <p class="intro">Permite devolver o cambiar productos de una venta que ya se cobró. Se abre desde Facturación (menú de acciones de la venta → "Devolución / Cambio"). No modifica la venta original: crea un documento nuevo vinculado a ella.</p>
+
+      <h3>Elementos de la pantalla</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">Tabla "Productos a devolver"</td><td>Cada producto de la venta original, con cuánto se vendió, cuánto ya se devolvió antes, cuánto queda disponible, el precio que el cliente realmente pagó por unidad, y un campo para tipear cuánto se devuelve ahora.</td></tr>
+        <tr><td class="campo">Motivo</td><td>Regalo, Defectuoso, Arrepentimiento u Otro (obligatorio elegir uno; con "Otro" hay que escribir el detalle).</td></tr>
+        <tr><td class="campo">"Cambio — productos nuevos"</td><td>Buscador opcional para agregar productos nuevos que el cliente se lleva a cambio, al precio de lista actual (no al precio de la venta original).</td></tr>
+        <tr><td class="campo">Diferencia</td><td>Total nuevo menos total devuelto. Si es positiva, el cliente paga la diferencia; si es negativa, se le devuelve dinero.</td></tr>
+        <tr><td class="campo">Forma de pago de la diferencia</td><td>Solo aparece si hay diferencia distinta de cero. Mismas formas de pago que en Ventas (incluido pago combinado), salvo cuenta corriente.</td></tr>
+        <tr><td class="campo">Observaciones</td><td>Texto libre opcional, por ejemplo para anotar un saldo a favor o un voucher interno — queda solo como nota, no genera cuenta corriente.</td></tr>
+      </table>
+
+      <h3>Flujo paso a paso</h3>
+      <div class="flow">
+        <div class="step"><span class="num">1</span><span class="t">Ubicar la venta</span><span class="d">En Facturación</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">2</span><span class="t">Abrir Devolución/Cambio</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">3</span><span class="t">Cargar cantidades y motivo</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">4</span><span class="t">Agregar cambio (opcional)</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">5</span><span class="t">Saldar diferencia</span><span class="d">Si corresponde</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">6</span><span class="t">Confirmar</span></div>
+      </div>
+      <ol class="pasos">
+        <li>En Facturación, ubicá la venta original (por fecha, número de ticket o nombre de cliente).</li>
+        <li>Abrí "Devolución / Cambio" desde el menú de esa fila.</li>
+        <li>Cargá cuánto se devuelve de cada producto (no puede superar lo disponible) y elegí el motivo.</li>
+        <li>Si el cliente se lleva algo a cambio, buscalo y agregalo con su cantidad.</li>
+        <li>Si queda una diferencia de dinero, elegí cómo se cobra o se devuelve.</li>
+        <li>Confirmá la devolución. Queda registrada con un número propio, vinculada al ticket original.</li>
+      </ol>
+
+      <h3>Cuestiones lógicas importantes</h3>
+      <div class="box box-warn">
+        <p><strong>Plazo máximo: 15 días corridos</strong> desde la fecha de la venta (se cuenta por día calendario, así que una venta de hace exactamente 15 días todavía entra). Pasado ese plazo, el botón de confirmar queda deshabilitado y se muestra el aviso de plazo vencido.</p>
+      </div>
+      <div class="box box-rule">
+        <p>Se pueden hacer <strong>varias devoluciones parciales</strong> sobre la misma venta, mientras quede cantidad disponible de cada producto y siga dentro del plazo.</p>
+      </div>
+      <div class="box box-rule">
+        <p>El producto marcado como <strong>"Defectuoso"</strong> no vuelve al stock: queda apartado para revisión (hay una tarjeta de "Productos defectuosos" en el Dashboard para verlos, fuera del alcance de este manual).</p>
+      </div>
+      <div class="box box-rule">
+        <p>El "Cambio" solo permite elegir productos actualmente <strong>activos</strong> en el catálogo — si un producto fue dado de baja después de la venta original, no aparece para elegirlo como cambio (pero sí se lo puede seguir devolviendo, porque esa parte usa los datos de la venta ya registrada, no el buscador de catálogo).</p>
+      </div>
+      <div class="box box-note">
+        <p>Si la venta original ya tenía Factura C, la devolución <strong>no genera nota de crédito</strong>: queda como un registro interno para llevar el control de stock y de caja, nada más. El modal avisa esto explícitamente en ese caso.</p>
+      </div>
+      <div class="box box-note">
+        <p>No hay cuenta corriente para saldar la diferencia de una devolución — si hay que cobrar o devolver plata, siempre es con un medio de pago real (efectivo, transferencia, QR, tarjeta, o combinado entre esos).</p>
+      </div>
+      <div class="box box-note">
+        <p>Anular una devolución (por si se cargó mal) es <span class="role-pill role-admin">Solo Admin</span>, se hace desde la pestaña "Devoluciones" de Facturación, pide un motivo, y revierte el stock que esa devolución había movido.</p>
+      </div>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- 4. INVENTARIO -->
+    <!-- ======================================================= -->
+    <section class="screen" id="inventario">
+      <p class="kicker">Pantalla 4 · Gestión</p>
+      <h2>Inventario</h2>
+      <p class="intro">Catálogo completo de productos: precios, márgenes y stock por ubicación (Local y Depósito).</p>
+
+      <h3>Elementos de la pantalla</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">Buscador</td><td>Filtra por nombre, marca, código o proveedor. Acepta lector físico de código de barras (el campo queda enfocado) o el botón de escaneo por cámara.</td></tr>
+        <tr><td class="campo">"Actualizar precios"</td><td>Abre la actualización masiva de precios, ya sea por proveedor o por una selección puntual de productos tildados.</td></tr>
+        <tr><td class="campo">"+ Nuevo producto"</td><td>Abre la ficha de alta de producto.</td></tr>
+        <tr><td class="campo">Columna "Stock (Local/Dep.)"</td><td>Unidades disponibles en el local y en el depósito, por separado.</td></tr>
+        <tr><td class="campo">Columna "Estado"</td><td>Activo (aparece en ventas y búsquedas) o Inactivo (se conserva el historial pero no se puede vender ni elegir en un cambio).</td></tr>
+      </table>
+
+      <h3>Elementos de la ficha de producto</h3>
+      <table class="elementos">
+        <tr><th>Campo</th><th>Qué significa</th></tr>
+        <tr><td class="campo">Código de barras</td><td>Se puede escanear o tipear. Si ya existe un producto con ese código, avisa antes de guardar y ofrece ir directo a editar el existente. Si se deja vacío, se genera un código interno automático.</td></tr>
+        <tr><td class="campo">Proveedor</td><td>Al elegirlo en un producto nuevo, los márgenes 1 y 2 se autocompletan con los márgenes por defecto de ese proveedor — se pueden pisar a mano después.</td></tr>
+        <tr><td class="campo">Costo</td><td>Precio de compra, sin IVA.</td></tr>
+        <tr><td class="campo">Margen 1 y Margen 2</td><td>Dos porcentajes de ganancia que se aplican en cadena sobre el costo. <span class="role-pill role-admin">Solo Admin</span> puede editarlos.</td></tr>
+        <tr><td class="campo">Precio de venta</td><td>Se calcula solo, en vivo: <em>Costo × (1 + Margen 1) × (1 + Margen 2) × (1 + IVA 21%)</em>.</td></tr>
+        <tr><td class="campo">Stock mínimo</td><td>Umbral para la alerta de stock bajo (se ve en el Dashboard, fuera de esta pantalla).</td></tr>
+        <tr><td class="campo">Stock por ubicación</td><td>Muestra Local y Depósito por separado, con un botón "Ajustar" en cada uno.</td></tr>
+        <tr><td class="campo">Pestaña "Historial de precio"</td><td><span class="role-pill role-admin">Solo Admin</span> — cada cambio de costo o margen, con fecha, usuario y el precio de venta antes/después.</td></tr>
+      </table>
+
+      <h3>Flujo paso a paso — dar de alta un producto</h3>
+      <ol class="pasos">
+        <li>Tocá "+ Nuevo producto".</li>
+        <li>Escaneá o tipeá el código de barras (o dejalo vacío para que se genere uno interno).</li>
+        <li>Completá nombre, marca, descripción y proveedor.</li>
+        <li>Cargá el costo. Si el producto sigue al proveedor, los márgenes ya vienen precargados; si hace falta, un Admin los ajusta a mano.</li>
+        <li>Revisá el precio de venta calculado en la vista previa.</li>
+        <li>Guardá. El stock arranca en 0 hasta que se cargue por una factura de compra o un ajuste manual.</li>
+      </ol>
+
+      <h3>Flujo paso a paso — actualización masiva de precios</h3>
+      <ol class="pasos">
+        <li>Tocá "Actualizar precios" (con o sin productos tildados de antes).</li>
+        <li>Elegí el modo: todos los productos de un proveedor, o una selección puntual (buscador + tildado).</li>
+        <li>Cargá el porcentaje: positivo para aumentar, negativo para bajar. Se aplica sobre el costo.</li>
+        <li>Aplicá. El precio de venta de cada producto afectado se recalcula con su margen vigente.</li>
+      </ol>
+
+      <h3>Cuestiones lógicas importantes</h3>
+      <div class="box box-rule">
+        <p><strong>Ajustar stock manualmente</strong> (sumar o restar unidades a mano, por rotura, pérdida o corrección de conteo) es <span class="role-pill role-admin">Solo Admin</span>. Siempre pide un motivo: Rotura, Pérdida, Corrección de conteo físico, u Otro con detalle obligatorio — queda todo auditado.</p>
+      </div>
+      <div class="box box-rule">
+        <p>Editar <strong>margen 1 y margen 2</strong> de un producto también es <span class="role-pill role-admin">Solo Admin</span>. Un cajero puede dar de alta productos y cargar el costo, pero no fijar el margen de ganancia.</p>
+      </div>
+      <div class="box box-rule">
+        <p>El precio de venta siempre se calcula con <strong>IVA 21% fijo</strong> incluido — no es editable por producto.</p>
+      </div>
+      <div class="box box-note">
+        <p>Un producto marcado "Inactivo" no desaparece: se conserva para el historial (ventas viejas, devoluciones), pero deja de aparecer en el buscador de Ventas, en la actualización masiva de precios y en el buscador de "cambio" de una devolución.</p>
+      </div>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- 5. PROVEEDORES -->
+    <!-- ======================================================= -->
+    <section class="screen" id="proveedores">
+      <p class="kicker">Pantalla 5 · Gestión</p>
+      <h2>Proveedores</h2>
+      <p class="intro">Carga de facturas de compra, sus pagos, y los datos de contacto de cada proveedor con su saldo. Tiene dos pestañas: <strong>Facturas de compra</strong> (la que abre por defecto) y <strong>Proveedores</strong>.</p>
+
+      <h3>Elementos de la pantalla — Facturas de compra</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">Listado</td><td>Cada factura, remito u otro comprobante cargado, con proveedor, tipo y número, total y saldo pendiente. Un click en la fila abre el detalle.</td></tr>
+        <tr><td class="campo">"+ Nueva factura"</td><td>Abre la planilla de carga.</td></tr>
+        <tr><td class="campo">Planilla de carga</td><td>Datos del comprobante (proveedor, tipo, letra, punto de venta, número, fecha, forma de pago) y una tabla de ítems, uno por fila.</td></tr>
+        <tr><td class="campo">Fila de ítem</td><td>Código de barras, Producto (busca en el catálogo o queda "libre" si no matchea), Marca, Cantidad, Precio unitario sin IVA, Descuento %, Depósito de destino (Local o Depósito) y el Subtotal calculado.</td></tr>
+        <tr><td class="campo">"+ Crear producto nuevo"</td><td>Desde una fila de ítem, si el producto no existe en el catálogo, se puede dar de alta sin salir de la planilla.</td></tr>
+        <tr><td class="campo">Detalle de factura</td><td>Ítems cargados, saldo pendiente e historial de pagos ya registrados.</td></tr>
+        <tr><td class="campo">"+ Registrar pago"</td><td>Solo visible si queda saldo pendiente.</td></tr>
+      </table>
+
+      <h3>Elementos de la pantalla — Proveedores</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">Listado</td><td>Razón social, CUIT, teléfono y saldo actual de cada proveedor.</td></tr>
+        <tr><td class="campo">Ficha de proveedor</td><td>Datos de contacto y los márgenes 1 y 2 "por defecto" — los productos nuevos de ese proveedor los heredan automáticamente.</td></tr>
+      </table>
+
+      <h3>Flujo paso a paso — cargar una factura de compra</h3>
+      <div class="flow">
+        <div class="step"><span class="num">1</span><span class="t">+ Nueva factura</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">2</span><span class="t">Datos del comprobante</span><span class="d">Proveedor, tipo, fecha…</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">3</span><span class="t">Cargar ítems</span><span class="d">Uno por fila</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">4</span><span class="t">Guardar</span><span class="d">Suma el stock</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">5</span><span class="t">Registrar pago(s)</span><span class="d">Hasta saldar</span></div>
+      </div>
+      <ol class="pasos">
+        <li>Tocá "+ Nueva factura" y elegí el proveedor y el tipo de comprobante (Factura, Remito, Cupón, Nota de crédito o Nota de débito).</li>
+        <li>Cargá letra, punto de venta, número y fecha del comprobante, y la forma de pago (Contado o Cuenta corriente).</li>
+        <li>Por cada producto: escaneá o tipeá el código, o buscalo por nombre — si no existe, se puede crear ahí mismo. Cargá cantidad, precio unitario sin IVA, descuento si corresponde y a qué depósito entra (Local o Depósito).</li>
+        <li>Revisá los totales (subtotal, descuento, IVA 21%, total) en el pie de la planilla y guardá con el botón "Guardar factura" — el stock de cada producto se actualiza solo. Enter (incluido el que manda el lector al escanear) nunca guarda la factura: solo ese botón.</li>
+        <li>Cuando corresponda pagarla, abrí el detalle de la factura y tocá "+ Registrar pago" (podés hacerlo en varias partes hasta saldar el total).</li>
+      </ol>
+
+      <h3>Cuestiones lógicas importantes</h3>
+      <div class="box box-warn">
+        <p>Hoy <strong>no existe una forma de anular ni editar</strong> una factura de compra ya guardada desde Virikyna Local — ver el punto correspondiente en "Puntos a confirmar con Jimena".</p>
+      </div>
+      <div class="box box-rule">
+        <p>Al guardar una factura, el saldo pendiente arranca siendo igual al total — aunque se haya elegido "Contado", no se registra ningún pago automáticamente. El pago (parcial o total) siempre se carga como un paso aparte.</p>
+      </div>
+      <div class="box box-rule">
+        <p>El pago admite <strong>Efectivo, Transferencia, Cheque o E-cheq</strong>. Con cheque o e-cheq son obligatorios el número, la fecha de salida y la fecha de vencimiento.</p>
+      </div>
+      <div class="box box-rule">
+        <p>Registrar un pago a proveedor se puede hacer desde dos lugares — el detalle de una factura puntual, o desde "Registrar egreso" en Cierre de Caja eligiendo la categoría "Pago a proveedor" — pero en el fondo es siempre la misma operación, con el mismo resultado.</p>
+      </div>
+      <div class="box box-note">
+        <p>El saldo que se ve en la lista de Proveedores (saldo inicial + facturado − pagado) se calcula siempre en el sistema, nunca a mano.</p>
+      </div>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- 6. CUENTAS CORRIENTES -->
+    <!-- ======================================================= -->
+    <section class="screen" id="cuentas-corrientes">
+      <p class="kicker">Pantalla 6 · Gestión</p>
+      <h2>Cuentas corrientes</h2>
+      <p class="intro">Ficha de clientes y el estado de su cuenta corriente: cuánto deben, sus ventas a cuenta corriente y los pagos que fueron haciendo.</p>
+
+      <h3>Elementos de la pantalla</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">Listado</td><td>Nombre, CUIT, celular, saldo de cuenta corriente y estado (Activo/Inactivo) de cada cliente.</td></tr>
+        <tr><td class="campo">"+ Nuevo cliente"</td><td>Alta de cliente. Solo hace falta cargar razón social o nombre de fantasía (al menos uno de los dos) — el resto es opcional.</td></tr>
+        <tr><td class="campo">Condición frente al IVA</td><td>Necesaria para que la Factura C salga bien a nombre de ese cliente (Consumidor Final, Responsable Inscripto, Monotributista, Exento o No categorizado).</td></tr>
+        <tr><td class="campo">Ver detalle</td><td>Abre el saldo actual, el botón "Cobrar", el historial de ventas a cuenta corriente y el historial de pagos recibidos.</td></tr>
+        <tr><td class="campo">Eliminar</td><td>Solo para clientes activos. Si el cliente ya tiene historial, el sistema rechaza el borrado y ofrece <strong>inactivarlo</strong> en su lugar.</td></tr>
+      </table>
+
+      <h3>Flujo paso a paso — cobrar una cuenta corriente</h3>
+      <ol class="pasos">
+        <li>Buscá al cliente en el listado y abrí "Ver detalle".</li>
+        <li>Tocá "Cobrar".</li>
+        <li>Cargá el monto y la forma de pago (cualquiera menos cuenta corriente o combinado).</li>
+        <li>Elegí a qué se aplica: una venta puntual de la lista, o "Cuenta general" si es un pago que no corresponde a una venta específica.</li>
+        <li>Confirmá — el saldo del cliente se actualiza solo.</li>
+      </ol>
+
+      <h3>Cuestiones lógicas importantes</h3>
+      <div class="box box-rule">
+        <p>El saldo mostrado (saldo inicial + ventas a cuenta corriente − pagos) siempre se calcula en el sistema — nunca hay que sumarlo a mano ni desconfiar de que esté desactualizado.</p>
+      </div>
+      <div class="box box-rule">
+        <p>Un pago de cliente nunca puede registrarse como "cuenta corriente" ni como "combinado" — siempre es un medio de pago real y único (Efectivo, Transferencia, QR, Débito o Crédito).</p>
+      </div>
+      <div class="box box-warn">
+        <p><strong>Eliminar un cliente es distinto según tenga historial o no:</strong> si nunca tuvo ventas ni pagos, se borra directamente. Si ya tiene historial, el sistema no lo permite (para no perder trazabilidad) y en su lugar ofrece inactivarlo — el cliente deja de listarse como activo pero su historial se conserva intacto.</p>
+      </div>
+      <div class="box box-note">
+        <p>No hay un límite de crédito configurado por cliente — se le puede seguir vendiendo a cuenta corriente sin tope, sea cual sea su saldo (ver también la sección de Ventas).</p>
+      </div>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- 7. CIERRE DE CAJA -->
+    <!-- ======================================================= -->
+    <section class="screen" id="cierre-caja">
+      <p class="kicker">Pantalla 7 · Gestión</p>
+      <h2>Cierre de Caja</h2>
+      <p class="intro">Es donde se abre la caja al empezar el turno, se registran egresos y retiros de efectivo durante el día, y se cierra la caja al final (Cierre X para una foto parcial, Cierre Z para el cierre único del día).</p>
+
+      <h3>Elementos de la pantalla</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">"+ Registrar egreso"</td><td>Carga un gasto del turno (pago a proveedor, agua, descartables, super u otro), con su forma de pago.</td></tr>
+        <tr><td class="campo">"+ Retiro"</td><td>Registra que el cajero le entrega efectivo físico a un administrador durante el turno.</td></tr>
+        <tr><td class="campo">"Realizar Cierre X"</td><td>Genera una foto del turno hasta ese momento — se puede hacer todas las veces que haga falta en el día.</td></tr>
+        <tr><td class="campo">"Realizar Cierre Z"</td><td>El cierre único del día — desaparece de la pantalla una vez que ya se hizo el de hoy.</td></tr>
+        <tr><td class="campo">Sección "Cierre Z de hoy"</td><td>Aparece solo si ya se hizo. Muestra si está Validado o Pendiente de validación, y la diferencia de caja.</td></tr>
+        <tr><td class="campo">Tablas de abajo</td><td>Egresos de turno de hoy, Retiros de caja de hoy y Cierres X de hoy, cada una con su total.</td></tr>
+      </table>
+
+      <h3>Apertura de caja (Inicio de turno)</h3>
+      <p>Antes de vender, hay que abrir la caja — esa tarjeta aparece en el Dashboard, al iniciar sesión.</p>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">Monto esperado</td><td>Es el efectivo contado en el último Cierre Z (o $0 si todavía no hubo ninguno).</td></tr>
+        <tr><td class="campo">"Confirmar [monto]"</td><td>Abre la caja aceptando ese monto esperado tal cual.</td></tr>
+        <tr><td class="campo">"Modificar monto"</td><td>Permite abrir con un monto real distinto (por ejemplo, si se agregó o se sacó cambio antes de arrancar).</td></tr>
+      </table>
+      <div class="box box-rule">
+        <p>Mientras haya una caja abierta, no se puede volver a abrir otra — el formulario ni se muestra, solo el estado "Caja abierta desde...". Recién se puede reabrir después del próximo Cierre Z.</p>
+      </div>
+
+      <h3>Flujo paso a paso — un turno completo</h3>
+      <div class="flow">
+        <div class="step"><span class="num">1</span><span class="t">Abrir caja</span><span class="d">Al iniciar el turno</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">2</span><span class="t">Vender / registrar egresos</span><span class="d">Durante el día</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">3</span><span class="t">Cierre X</span><span class="d">Cuantas veces haga falta</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">4</span><span class="t">Retiro de efectivo</span><span class="d">Entrega física a un admin</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">5</span><span class="t">Cierre Z</span><span class="d">Una vez, contando la caja</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">6</span><span class="t">Validación</span><span class="d">Desde Virikyna Gestión</span></div>
+      </div>
+
+      <h3>Flujo paso a paso — hacer el Cierre Z</h3>
+      <ol class="pasos">
+        <li>Contá el efectivo físico que hay en el cajón.</li>
+        <li>Tocá "Realizar Cierre Z" y cargá ese monto contado.</li>
+        <li>Confirmá. El sistema calcula la diferencia (contado menos esperado) y lo marca como "Pendiente de validación".</li>
+        <li>Un administrador valida ese Cierre Z desde Virikyna Gestión (fuera de esta app).</li>
+      </ol>
+
+      <h3>Cuestiones lógicas importantes</h3>
+      <div class="box box-warn">
+        <p><strong>El Cierre Z, una vez validado por un administrador, no se puede editar ni revertir</strong> — el propio formulario lo advierte antes de confirmar. Si algo salió mal, la corrección se hace aparte (nota de corrección), no reabriendo el cierre.</p>
+      </div>
+      <div class="box box-rule">
+        <p>El <strong>Cierre X</strong> es solo informativo: una foto del turno hasta ese momento. Se puede repetir todas las veces que haga falta y nunca pide contar efectivo.</p>
+      </div>
+      <div class="box box-rule">
+        <p>El <strong>retiro de efectivo</strong> es la única manera en que ese dinero llega a Caja Gestión (la administración general) — el Cierre Z solo informa cuánto hay en el cajón, nunca lo transfiere a las cuentas del negocio. Si no se hace el retiro, ese efectivo no aparece del lado de Gestión.</p>
+      </div>
+      <div class="box box-rule">
+        <p>Al registrar un retiro, el campo "Cajero" viene precargado con el usuario que inició sesión, pero se puede cambiar a cualquier otro cajero — pensado para cuando quien hace el trámite no es quien realmente entregó el efectivo.</p>
+      </div>
+      <div class="box box-rule">
+        <p>Las categorías de egreso disponibles desde Virikyna Local son: Pago a proveedor, Agua, Descartables, Super u Otro. ("Sueldo" y "Servicio" quedaron reservadas para Virikyna Gestión.)</p>
+      </div>
+      <div class="box box-note">
+        <p>El detalle de un cierre (X o Z) muestra: ventas por cada medio de pago, el neto de devoluciones/cambios del período (si hubo), los datos de la apertura vigente, egresos, retiros, el efectivo esperado y — si ya se cerró Z — el efectivo contado y la diferencia.</p>
+      </div>
+      <div class="box box-note">
+        <p>Todas las acciones de esta pantalla están disponibles igual para <span class="role-pill role-both">Cajero y Admin</span>. Lo que sí es exclusivo de Admin y vive en otra app (Virikyna Gestión) es <strong>validar</strong> el Cierre Z.</p>
+      </div>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- 8. NOTAS -->
+    <!-- ======================================================= -->
+    <section class="screen" id="notas">
+      <p class="kicker">Pantalla 8 · Gestión</p>
+      <h2>Notas</h2>
+      <p class="intro">Un tablero de mensajes internos tipo post-it, para dejar avisos entre el equipo (por ejemplo "falta cambio en el cajón" o "el cliente X va a pasar a buscar su pedido").</p>
+
+      <h3>Elementos de la pantalla</h3>
+      <table class="elementos">
+        <tr><th>Elemento</th><th>Qué es</th></tr>
+        <tr><td class="campo">Tarjetas</td><td>Cada nota activa, con fecha, mensaje y quién la escribió. El color y la leve inclinación de cada tarjeta rotan solas, no significan nada por sí mismos.</td></tr>
+        <tr><td class="campo">"+ Nueva nota"</td><td>Abre un cuadro de texto simple para escribir el mensaje.</td></tr>
+        <tr><td class="campo">"Archivar"</td><td>Saca la nota de la vista principal sin borrarla.</td></tr>
+        <tr><td class="campo">"Ver archivadas"</td><td>Muestra las notas ya archivadas, tachadas.</td></tr>
+      </table>
+
+      <h3>Flujo paso a paso</h3>
+      <ol class="pasos">
+        <li>Tocá "+ Nueva nota".</li>
+        <li>Escribí el mensaje (es el único dato que pide).</li>
+        <li>Guardá — aparece como una tarjeta nueva, arriba de todo.</li>
+        <li>Cuando ya no haga falta tenerla a la vista, tocá "Archivar".</li>
+      </ol>
+
+      <h3>Cuestiones lógicas importantes</h3>
+      <ul class="reglas">
+        <li>No hay edición ni borrado de una nota ya creada — solo se puede archivar.</li>
+        <li>Una nota archivada no se puede volver a activar desde acá.</li>
+        <li>Las notas creadas en Virikyna Local son siempre de "origen Local": no se mezclan con las notas internas de Virikyna Gestión, ni siquiera para un usuario Admin que esté usando esta app.</li>
+        <li>Disponible igual para <span class="role-pill role-both">Cajero y Admin</span>.</li>
+      </ul>
+
+
+    <footer class="pie">Manual generado a partir del código de Virikyna Local — 28/09/2026.</footer>
+
+  </main>
+</div>
+
+<script>
+(function(){
+  var input = document.getElementById('buscador');
+  var info = document.getElementById('buscador-info');
+  var secciones = Array.prototype.slice.call(document.querySelectorAll('section.screen'));
+  var navLinks = Array.prototype.slice.call(document.querySelectorAll('nav.toc a[data-nav]'));
+
+  function filtrar(){
+    var q = input.value.trim().toLowerCase();
+    var visibles = 0;
+    secciones.forEach(function(sec){
+      if (sec.id === 'confirmar') { sec.classList.remove('oculto'); return; } // siempre visible
+      var match = !q || sec.textContent.toLowerCase().indexOf(q) !== -1;
+      sec.classList.toggle('oculto', !match);
+      if (match) visibles++;
+    });
+    navLinks.forEach(function(a){
+      var id = a.getAttribute('href').slice(1);
+      var li = a.closest('li');
+      if (id === 'inicio' || id === 'confirmar') { li.classList.remove('oculto-nav'); return; }
+      var match = !q || document.getElementById(id).textContent.toLowerCase().indexOf(q) !== -1;
+      li.classList.toggle('oculto-nav', !match);
+    });
+    info.textContent = q ? (visibles + ' pantalla' + (visibles === 1 ? '' : 's') + ' con coincidencias') : '';
+  }
+  input.addEventListener('input', filtrar);
+
+  // Resalta en el índice la sección visible mientras se scrollea
+  var observer = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      var link = document.querySelector('nav.toc a[href="#' + entry.target.id + '"]');
+      if (!link) return;
+      if (entry.isIntersecting) {
+        navLinks.forEach(function(a){ a.classList.remove('activo'); });
+        link.classList.add('activo');
+      }
+    });
+  }, { rootMargin: '-15% 0px -70% 0px' });
+  secciones.concat(document.getElementById('inicio')).forEach(function(sec){ if (sec) observer.observe(sec); });
+})();
+</script>
+</body>
+</html>
