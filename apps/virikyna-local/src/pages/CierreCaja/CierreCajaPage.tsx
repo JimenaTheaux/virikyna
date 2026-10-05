@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Eye } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 import { friendlyError, mensajeErrorGuardado, nombresPorId } from '@virikyna/shared'
-import { formatCurrency, formatFechaHora, fechaHoyISO } from '@virikyna/shared'
+import { formatCurrency, formatFechaHora, fechaHoyISO, rangoTimestampsAR } from '@virikyna/shared'
 import { CATEGORIA_EGRESO_LABEL, diferenciaLabel } from '../../lib/caja'
 import { CierreDetalleModal } from './CierreDetalleModal'
 import { RegistrarEgresoModal } from './RegistrarEgresoModal'
@@ -28,6 +28,7 @@ export function CierreCajaPage() {
     setLoading(true)
     setError(null)
     const hoy = fechaHoyISO()
+    const rangoHoy = rangoTimestampsAR(hoy, hoy)
 
     const [cierresRes, egresosRes, retirosRes] = await Promise.all([
       supabase.from('cierres_caja').select('*').eq('turno_fecha', hoy).order('created_at', { ascending: false }),
@@ -35,8 +36,8 @@ export function CierreCajaPage() {
         .from('egresos')
         .select('*')
         .eq('origen', 'turno')
-        .gte('created_at', `${hoy}T00:00:00`)
-        .lte('created_at', `${hoy}T23:59:59`)
+        .gte('created_at', rangoHoy.desde)
+        .lte('created_at', rangoHoy.hasta)
         .order('created_at', { ascending: false }),
       supabase.from('retiros_caja').select('*').eq('fecha', hoy).order('created_at', { ascending: false }),
     ])

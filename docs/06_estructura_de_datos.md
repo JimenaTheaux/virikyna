@@ -959,6 +959,8 @@ $$;
 -- Versión con el merge de docs/21 (apertura de caja, v_monto_base) + docs/22 (venta_pagos) ya
 -- aplicado, más el cambio de docs/23: la rama de cuenta corriente lee precio_cobrado en vez de
 -- total (hoy da lo mismo porque total = precio_cobrado, pero queda explícito).
+-- ⚠ No es la versión vigente: la vigente es la de docs/24 (devoluciones) + SET timezone de
+-- docs/28 (día de caja en hora argentina — ver sección 19). Partir de esas, no de esta.
 -- ============================================================
 CREATE OR REPLACE FUNCTION cerrar_caja(
   p_tipo tipo_cierre,
@@ -1977,3 +1979,127 @@ export type NotaInterna = {
   created_at: string
 }
 ```
+
+## 16. Resumen de ventas por día para el Dashboard (Virikyna Gestión)
+
+El Dashboard de Gestión traía las ventas crudas de los últimos 7 días y las sumaba en el navegador, con un rango `desde`/`hasta` armado como texto sin zona horaria. Como la base está en UTC, "hoy 23:59:59" se leía como 20:59:59 hora argentina y las ventas de después de las 21:00 (AR) no contaban en el día de hoy. Ahora la agregación la hace la base, con el día calculado en hora argentina explícita. SQL completo en `docs/25_dashboard_resumen.sql`.
+
+```sql
+CREATE OR REPLACE FUNCTION dashboard_ventas_por_dia(p_desde DATE, p_hasta DATE)
+RETURNS TABLE (fecha DATE, total NUMERIC, cantidad INT)
+LANGUAGE sql STABLE SECURITY INVOKER SET search_path = public
+AS $$
+  WITH ventas_rango AS (
+    SELECT (v.created_at AT TIME ZONE 'America/Argentina/Buenos_Aires')::date AS dia,
+           v.precio_cobrado
+    FROM ventas v
+    WHERE v.estado <> 'anulada'
+      AND v.created_at >= (p_desde::timestamp AT TIME ZONE 'America/Argentina/Buenos_Aires')
+      AND v.created_at <  ((p_hasta + 1)::timestamp AT TIME ZONE 'America/Argentina/Buenos_Aires')
+  )
+  SELECT g.dia::date,
+         COALESCE(SUM(vr.precio_cobrado), 0)::numeric,
+         COUNT(vr.dia)::int
+  FROM generate_series(p_desde::timestamp, p_hasta::timestamp, interval '1 day') AS g(dia)
+  LEFT JOIN ventas_rango vr ON vr.dia = g.dia::date
+  GROUP BY g.dia
+  ORDER BY g.dia;
+$$;
+GRANT EXECUTE ON FUNCTION dashboard_ventas_por_dia(DATE, DATE) TO authenticated;
+```
+
+- **Una fila por día del rango**, incluso sin ventas (`total = 0`, `cantidad = 0`), por el `generate_series` + `LEFT JOIN`.
+- **Total = `precio_cobrado`** (lo realmente cobrado, docs/23), excluyendo `estado = 'anulada'`.
+- **`SECURITY INVOKER`**: respeta la RLS de `ventas` (policy `ventas_todos`), no abre nada que el cliente no pudiera leer directo.
+- El filtro es un rango de `timestamptz` sobre `created_at`, así que usa `idx_ventas_created_at` (sección 4). El día de cada venta se calcula después del filtro.
+
+**Frontend** (`apps/virikyna-gestion/src/pages/Dashboard/queries.ts`): `useVentasPorDia(desde, hasta)` llama a la RPC con TanStack Query (`queryKey: ['dashboard', 'ventas', desde, hasta]`). "Hoy" en el cliente sale de `hoyAR()` (`packages/shared/lib/format.ts`): la fecha en `America/Argentina/Buenos_Aires`, no la del reloj de la PC.
+
+**Tipos TypeScript** (`apps/virikyna-gestion/src/pages/Dashboard/types.ts`):
+
+```typescript
+export type VentaDelDia = {
+  fecha: string // YYYY-MM-DD, día en hora AR
+  total: number
+  cantidad: number
+}
+```
+
+## 17. Stock bajo calculado en el servidor (card "Stock bajo" de Gestión y Local)
+
+`StockBajoCard` (`packages/shared`, usada en el Dashboard de Gestión y en Local Admin y Cajero) traía todos los productos activos con sus `stock_ubicaciones` y filtraba en el navegador. La API de Supabase corta en 1000 filas por defecto, así que con más de 1000 productos activos los que quedaban afuera nunca se evaluaban. Ahora la suma, el filtro y el orden los hace la base. SQL completo en `docs/26_stock_bajo.sql`.
+
+```sql
+CREATE OR REPLACE FUNCTION productos_stock_bajo(p_limite INT DEFAULT NULL)
+RETURNS TABLE (id UUID, nombre TEXT, stock_total NUMERIC, stock_minimo NUMERIC, total_count INT)
+LANGUAGE sql STABLE SECURITY INVOKER SET search_path = public
+AS $$
+  WITH stock AS (
+    SELECT p.id, p.nombre, p.stock_minimo,
+           COALESCE(SUM(s.cantidad), 0) AS stock_total
+    FROM productos p
+    LEFT JOIN stock_ubicaciones s ON s.producto_id = p.id
+    WHERE p.estado = 'activo'
+    GROUP BY p.id, p.nombre, p.stock_minimo
+  )
+  SELECT st.id, st.nombre, st.stock_total, st.stock_minimo,
+         (COUNT(*) OVER ())::int AS total_count
+  FROM stock st
+  WHERE st.stock_total <= st.stock_minimo
+  ORDER BY st.stock_total - st.stock_minimo, st.nombre
+  LIMIT p_limite;
+$$;
+GRANT EXECUTE ON FUNCTION productos_stock_bajo(INT) TO authenticated;
+```
+
+- **Mismo criterio que antes**: stock total = suma de todas las ubicaciones (0 si el producto no tiene filas en `stock_ubicaciones`), solo `estado = 'activo'`, `stock_total <= stock_minimo`, más crítico primero (`stock_total - stock_minimo` ascendente). Se agregó desempate por `nombre` para que el orden sea estable.
+- **`total_count`** sale de `COUNT(*) OVER ()`, que se calcula antes del `LIMIT`: es la cantidad total de productos con stock bajo, la misma en todas las filas. La card la usa para el título ("N productos") y para el "+N más". Si no hay ninguno, la RPC no devuelve filas (total 0).
+- **`p_limite` NULL** = sin límite.
+- **`SECURITY INVOKER`**: respeta la RLS de `productos` y `stock_ubicaciones`.
+
+**Frontend** (`packages/shared/src/components/StockBajoCard.tsx`): `useQuery` con `queryKey: ['stock-bajo', maxItems]` y `staleTime` de 60 s; `maxItems` se manda como `p_limite`. Las apps que usan la card (Gestión y Local) tienen `QueryClientProvider` en su `main.tsx`.
+
+## 18. Aperturas de caja con diferencia: marcar como revisada (Dashboard de Gestión)
+
+La alerta del Dashboard mostraba las 5 aperturas con diferencia más recientes, sin estado: una diferencia vieja seguía apareciendo hasta que la tapaban 5 nuevas, y una nueva podía quedar escondida detrás de 5 viejas. Ahora cada apertura guarda quién y cuándo la revisó, y la alerta muestra **todas** las pendientes hasta que la dueña las marca. SQL completo en `docs/27_aperturas_revisadas.sql` (tabla original en `docs/21_apertura_caja.sql`).
+
+```sql
+ALTER TABLE aperturas_caja ADD COLUMN IF NOT EXISTS revisada_por UUID REFERENCES perfiles(id);
+ALTER TABLE aperturas_caja ADD COLUMN IF NOT EXISTS revisada_at TIMESTAMPTZ;
+```
+
+- **Sin policy de UPDATE nueva**: igual que en docs/21, la tabla solo se escribe por RPC `SECURITY DEFINER`.
+- **`marcar_apertura_revisada(p_apertura_id UUID) RETURNS VOID`** — `SECURITY DEFINER`, exclusivo Admin (valida `rol = 'admin' AND activo` como `validar_cierre_z`). Falla si la apertura no existe, si no tiene diferencia o si ya está revisada (con `FOR UPDATE`, así dos admins a la vez no la marcan dos veces). Solo completa `revisada_por = auth.uid()` y `revisada_at = now()`; el registro no se borra. El `UPDATE` pasa por `trg_auditoria_aperturas_caja`, así que queda en auditoría.
+- **`aperturas_con_diferencia_pendientes()`** → `(id, monto_esperado, monto_real, diferencia, usuario_id, usuario_nombre, abierta_at)` — `SECURITY INVOKER` (RLS `aperturas_ver_todos`). Filtra `diferencia <> 0 AND revisada_at IS NULL`, ordena por `abierta_at DESC`, sin límite ni filtro de período. El nombre sale de un `LEFT JOIN` con `perfiles_publico`: `LEFT` porque esa vista solo lista usuarios activos, y la apertura de un cajero ya desactivado tiene que seguir apareciendo (con `usuario_nombre` null).
+
+**Frontend** (`apps/virikyna-gestion/src/pages/Dashboard/AperturasAlerta.tsx`): `useQuery` con `queryKey: ['aperturas-pendientes']` (una sola llamada, sin la consulta aparte a `perfiles_publico`); botón "Marcar revisada" por alerta, visible solo para `rol = 'admin'`; `useMutation` que invalida `['aperturas-pendientes']`, así la alerta revisada desaparece sin recargar. Si la consulta falla se muestra el error en vez de ocultar la alerta.
+
+**Tipos TypeScript** (`packages/shared/types/database.ts`, `AperturaCaja`): se agregan `revisada_por: string | null` y `revisada_at: string | null`.
+
+## 19. Día de caja en hora argentina (la base está en UTC)
+
+**Regla general:** el "día" de negocio es siempre el día en hora argentina (`America/Argentina/Buenos_Aires`) — ni el UTC de la base ni la zona de la PC. La base de Supabase corre en **UTC** (`SHOW timezone` → `UTC`, confirmado): dentro de una función, `current_date` y `created_at::date` dan el día UTC, y entre las 21:00 y las 00:00 hora AR eso ya es "mañana". SQL completo en `docs/28_zona_horaria_caja.sql`.
+
+**Qué pasaba:** un Cierre Z a las 22:00 AR quedaba con `turno_fecha` del día siguiente y, peor, sumaba solo las ventas y egresos de después de las 21:00, ningún retiro del día (Local guarda `retiros_caja.fecha` con el día AR, el cierre buscaba el día UTC) y solo las devoluciones de después de las 21:00 — con eso, `efectivo_esperado` y la diferencia salían mal.
+
+```sql
+ALTER FUNCTION cerrar_caja(tipo_cierre, NUMERIC)
+  SET timezone = 'America/Argentina/Buenos_Aires';
+ALTER FUNCTION crear_devolucion(UUID, motivo_devolucion, TEXT, TEXT, JSONB, JSONB, forma_pago_venta, JSONB)
+  SET timezone = 'America/Argentina/Buenos_Aires';
+
+ALTER TABLE devoluciones ALTER COLUMN fecha SET DEFAULT ((now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date);
+ALTER TABLE retiros_caja ALTER COLUMN fecha SET DEFAULT ((now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date);
+ALTER TABLE egresos      ALTER COLUMN fecha SET DEFAULT ((now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date);
+```
+
+- **`SET timezone` en la función** (no en toda la base): dentro de `cerrar_caja` y `crear_devolucion`, `current_date` y `::date` pasan a ser hora AR sin tocar sus cuerpos (versión vigente: docs/24). El resto de la base y la API siguen en UTC.
+- **⚠ Al redefinir una de estas funciones** con `CREATE OR REPLACE`, la nueva versión tiene que llevar `SET timezone = 'America/Argentina/Buenos_Aires'` junto al `SET search_path`: el `CREATE OR REPLACE` borra los `SET` anteriores. La verificación 1 de docs/28 lo detecta.
+- **DEFAULT de `fecha`** en `devoluciones`, `retiros_caja` y `egresos`: día AR explícito, para cualquier insert que no mande la fecha (p. ej. `registrar_pago_proveedor` con `egresos.fecha`).
+- `registrar_retiro_caja` y `registrar_egreso_general` conservan `p_fecha DEFAULT CURRENT_DATE` (default de parámetro, se evalúa en UTC), pero las apps siempre mandan `p_fecha` calculada en hora AR.
+- Funciones nuevas con fechas: usar `AT TIME ZONE 'America/Argentina/Buenos_Aires'` explícito (como `dashboard_ventas_por_dia`, sección 16) o `SET timezone`.
+
+**Frontend** (`packages/shared/lib/format.ts`):
+
+- `fechaISO()`, `fechaHoyISO()` y `fechaLocalDeISO()` calculan en hora AR (antes usaban la zona de la PC). Son alias de `hoyAR()`; el nombre se mantiene para no tocar todos los usos.
+- `rangoTimestampsAR(desdeDia, hastaDia)` → `{ desde: 'YYYY-MM-DDT00:00:00-03:00', hasta: 'YYYY-MM-DDT23:59:59.999-03:00' }`: para filtrar columnas `timestamptz` por días AR completos. Nunca armar `${dia}T23:59:59` sin zona — la base lo lee en UTC (= 20:59:59 AR). Usado en: Cierre de Caja de Local (egresos del turno), Ventas del día (`VentasDelDiaTab`), Dashboard de Local, Facturación (Local y Gestión) e Historial (Gestión).

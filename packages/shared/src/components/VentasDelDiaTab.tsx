@@ -2,7 +2,7 @@ import { useEffect, useState, type ComponentType } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { FileText } from 'lucide-react'
 import { friendlyError } from '../../lib/supabaseErrors'
-import { formatCurrency, fechaHoyISO, formatFechaCortaLocal, formatHora } from '../../lib/format'
+import { formatCurrency, fechaHoyISO, formatFechaCortaLocal, formatHora, rangoTimestampsAR } from '../../lib/format'
 import { emitirFacturaCReal } from '../../lib/arcaFacturacion'
 import type { Cliente, FacturaC, FormaPagoVenta, Producto, Venta, VentaItem, VentaPago } from '../../types/database'
 import { EstadoBadge } from './EstadoBadge'
@@ -65,12 +65,12 @@ export function VentasDelDiaTab({
     setLoading(true)
     setError(null)
 
-    const hoy = fechaHoyISO()
+    const rango = rangoTimestampsAR(fechaHoyISO(), fechaHoyISO())
     const { data, error: dbError } = await supabase
       .from('ventas')
       .select('*, factura_c:facturas_c(*), cliente:clientes(razon_social, nombre_fantasia, mail, celular)')
-      .gte('created_at', `${hoy}T00:00:00`)
-      .lte('created_at', `${hoy}T23:59:59`)
+      .gte('created_at', rango.desde)
+      .lte('created_at', rango.hasta)
       .order('created_at', { ascending: false })
 
     if (dbError) {

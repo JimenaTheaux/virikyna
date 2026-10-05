@@ -27,6 +27,7 @@ Fuente de verdad detallada en `04_modulos_y_funciones.md` — esta tabla es el r
 | Login | Blanquear contraseña / crear usuario | ✅ | ❌ |
 | Dashboard | Ver panel completo (Admin) | ✅ | — |
 | Dashboard | Ver grid simplificado (Cajero) | — | ✅ |
+| Dashboard | **Marcar como revisada una apertura de caja con diferencia** | ✅ | ❌ (solo existe en Virikyna Gestión) |
 | Ventas | Todas las acciones de venta (agregar, editar, cobrar, cancelar, descuento, recargo) | ✅ | ✅ |
 | Facturación | Ver, filtrar, seleccionar, emitir Factura C, enviar comprobante | ✅ | ✅ |
 | Inventario y Stock | Ver, alta, editar, eliminar, inactivar/reactivar, actualización masiva de precios | ✅ | ✅ |
@@ -42,13 +43,14 @@ Fuente de verdad detallada en `04_modulos_y_funciones.md` — esta tabla es el r
 
 ## Excepciones puntuales a memorizar (las que rompen el patrón "ambos roles")
 
-Todo el sistema sigue el mismo patrón por defecto — **Admin y Cajero acceden igual** — salvo estas cinco excepciones, todas del lado de restringir al Cajero:
+Todo el sistema sigue el mismo patrón por defecto — **Admin y Cajero acceden igual** — salvo estas seis excepciones, todas del lado de restringir al Cajero:
 
 1. **Ajuste manual de stock** — exclusivo Admin (para que quien se equivocó cargando no pueda "corregirlo" sin trazabilidad).
 2. **Configuración de usuarios** — exclusivo Admin.
 3. **Caja Gestión completa** (validar Cierre Z, carga inicial, movimientos manuales) — exclusivo Admin, y solo existe en Virikyna Gestión.
 4. **Historial y Auditoría completo** (ver, revertir) — exclusivo Admin, y solo existe en Virikyna Gestión.
 5. **Blanquear contraseña / crear usuario** — exclusivo Admin.
+6. **Marcar como revisada una apertura de caja con diferencia** — exclusivo Admin, desde el Dashboard de Virikyna Gestión. Validado en la RPC `marcar_apertura_revisada` (docs/27): un cajero que la llame directo recibe "Solo un administrador puede marcar una apertura como revisada". La tabla `aperturas_caja` no tiene policy de UPDATE, así que no hay otro camino para escribir.
 
 ## Regla de implementación (ver `06_estructura_de_datos.md`)
 

@@ -3,7 +3,7 @@ import { Eye, ArrowLeftRight } from 'lucide-react'
 import type { EstadoComprobante, FormaPagoVenta } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { friendlyError, emitirFacturaCReal } from '@virikyna/shared'
-import { formatCurrency, formatFechaCortaLocal, formatHora } from '@virikyna/shared'
+import { formatCurrency, formatFechaCortaLocal, formatHora, rangoTimestampsAR } from '@virikyna/shared'
 import { EstadoBadge, RowActionsMenu } from '@virikyna/shared'
 import { FORMA_PAGO_LABEL, type DatosComprobante } from '../../lib/comprobante'
 import { ComprobanteModal } from '../../components/ComprobanteModal'
@@ -47,8 +47,8 @@ export function FacturacionTab() {
       .in('estado', estadoFiltro === 'todas' ? ['sin_facturar', 'facturado'] : [estadoFiltro])
       .order('created_at', { ascending: false })
 
-    if (fechaDesde) query = query.gte('created_at', `${fechaDesde}T00:00:00`)
-    if (fechaHasta) query = query.lte('created_at', `${fechaHasta}T23:59:59`)
+    if (fechaDesde) query = query.gte('created_at', rangoTimestampsAR(fechaDesde, fechaDesde).desde)
+    if (fechaHasta) query = query.lte('created_at', rangoTimestampsAR(fechaHasta, fechaHasta).hasta)
     if (formaPagoFiltro !== 'todas') query = query.eq('forma_pago', formaPagoFiltro)
     const numeroBuscado = /^\d+$/.test(busqueda.trim()) ? Number(busqueda.trim()) : null
     if (numeroBuscado !== null) query = query.eq('numero', numeroBuscado)

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Eye } from 'lucide-react'
 import type { Auditoria, PerfilPublico, TipoAccionAuditoria } from '@virikyna/shared'
-import { formatFechaHora, friendlyError, nombresPorId, EstadoBadge } from '@virikyna/shared'
+import { formatFechaHora, friendlyError, nombresPorId, EstadoBadge, rangoTimestampsAR } from '@virikyna/shared'
 import { supabase } from '../lib/supabaseClient'
 import { ACCION_LABEL, accionRevertible, tablaLabel } from '../lib/historial'
 import { DetalleAuditoriaModal } from './Historial/DetalleAuditoriaModal'
@@ -43,8 +43,8 @@ export function HistorialPage() {
     if (usuarioFiltro !== 'todos') query = query.eq('usuario_id', usuarioFiltro)
     if (tablaFiltro !== 'todos') query = query.eq('tabla_afectada', tablaFiltro)
     if (accionFiltro !== 'todos') query = query.eq('accion', accionFiltro)
-    if (fechaDesde) query = query.gte('created_at', `${fechaDesde}T00:00:00`)
-    if (fechaHasta) query = query.lte('created_at', `${fechaHasta}T23:59:59`)
+    if (fechaDesde) query = query.gte('created_at', rangoTimestampsAR(fechaDesde, fechaDesde).desde)
+    if (fechaHasta) query = query.lte('created_at', rangoTimestampsAR(fechaHasta, fechaHasta).hasta)
 
     const { data, error: dbError } = await query
     if (dbError) {

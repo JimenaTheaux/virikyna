@@ -61,22 +61,56 @@ export function formatFechaCorta(fecha: string): string {
   return `${dia}/${mes}/${anio}`
 }
 
-// `offsetDias` negativo = días hacia atrás desde hoy (ej. -1 = ayer, -6 = hace 6 días).
+// Día de negocio = día en hora argentina, en todas las apps y en la base (docs/28): nunca el
+// reloj/zona de la PC ni el UTC de Supabase. Las RPCs usan el mismo día con
+// AT TIME ZONE 'America/Argentina/Buenos_Aires' o SET timezone.
+const ZONA_AR = 'America/Argentina/Buenos_Aires'
+
+const fechaEnAR = new Intl.DateTimeFormat('en-CA', {
+  timeZone: ZONA_AR,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+
+// "Hoy" en hora argentina (YYYY-MM-DD). `offsetDias` negativo = días hacia atrás (-1 = ayer).
+// El corrimiento se hace sobre la fecha de calendario en UTC, así no lo afecta ningún cambio de horario.
+export function hoyAR(offsetDias = 0): string {
+  const fecha = new Date(`${fechaEnAR.format(new Date())}T00:00:00Z`)
+  fecha.setUTCDate(fecha.getUTCDate() + offsetDias)
+  return fecha.toISOString().slice(0, 10)
+}
+
+// Alias históricos de hoyAR — antes calculaban con la zona de la PC (docs/28).
 export function fechaISO(offsetDias = 0): string {
-  const fecha = new Date()
-  fecha.setDate(fecha.getDate() + offsetDias)
-  const tz = fecha.getTimezoneOffset()
-  return new Date(fecha.getTime() - tz * 60000).toISOString().slice(0, 10)
+  return hoyAR(offsetDias)
 }
 
 export function fechaHoyISO(): string {
-  return fechaISO(0)
+  return hoyAR(0)
 }
 
-// Misma normalización de zona horaria que fechaISO, aplicada a un timestamp (created_at)
-// en vez de "ahora" — para agrupar filas por su día local real.
+// Día argentino (YYYY-MM-DD) de un timestamp (created_at) — para agrupar filas por día de negocio.
+// (El nombre es histórico: antes usaba la zona de la PC.)
 export function fechaLocalDeISO(iso: string): string {
-  const fecha = new Date(iso)
-  const tz = fecha.getTimezoneOffset()
-  return new Date(fecha.getTime() - tz * 60000).toISOString().slice(0, 10)
+  return fechaEnAR.format(new Date(iso))
+}
+
+// Offset de Argentina para una fecha ("-03:00"). Hoy es fijo, pero se calcula por si vuelve el
+// horario de verano.
+function offsetAR(fecha: string): string {
+  const nombre = new Intl.DateTimeFormat('en-US', { timeZone: ZONA_AR, timeZoneName: 'longOffset' })
+    .formatToParts(new Date(`${fecha}T12:00:00Z`))
+    .find((p) => p.type === 'timeZoneName')?.value
+  return nombre?.match(/[+-]\d{2}:\d{2}/)?.[0] ?? '-03:00'
+}
+
+// Rango de timestamps (con zona) que cubre días argentinos completos, para filtrar columnas
+// timestamptz (created_at) con .gte(desde).lte(hasta). Un texto sin zona como `${dia}T23:59:59`
+// la base lo lee en UTC = 20:59:59 AR, y deja afuera lo de después de las 21:00.
+export function rangoTimestampsAR(desdeDia: string, hastaDia: string): { desde: string; hasta: string } {
+  return {
+    desde: `${desdeDia}T00:00:00${offsetAR(desdeDia)}`,
+    hasta: `${hastaDia}T23:59:59.999${offsetAR(hastaDia)}`,
+  }
 }

@@ -37,6 +37,9 @@
 -- cerrar_caja de acá parte de la de docs/23 y la de validar_cierre_z parte de la de docs/14).
 -- CREATE OR REPLACE FUNCTION reemplaza la función entera: si se vuelve a tocar cerrar_caja o
 -- validar_cierre_z, partir de la versión de ESTE archivo.
+-- ⚠ docs/28: cerrar_caja y crear_devolucion llevan además SET timezone =
+-- 'America/Argentina/Buenos_Aires' (agregado con ALTER FUNCTION). Al redefinirlas, sumar ese SET
+-- junto al SET search_path — CREATE OR REPLACE lo borra y el día de caja vuelve a ser UTC.
 
 -- ============================================================
 -- 1. Tipos

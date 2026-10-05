@@ -333,6 +333,8 @@ export type AperturaCaja = {
   usuario_id: string // quien abrió
   abierta_at: string
   created_at: string
+  revisada_por: string | null // docs/27: admin que marcó la diferencia como revisada; null = pendiente
+  revisada_at: string | null
 }
 
 export type Egreso = {

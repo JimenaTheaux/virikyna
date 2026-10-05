@@ -1,12 +1,11 @@
 import { supabase } from '../../lib/supabaseClient'
-import { fechaISO, fechaLocalDeISO } from '@virikyna/shared'
+import { fechaISO, fechaLocalDeISO, rangoTimestampsAR } from '@virikyna/shared'
 import type { VentaDelDia } from './types'
 
 // Una sola consulta cubre "hoy" y "ayer" (variación) y los últimos 7 días (gráfico semanal),
-// agrupando por día local en el cliente.
+// agrupando por día argentino en el cliente.
 export async function fetchVentasUltimosDias(dias: number) {
-  const desde = `${fechaISO(-(dias - 1))}T00:00:00`
-  const hasta = `${fechaISO(0)}T23:59:59`
+  const { desde, hasta } = rangoTimestampsAR(fechaISO(-(dias - 1)), fechaISO(0))
 
   const { data, error } = await supabase
     .from('ventas')

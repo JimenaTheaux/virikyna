@@ -1,29 +1,25 @@
-import { fechaISO, fechaLocalDeISO } from '@virikyna/shared'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabaseClient'
 import type { VentaDelDia } from './types'
 
-// Una sola consulta cubre "hoy" y "ayer" (variación) y los últimos 7 días (gráfico semanal),
-// agrupando por día local en el cliente.
-export async function fetchVentasUltimosDias(dias: number) {
-  const desde = `${fechaISO(-(dias - 1))}T00:00:00`
-  const hasta = `${fechaISO(0)}T23:59:59`
+// Ventas por día (hora AR) ya agregadas en la base — una fila por día del rango, incluso sin
+// ventas (docs/25_dashboard_resumen.sql). El cliente no suma ni agrupa.
+async function fetchVentasPorDia(desde: string, hasta: string): Promise<VentaDelDia[]> {
+  const { data, error } = await supabase.rpc('dashboard_ventas_por_dia', { p_desde: desde, p_hasta: hasta })
+  if (error) throw error
+  return ((data ?? []) as { fecha: string; total: number | string; cantidad: number }[]).map((fila) => ({
+    fecha: fila.fecha,
+    total: Number(fila.total),
+    cantidad: fila.cantidad,
+  }))
+}
 
-  const { data, error } = await supabase
-    .from('ventas')
-    .select('precio_cobrado, created_at')
-    .neq('estado', 'anulada')
-    .gte('created_at', desde)
-    .lte('created_at', hasta)
-
-  if (error || !data) return { porDia: new Map<string, VentaDelDia>(), error }
-
-  const porDia = new Map<string, VentaDelDia>()
-  for (const venta of data as { precio_cobrado: number; created_at: string }[]) {
-    const fecha = fechaLocalDeISO(venta.created_at)
-    const actual = porDia.get(fecha) ?? { fecha, total: 0, cantidad: 0 }
-    actual.total += venta.precio_cobrado
-    actual.cantidad += 1
-    porDia.set(fecha, actual)
-  }
-  return { porDia, error: null }
+// placeholderData: al cambiar de período se siguen mostrando los datos anteriores hasta que llegan
+// los nuevos, en vez de volver al estado de carga.
+export function useVentasPorDia(desde: string, hasta: string) {
+  return useQuery({
+    queryKey: ['dashboard', 'ventas', desde, hasta],
+    queryFn: () => fetchVentasPorDia(desde, hasta),
+    placeholderData: keepPreviousData,
+  })
 }

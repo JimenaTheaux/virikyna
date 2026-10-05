@@ -19,8 +19,9 @@ export const MOTIVO_DEVOLUCION_LABEL: Record<MotivoDevolucion, string> = {
 
 export const MOTIVOS_DEVOLUCION = Object.keys(MOTIVO_DEVOLUCION_LABEL) as MotivoDevolucion[]
 
-// Mismo criterio que el RPC (created_at::date >= current_date - 15): compara días de calendario
-// locales, así una venta de hace exactamente 15 días todavía entra.
+// Mismo criterio que el RPC (created_at::date >= current_date - 15, con crear_devolucion en hora
+// AR — docs/28): compara días de calendario argentinos, así una venta de hace exactamente 15 días
+// todavía entra y la pantalla nunca contradice al RPC en el borde.
 export function ventaDentroDePlazoDevolucion(createdAtISO: string): boolean {
   return fechaLocalDeISO(createdAtISO) >= fechaISO(-DIAS_LIMITE_DEVOLUCION)
 }

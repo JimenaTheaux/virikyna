@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { EstadoComprobante, FormaPagoVenta } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
-import { friendlyError, formatCurrency, formatFechaHora, emitirFacturaCReal } from '@virikyna/shared'
+import { friendlyError, formatCurrency, formatFechaHora, emitirFacturaCReal, rangoTimestampsAR } from '@virikyna/shared'
 import { FORMA_PAGO_LABEL, type DatosComprobante } from '../../lib/comprobante'
 import { ComprobanteModal } from '../../components/ComprobanteModal'
 import type { VentaConFactura, VentaItemConProducto } from './types'
@@ -41,8 +41,8 @@ export function FacturacionTab() {
       .in('estado', estadoFiltro === 'todas' ? ['sin_facturar', 'facturado'] : [estadoFiltro])
       .order('created_at', { ascending: false })
 
-    if (fechaDesde) query = query.gte('created_at', `${fechaDesde}T00:00:00`)
-    if (fechaHasta) query = query.lte('created_at', `${fechaHasta}T23:59:59`)
+    if (fechaDesde) query = query.gte('created_at', rangoTimestampsAR(fechaDesde, fechaDesde).desde)
+    if (fechaHasta) query = query.lte('created_at', rangoTimestampsAR(fechaHasta, fechaHasta).hasta)
     if (formaPagoFiltro !== 'todas') query = query.eq('forma_pago', formaPagoFiltro)
 
     const { data, error: dbError } = await query
