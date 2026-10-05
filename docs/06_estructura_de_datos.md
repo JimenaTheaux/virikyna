@@ -186,7 +186,9 @@ CREATE TABLE productos (
   margen_1 NUMERIC(6,2) NOT NULL DEFAULT 0,
   margen_2 NUMERIC(6,2) NOT NULL DEFAULT 0,
   iva_porcentaje NUMERIC(5,2) NOT NULL DEFAULT 21,
-  -- precio de venta derivado, siempre consistente con costo/margen/iva:
+  -- precio de venta derivado, siempre consistente con costo/margen/iva.
+  -- ⚠ Versión vigente desde docs/29 (sección 20): precio_venta se redondea a la centena
+  -- (ROUND(…, -2)) y se agregó precio_calculado con la fórmula exacta a 2 decimales.
   precio_venta NUMERIC(12,2) GENERATED ALWAYS AS (
     ROUND(costo * (1 + margen_1/100.0) * (1 + margen_2/100.0) * (1 + iva_porcentaje/100.0), 2)
   ) STORED,
@@ -1490,7 +1492,8 @@ export type Producto = {
   margen_1: number
   margen_2: number
   iva_porcentaje: number
-  precio_venta: number        // columna generada — nunca escribir, solo leer
+  precio_calculado: number    // columna generada (sección 20) — fórmula exacta, 2 decimales
+  precio_venta: number        // columna generada — redondeada a la centena (sección 20), nunca escribir
   stock_minimo: number
   estado: EstadoProducto
   created_at: string
@@ -1749,6 +1752,8 @@ Regla de negocio agregada: cuando un ítem de la factura está vinculado a un pr
 - **Proveedor nuevo** (el producto cambió de proveedor respecto de la última vez) → se actualiza `productos.proveedor_id` al proveedor de la factura y se pisan `margen_1`/`margen_2` con `margen_1_default`/`margen_2_default` del proveedor nuevo, sobrescribiendo el margen anterior (incluida cualquier excepción manual previa — el cambio de proveedor es intencional y gana).
 
 No se toca el cálculo de `precio_venta` (columna generada, sección 3) ni ninguna otra regla de stock de esta función — solo se agrega esta comparación dentro del loop de ítems que ya existía.
+
+> ⚠ La versión vigente de `cargar_factura_compra` es la de la sección 20 (docs/29): mantiene esta regla de proveedor y márgenes y además actualiza `productos.costo` desde la factura.
 
 El trigger `trg_proteger_margen_producto` (sección 11) bloquea cualquier UPDATE a `margen_1`/`margen_2` si quien ejecuta la sesión no es admin. Acá el cambio es automático, disparado por la regla "cambió de proveedor" — no una edición manual — así que necesita su propia válvula de escape, con el mismo patrón que ya usa `fn_auditoria_generica` (`virikyna.suppress_audit`, sección 10) pero con su propio flag, para NO desactivar la auditoría: el `UPDATE` sigue quedando registrado en `auditoria` como `'edicion'` normal (así el Historial puede mostrar por qué cambió el margen).
 
@@ -2103,3 +2108,48 @@ ALTER TABLE egresos      ALTER COLUMN fecha SET DEFAULT ((now() AT TIME ZONE 'Am
 
 - `fechaISO()`, `fechaHoyISO()` y `fechaLocalDeISO()` calculan en hora AR (antes usaban la zona de la PC). Son alias de `hoyAR()`; el nombre se mantiene para no tocar todos los usos.
 - `rangoTimestampsAR(desdeDia, hastaDia)` → `{ desde: 'YYYY-MM-DDT00:00:00-03:00', hasta: 'YYYY-MM-DDT23:59:59.999-03:00' }`: para filtrar columnas `timestamptz` por días AR completos. Nunca armar `${dia}T23:59:59` sin zona — la base lo lee en UTC (= 20:59:59 AR). Usado en: Cierre de Caja de Local (egresos del turno), Ventas del día (`VentasDelDiaTab`), Dashboard de Local, Facturación (Local y Gestión) e Historial (Gestión).
+
+## 20. Precio de venta redondeado a la centena + costo desde la factura de compra
+
+SQL completo en `docs/29_redondeo_y_costo_factura.sql` (aplicado). Requiere PostgreSQL 17 (`ALTER COLUMN … SET EXPRESSION`).
+
+**Precio de venta redondeado.** `productos` tiene ahora dos columnas generadas:
+
+```sql
+precio_calculado NUMERIC(12,2) GENERATED ALWAYS AS (
+  ROUND(costo * (1 + margen_1/100.0) * (1 + margen_2/100.0) * (1 + iva_porcentaje/100.0), 2)
+) STORED,
+precio_venta NUMERIC(12,2) GENERATED ALWAYS AS (   -- vía ALTER COLUMN … SET EXPRESSION
+  ROUND(costo * (1 + margen_1/100.0) * (1 + margen_2/100.0) * (1 + iva_porcentaje/100.0), -2)
+) STORED,
+```
+
+- `precio_calculado` es el precio exacto de la fórmula (lo que antes era `precio_venta`). Sirve para ver cuánto se redondeó.
+- `precio_venta` es lo que se cobra: redondeo a la centena, la mitad redondea hacia arriba (2148 → 2100, 2150 → 2200, 2149,99 → 2100).
+- `precio_venta` se calcula desde la fórmula cruda, no desde `precio_calculado`: Postgres no deja que una columna generada lea otra. Consecuencia rara: si el precio exacto cae entre 2149,995 y 2149,999, `precio_calculado` muestra 2150,00 y `precio_venta` 2100.
+- Un precio exacto menor a 50 redondea a 0 (al aplicar: ningún producto con costo > 0 estaba en ese rango).
+- Las dos son de solo lectura. `revertir_edicion` (docs/10) excluye ahora `precio_calculado` además de `precio_venta` de lo que restaura: si no, revertir una edición de producto falla con "column can only be updated to DEFAULT".
+
+**Costo desde la factura de compra.** Versión vigente de `cargar_factura_compra` (reemplaza la de la sección 13). Por cada producto vinculado en la factura:
+
+- `productos.costo` = `precio_unitario_sin_iva` del ítem: precio de lista, antes del `descuento_porcentaje` de la línea (es el mismo valor con el que la pantalla precarga el ítem la próxima vez). `precio_venta` y `precio_calculado` se recalculan solos.
+- Aplica a todo tipo de comprobante **salvo `nota_credito` y `nota_debito`**. Hoy el enum vivo es `factura, remito, cupon, nota_credito, nota_debito` — `presupuesto` figura en la sección 1 pero nunca se aplicó a la base; si se agrega, también actualiza costo.
+- Producto repetido en la misma factura: gana la **última línea**.
+- Ítem con precio 0 (bonificación, sin cargo): no pisa el costo.
+- La regla de proveedor y márgenes de la sección 13 sigue igual (también en NC/ND).
+- Proveedor, márgenes y costo se escriben en **un solo `UPDATE` por producto** → una sola fila `'edicion'` en `auditoria` (trigger `trg_auditoria_productos`) con costo, márgenes y `precio_venta` antes/después, visible en Historial y en la pestaña Historial de precio. Si no cambia nada, no hay `UPDATE` ni fila. Se puede deshacer con "Revertir" (`revertir_edicion`).
+- Stock e ítems: sin cambios.
+
+**Lo que no cambia el costo:**
+
+- `editar_factura_compra` solo toca campos descriptivos. Si se cambia el tipo de una factura ya cargada (p. ej. a nota de crédito), el costo que se cargó queda igual.
+- `anular_factura_compra` revierte el stock pero **no el costo**: el producto se queda con el precio de la factura anulada. Para volver atrás: "Revertir" en Historial sobre esa edición, o corregir el costo a mano.
+- `actualizar_precios_masivo` sigue aplicando el % sobre `costo` (sin cambios).
+- `crear_devolucion` solo lee `precio_venta` (precio de los productos nuevos de un cambio).
+
+**Frontend** (`packages/shared/lib/precios.ts`, reemplaza a `calcularPrecioVenta` de `format.ts`):
+
+- `calcularPrecio({ costo, margen1, margen2, iva })` → `{ calculado, venta, ajuste }`: misma fórmula y mismo redondeo que las dos columnas, con enteros (`BigInt`) en vez de punto flotante para que un ,5 redondee igual que `NUMERIC`. Lo usan los 3 formularios de producto (con el `iva_porcentaje` del producto) y muestran "Calculado → redondeado (ajuste)" cuando hay ajuste.
+- `cambiosPrecioFactura(...)`: espejo de las reglas de `cargar_factura_compra` para avisar, por ítem, "Actualiza precio de venta: $A → $B" antes de guardar la factura.
+- `costoConPorcentaje(...)` + `useActualizarPrecios` (hook compartido por el modal de escritorio y el sheet de Inventario): vista previa por producto antes de aplicar `actualizar_precios_masivo`.
+- Tests: `npm test` (redondeo, entradas de formulario, reglas de factura). Paridad contra la base real: `npm run paridad-precios` (compara cada producto con sus columnas generadas y corre la actualización masiva con varios % en un bloque que se deshace solo).

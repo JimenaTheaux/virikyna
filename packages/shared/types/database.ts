@@ -154,7 +154,8 @@ export type Producto = {
   margen_1: number
   margen_2: number
   iva_porcentaje: number
-  precio_venta: number // columna generada — nunca escribir, solo leer
+  precio_calculado: number // columna generada — precio exacto de la fórmula, 2 decimales. Nunca escribir
+  precio_venta: number // columna generada — precio_calculado redondeado a la centena. Nunca escribir
   stock_minimo: number
   estado: EstadoProducto
   created_at: string

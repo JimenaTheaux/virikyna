@@ -128,7 +128,8 @@ Roles del sistema: **Admin** (Alicia, Ana Julia) y **Cajero** (Jose, Ale, Belu).
 
 **Regla de precios y márgenes (importante):**
 - El vendedor solo carga el **costo**. El margen es decisión de gerencia, no del vendedor — evita errores de carga (ya ocurrió un caso real).
-- Precio de venta = `costo × (1 + margen_1%) × (1 + margen_2%) × (1 + IVA 21%)`.
+- Precio de venta = `costo × (1 + margen_1%) × (1 + margen_2%) × (1 + IVA 21%)`, **redondeado a la centena** (2148 → $2.100, 2150 → $2.200). El precio exacto sin redondear queda guardado aparte como precio calculado.
+- El costo se actualiza solo al cargar una factura de compra (ver módulo 6), además de la edición manual y la actualización masiva.
 - El margen tiene un **valor por defecto a nivel proveedor** — los productos nuevos de ese proveedor lo heredan automáticamente.
 - Se puede hacer **override individual** del margen en un producto puntual, sin afectar el default del proveedor.
 
@@ -172,6 +173,8 @@ Mismo cuadro de acciones que Inventario de escritorio (excepto ajuste de stock, 
 
 **Reglas:**
 - Cargar una factura de compra actualiza el stock automático de esos productos, en la ubicación indicada por ítem. Queda registrado qué usuario realizó la carga.
+- También actualiza el **costo** de cada producto con el precio unitario sin IVA del ítem (antes del descuento de la línea), y con eso su precio de venta. Aplica a factura, remito, presupuesto y cupón — **no** a nota de crédito ni nota de débito. Si el mismo producto aparece dos veces, vale la última línea. Un ítem con precio 0 no cambia el costo. El cambio queda en Historial y se puede revertir.
+- Anular una factura de compra devuelve el stock pero **no** el costo: para volverlo atrás, revertir ese cambio desde Historial.
 - Registrar un pago a proveedor genera una **salida de dinero** → se refleja como egreso en el Cierre de Caja del día, y afecta la cuenta corriente del proveedor.
 - Pago a proveedores: efectivo, transferencia, cheque físico o echeq.
 
