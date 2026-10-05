@@ -128,7 +128,11 @@ Roles del sistema: **Admin** (Alicia, Ana Julia) y **Cajero** (Jose, Ale, Belu).
 
 **Regla de precios y márgenes (importante):**
 - El vendedor solo carga el **costo**. El margen es decisión de gerencia, no del vendedor — evita errores de carga (ya ocurrió un caso real).
-- Precio de venta = `costo × (1 + margen_1%) × (1 + margen_2%) × (1 + IVA 21%)`, **redondeado a la centena** (2148 → $2.100, 2150 → $2.200). El precio exacto sin redondear queda guardado aparte como precio calculado.
+- Precio de venta = `costo × (1 + margen_1%) × (1 + margen_2%) × (1 + IVA 21%)`, con **redondeo escalonado** según el precio calculado. El precio exacto sin redondear queda guardado aparte como precio calculado.
+  - **Menos de $500:** a la centena más cercana; la mitad sube ($149 → $100, $150 → $200, $450 → $500).
+  - **De $500 a $9.999,99:** a múltiplo de $500. Si lo que sobra sobre el múltiplo de abajo es hasta $200, baja; si es más de $200, sube ($6.200 → $6.000, $6.200,01 → $6.500, $6.700 → $6.500, $6.800 → $7.000, $9.750 → $10.000).
+  - **$10.000 o más:** a múltiplo de $1.000 más cercano; $500 sube ($11.200 → $11.000, $11.500 → $12.000, $11.680 → $12.000).
+  - $0 queda en $0.
 - El costo se actualiza solo al cargar una factura de compra (ver módulo 6), además de la edición manual y la actualización masiva.
 - El margen tiene un **valor por defecto a nivel proveedor** — los productos nuevos de ese proveedor lo heredan automáticamente.
 - Se puede hacer **override individual** del margen en un producto puntual, sin afectar el default del proveedor.

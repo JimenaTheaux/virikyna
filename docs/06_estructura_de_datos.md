@@ -187,8 +187,8 @@ CREATE TABLE productos (
   margen_2 NUMERIC(6,2) NOT NULL DEFAULT 0,
   iva_porcentaje NUMERIC(5,2) NOT NULL DEFAULT 21,
   -- precio de venta derivado, siempre consistente con costo/margen/iva.
-  -- ⚠ Versión vigente desde docs/29 (sección 20): precio_venta se redondea a la centena
-  -- (ROUND(…, -2)) y se agregó precio_calculado con la fórmula exacta a 2 decimales.
+  -- ⚠ No es la versión vigente: docs/29 (sección 20) agregó precio_calculado (fórmula exacta a 2
+  -- decimales) y docs/30 (sección 21) redondea precio_venta con redondear_precio_venta (escalonado).
   precio_venta NUMERIC(12,2) GENERATED ALWAYS AS (
     ROUND(costo * (1 + margen_1/100.0) * (1 + margen_2/100.0) * (1 + iva_porcentaje/100.0), 2)
   ) STORED,
@@ -1493,7 +1493,7 @@ export type Producto = {
   margen_2: number
   iva_porcentaje: number
   precio_calculado: number    // columna generada (sección 20) — fórmula exacta, 2 decimales
-  precio_venta: number        // columna generada — redondeada a la centena (sección 20), nunca escribir
+  precio_venta: number        // columna generada — redondeo escalonado (sección 21), nunca escribir
   stock_minimo: number
   estado: EstadoProducto
   created_at: string
@@ -2125,9 +2125,7 @@ precio_venta NUMERIC(12,2) GENERATED ALWAYS AS (   -- vía ALTER COLUMN … SET 
 ```
 
 - `precio_calculado` es el precio exacto de la fórmula (lo que antes era `precio_venta`). Sirve para ver cuánto se redondeó.
-- `precio_venta` es lo que se cobra: redondeo a la centena, la mitad redondea hacia arriba (2148 → 2100, 2150 → 2200, 2149,99 → 2100).
-- `precio_venta` se calcula desde la fórmula cruda, no desde `precio_calculado`: Postgres no deja que una columna generada lea otra. Consecuencia rara: si el precio exacto cae entre 2149,995 y 2149,999, `precio_calculado` muestra 2150,00 y `precio_venta` 2100.
-- Un precio exacto menor a 50 redondea a 0 (al aplicar: ningún producto con costo > 0 estaba en ese rango).
+- `precio_venta` es lo que se cobra. **⚠ El redondeo a la centena de esta sección fue reemplazado por el redondeo escalonado de la sección 21 (docs/30).**
 - Las dos son de solo lectura. `revertir_edicion` (docs/10) excluye ahora `precio_calculado` además de `precio_venta` de lo que restaura: si no, revertir una edición de producto falla con "column can only be updated to DEFAULT".
 
 **Costo desde la factura de compra.** Versión vigente de `cargar_factura_compra` (reemplaza la de la sección 13). Por cada producto vinculado en la factura:
@@ -2153,3 +2151,52 @@ precio_venta NUMERIC(12,2) GENERATED ALWAYS AS (   -- vía ALTER COLUMN … SET 
 - `cambiosPrecioFactura(...)`: espejo de las reglas de `cargar_factura_compra` para avisar, por ítem, "Actualiza precio de venta: $A → $B" antes de guardar la factura.
 - `costoConPorcentaje(...)` + `useActualizarPrecios` (hook compartido por el modal de escritorio y el sheet de Inventario): vista previa por producto antes de aplicar `actualizar_precios_masivo`.
 - Tests: `npm test` (redondeo, entradas de formulario, reglas de factura). Paridad contra la base real: `npm run paridad-precios` (compara cada producto con sus columnas generadas y corre la actualización masiva con varios % en un bloque que se deshace solo).
+
+## 21. Redondeo escalonado del precio de venta
+
+Reemplaza el redondeo a la centena de la sección 20. SQL completo en `docs/30_redondeo_escalonado.sql`. `precio_calculado` no cambia.
+
+**Regla** (base = `precio_calculado`, o sea la fórmula cruda con `ROUND(…, 2)`):
+
+| Base | Redondeo | Ejemplos |
+|---|---|---|
+| `< 500` | Centena más cercana, la mitad sube | 49 → 0, 50 → 100, 149 → 100, 150 → 200, 449,99 → 400, 450 → 500, 499 → 500 |
+| `500 ≤ base < 10000` | Múltiplo de 500. `resto = base mod 500`: `resto ≤ 200` baja, `resto > 200` sube | 500 → 500, 700 → 500, 700,01 → 1000, 6100 → 6000, 6200 → 6000, 6200,01 → 6500, 6300 → 6500, 6700 → 6500, 6700,01 → 7000, 6800 → 7000, 9700 → 9500, 9750 → 10000, 9999,99 → 10000 |
+| `≥ 10000` | Múltiplo de 1000 más cercano, 500 sube | 10000 → 10000, 10400 → 10000, 11200 → 11000, 11499,99 → 11000, 11500 → 12000, 11680 → 12000 |
+| `0` | — | 0 → 0 |
+
+```sql
+CREATE OR REPLACE FUNCTION redondear_precio_venta(p_precio NUMERIC) RETURNS NUMERIC
+LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE
+AS $$
+DECLARE
+  v_base NUMERIC := ROUND(p_precio, 2);  -- = precio_calculado
+  v_resto NUMERIC;
+BEGIN
+  IF v_base < 500 THEN
+    RETURN ROUND(v_base, -2);
+  ELSIF v_base < 10000 THEN
+    v_resto := mod(v_base, 500);
+    RETURN CASE WHEN v_resto <= 200 THEN v_base - v_resto ELSE v_base - v_resto + 500 END;
+  ELSE
+    RETURN ROUND(v_base, -3);
+  END IF;
+END;
+$$;
+
+ALTER TABLE productos ALTER COLUMN precio_venta SET EXPRESSION AS (
+  redondear_precio_venta(costo * (1 + margen_1/100.0) * (1 + margen_2/100.0) * (1 + iva_porcentaje/100.0))
+);
+```
+
+- **La base es `precio_calculado`**: la función hace `ROUND(x, 2)` antes de aplicar la regla. Con eso desaparece el caso raro de la sección 20 (`precio_calculado` 2150,00 con `precio_venta` 2100).
+- **`IMMUTABLE`** es obligatorio para usarla en una columna generada.
+- **⚠ Si se cambia la función** (`CREATE OR REPLACE`), las filas guardadas **no** se recalculan solas: `precio_venta` es `STORED` y solo se recalcula al escribir la fila. Hay que volver a correr el `ALTER TABLE … SET EXPRESSION` de arriba, que reescribe la tabla y recalcula todo.
+- La función no se puede borrar mientras `precio_venta` dependa de ella.
+- El recálculo al aplicar no dispara triggers de fila: no genera filas de auditoría.
+- El ajuste (`precio_venta − precio_calculado`) ahora puede llegar a ±$500 (antes ±$50). Al momento de diseñarlo, con los 73 productos que había: 57 cambiaban de precio (36 suben, 21 bajan).
+- Sin cambios: `costo`, márgenes, IVA, `cargar_factura_compra`, `actualizar_precios_masivo` y ventas (que leen `precio_venta` ya redondeado).
+
+**Frontend** (`packages/shared/lib/precios.ts`): `redondearPrecioVenta(precio)` es el espejo de la función SQL, en centavos enteros (`BigInt`). Es la única implementación de la regla y la usa `calcularPrecio()` (formularios de producto, aviso de factura de compra, vista previa de Actualizar precios). Los 29 casos de la tabla están como test en SQL (bloque 3 de docs/30) y en TS (`packages/shared/tests/precios.test.ts`). Paridad contra la base: `npm run paridad-precios`.
+
+**Orden de despliegue:** primero el SQL, después el frontend. Si el frontend nuevo corre contra la base vieja, los avisos de factura y Actualizar precios muestran el precio "antes" con la regla vieja y el "después" con la nueva.

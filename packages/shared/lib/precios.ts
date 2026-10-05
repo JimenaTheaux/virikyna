@@ -1,8 +1,8 @@
 // Precio de venta de un producto — espejo exacto de las columnas generadas de `productos`
-// (docs/06_estructura_de_datos.md, sección 20; docs/29_redondeo_y_costo_factura.sql):
+// (docs/06_estructura_de_datos.md, secciones 20 y 21; docs/29 y docs/30_redondeo_escalonado.sql):
 //
 //   precio_calculado = ROUND(costo × (1 + margen_1/100) × (1 + margen_2/100) × (1 + iva/100), 2)
-//   precio_venta     = ROUND(misma fórmula cruda, -2)   ← lo que se cobra, a la centena
+//   precio_venta     = redondear_precio_venta(precio_calculado)   ← lo que se cobra (regla escalonada)
 //
 // El valor real siempre lo calcula la base; esto es para las vistas previas (formularios de
 // producto, ítem de factura de compra, actualización masiva). Se calcula con enteros (BigInt) y
@@ -48,6 +48,25 @@ function dividirRedondeando(a: bigint, b: bigint): bigint {
 
 const aPesos = (centavos: bigint) => Number(centavos) / 100
 
+// Regla escalonada del precio de venta — espejo de redondear_precio_venta (docs/30). Todo en
+// centavos enteros; primero ROUND(x, 2) (= precio_calculado) y después:
+//   base < 500           → centena más cercana, la mitad sube        (149 → 100, 150 → 200)
+//   500 <= base < 10000  → múltiplo de 500: resto <= 200 baja, > 200 sube (6200 → 6000, 6200,01 → 6500)
+//   base >= 10000        → múltiplo de 1000 más cercano, 500 sube   (11499,99 → 11000, 11500 → 12000)
+export function redondearPrecioVenta(precio: number | string): number {
+  const base = aEscalado(precio, 2)
+  let venta: bigint
+  if (base < 50_000n) {
+    venta = dividirRedondeando(base, 10_000n) * 10_000n
+  } else if (base < 1_000_000n) {
+    const resto = base % 50_000n
+    venta = resto <= 20_000n ? base - resto : base - resto + 50_000n
+  } else {
+    venta = dividirRedondeando(base, 100_000n) * 100_000n
+  }
+  return aPesos(venta)
+}
+
 export type DatosPrecio = {
   costo: number | string
   margen1: number | string
@@ -57,7 +76,7 @@ export type DatosPrecio = {
 
 export type PrecioProducto = {
   calculado: number // precio_calculado: exacto, 2 decimales
-  venta: number // precio_venta: a la centena
+  venta: number // precio_venta: redondeo escalonado (redondearPrecioVenta)
   ajuste: number // venta − calculado (negativo si redondeó para abajo)
 }
 
@@ -69,9 +88,9 @@ export function calcularPrecio({ costo, margen1, margen2, iva }: DatosPrecio): P
     (DIEZ_MIL + aEscalado(margen2, 2)) *
     (DIEZ_MIL + aEscalado(iva, 2))
   const calculado = dividirRedondeando(crudo, UN_BILLON)
-  // Desde la fórmula cruda, no desde `calculado` (igual que la columna generada).
-  const venta = dividirRedondeando(crudo, UN_BILLON * DIEZ_MIL) * DIEZ_MIL
-  return { calculado: aPesos(calculado), venta: aPesos(venta), ajuste: aPesos(venta - calculado) }
+  // La base del redondeo es precio_calculado (la función SQL hace ROUND(…, 2) primero).
+  const venta = redondearPrecioVenta(aPesos(calculado))
+  return { calculado: aPesos(calculado), venta, ajuste: aPesos(aEscalado(venta, 2) - calculado) }
 }
 
 // Costo tras la actualización masiva: ROUND(costo × (1 + porcentaje/100), 2), igual que el RPC
