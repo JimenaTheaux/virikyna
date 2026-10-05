@@ -1,3 +1,6 @@
+import { useId, useRef } from 'react'
+import { useFocoAtrapado } from '@virikyna/shared'
+
 type Props = {
   title: string
   mensaje: string
@@ -11,15 +14,29 @@ type Props = {
 // por click afuera, mismo criterio que BottomSheet — un toque perdido no debe descartar la
 // confirmación. z-[70] para quedar por encima tanto de BottomSheet (z-50) como de BarcodeScanner
 // (z-[60]), que puede estar montado debajo cuando se pide cerrar un formulario con el escáner abierto.
+// Diálogo accesible: Esc = Cancelar, foco atrapado y arranca en Cancelar (useFocoAtrapado).
 export function ConfirmDialog({ title, mensaje, confirmLabel = 'Confirmar', onCancel, onConfirm }: Props) {
+  const tituloId = useId()
+  const panelRef = useRef<HTMLDivElement>(null)
+  useFocoAtrapado(panelRef, onCancel)
+
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/40 p-stack-md">
-      <div className="w-full max-w-[400px] rounded-lg bg-surface p-card shadow-sm">
-        <h2 className="font-display text-headline-md text-accent-darker">{title}</h2>
+      <div
+        ref={panelRef}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={tituloId}
+        className="w-full max-w-[400px] rounded-lg bg-surface p-card shadow-sm"
+      >
+        <h2 id={tituloId} className="font-display text-headline-md text-accent-darker">
+          {title}
+        </h2>
         <p className="mt-2 font-sans text-body-md text-ink">{mensaje}</p>
         <div className="mt-stack-md flex justify-end gap-3">
           <button
             type="button"
+            data-autofocus
             onClick={onCancel}
             className="rounded px-4 py-3 font-sans text-label-bold text-ink-soft hover:bg-bg"
           >

@@ -14,12 +14,15 @@ type Props = {
 // esa posición — evita que un click apurado confirme algo pensando que era el botón de siempre.
 export function ConfirmDialog({ title, mensaje, confirmLabel = 'Eliminar', confirmando, onCancel, onConfirm }: Props) {
   return (
-    <Modal title={title} onClose={onCancel} widthClassName="max-w-[440px]">
+    // Siempre como diálogo accesible: Esc = Cancelar (nunca confirma) y el foco arranca en
+    // Cancelar — un Enter apurado no ejecuta la acción destructiva.
+    <Modal title={title} onClose={onCancel} widthClassName="max-w-[440px]" dialogo={{ onEscape: onCancel }}>
       <div className="flex flex-col gap-stack-md">
         <p className="font-sans text-body-md text-ink">{mensaje}</p>
         <div className="flex justify-end gap-3">
           <button
             type="button"
+            data-autofocus
             onClick={onCancel}
             className="rounded px-4 py-3 font-sans text-label-bold text-ink-soft hover:bg-bg"
           >

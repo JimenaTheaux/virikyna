@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react'
+import { useId, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { useFocoAtrapado } from '../../lib/useFocoAtrapado'
 
 type Props = {
   title: string
@@ -9,6 +10,9 @@ type Props = {
   // scrollea, respetando el safe-area inferior del celular. El botón de guardar que viva acá
   // apunta a su <form> con el atributo `form="<id>"`.
   footer?: ReactNode
+  // Opt-in, igual que Modal: role="dialog" + aria-modal + aria-labelledby, Esc → onEscape y foco
+  // atrapado (useFocoAtrapado). Sin esta prop el sheet se comporta como siempre.
+  dialogo?: { onEscape: () => void }
 }
 
 // Equivalente móvil de Modal (apps/virikyna-local y virikyna-gestion): en vez de un modal
@@ -28,11 +32,22 @@ type Props = {
 // también al onSubmit del formulario de afuera (por eso cerrar el subformulario de producto
 // cerraba la factura entera). Cortamos esa propagación acá, en el único punto por el que pasan
 // todos los sheets de la app.
-export function BottomSheet({ title, onClose, children, footer }: Props) {
+export function BottomSheet({ title, onClose, children, footer, dialogo }: Props) {
+  const tituloId = useId()
+  const panelRef = useRef<HTMLDivElement>(null)
+  useFocoAtrapado(panelRef, dialogo?.onEscape)
+
   return createPortal(
-    <div className="fixed inset-0 z-50 flex flex-col bg-bg" onSubmit={(e) => e.stopPropagation()}>
+    <div
+      ref={panelRef}
+      {...(dialogo ? { role: 'dialog', 'aria-modal': true, 'aria-labelledby': tituloId } : {})}
+      className="fixed inset-0 z-50 flex flex-col bg-bg"
+      onSubmit={(e) => e.stopPropagation()}
+    >
       <div className="flex flex-shrink-0 items-center justify-between border-b border-line bg-surface px-4 py-3 pt-[calc(env(safe-area-inset-top,0px)+12px)]">
-        <h2 className="font-display text-headline-md text-accent-darker">{title}</h2>
+        <h2 id={tituloId} className="font-display text-headline-md text-accent-darker">
+          {title}
+        </h2>
         <button
           type="button"
           onClick={onClose}

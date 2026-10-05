@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react'
+import { useId, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { useFocoAtrapado } from '../../lib/useFocoAtrapado'
 
 type Props = {
   title: string
@@ -9,6 +10,9 @@ type Props = {
   // Pie fijo (fuera del área con scroll) — para formularios largos donde los botones de acción
   // deben quedar siempre accesibles sin scrollear (ej. carga de factura de compra tipo planilla).
   footer?: ReactNode
+  // Opt-in: role="dialog" + aria-modal + aria-labelledby, Esc → onEscape y foco atrapado
+  // (useFocoAtrapado). Sin esta prop el modal se comporta como siempre.
+  dialogo?: { onEscape: () => void }
 }
 
 // Modal centrado de escritorio — lo usan virikyna-local y virikyna-gestion (que lo re-exportan desde
@@ -29,7 +33,11 @@ type Props = {
 // cerrar el subformulario de producto cerraba la factura entera). Cortamos esa propagación acá,
 // en el único punto por el que pasan todos los modales de la app — así ningún formulario futuro
 // que se abra dentro de otro va a heredar este mismo bug.
-export function Modal({ title, onClose, children, widthClassName = 'max-w-[560px]', footer }: Props) {
+export function Modal({ title, onClose, children, widthClassName = 'max-w-[560px]', footer, dialogo }: Props) {
+  const tituloId = useId()
+  const panelRef = useRef<HTMLDivElement>(null)
+  useFocoAtrapado(panelRef, dialogo?.onEscape)
+
   return createPortal(
     // Sin cierre por click afuera a propósito — un clic perdido durante la carga de una factura
     // (varios ítems, muchos campos) no debe tirar todo lo cargado. Solo cierran el botón ✕ y los
@@ -39,12 +47,16 @@ export function Modal({ title, onClose, children, widthClassName = 'max-w-[560px
       onSubmit={(e) => e.stopPropagation()}
     >
       <div
+        ref={panelRef}
+        {...(dialogo ? { role: 'dialog', 'aria-modal': true, 'aria-labelledby': tituloId } : {})}
         className={`flex w-full ${widthClassName} max-h-[90vh] flex-col rounded-lg bg-surface shadow-sm ${
           footer ? '' : 'overflow-y-auto p-card'
         }`}
       >
         <div className={`flex shrink-0 items-center justify-between ${footer ? 'p-card pb-0' : ''}`}>
-          <h2 className="font-display text-headline-md text-accent-darker">{title}</h2>
+          <h2 id={tituloId} className="font-display text-headline-md text-accent-darker">
+            {title}
+          </h2>
           <button
             type="button"
             onClick={onClose}

@@ -15,6 +15,7 @@ import type {
   UbicacionStock,
 } from '../types/database'
 import { IVA_DEFAULT } from './inventario'
+import type { ProductoPrecioActual } from './precios'
 import { fechaHoyISO } from './format'
 
 export type ItemFacturaCompra = {
@@ -71,17 +72,24 @@ export function calcularTotalesFacturaCompra(items: ItemFacturaCompra[]): {
   return { subtotalSinIva, descuento, iva, total, saldoPendiente: total }
 }
 
-// Extiende el ítem "real" (el que viaja al RPC `cargar_factura_compra`) con dos campos que
+// Extiende el ítem "real" (el que viaja al RPC `cargar_factura_compra`) con campos que
 // solo existen para la UI de la planilla/tarjeta de carga y nunca se envían al backend:
 // - marca: para ítems vinculados al catálogo es puramente informativa (ya vive en producto.marca,
 //   recuperable vía producto_id); para ítems libres se pega dentro de `descripcion` recién al
 //   guardar (ver integrarMarcaEnItemsLibres), porque no existe una columna de marca por ítem.
 // - codigoBarras: solo dispara la búsqueda de producto, no se persiste (un ítem libre no tiene
 //   código de barras propio en el catálogo).
-export type ItemFacturaCompraUI = ItemFacturaCompra & { marca: string; codigoBarras: string }
+// - productoPrecio: costo, márgenes, IVA, proveedor y precio de venta del producto vinculado, tal
+//   como estaban al elegirlo — para avisar cómo cambia el precio de venta al guardar
+//   (cambiosPrecioFactura, lib/precios.ts). null en ítems libres.
+export type ItemFacturaCompraUI = ItemFacturaCompra & {
+  marca: string
+  codigoBarras: string
+  productoPrecio: ProductoPrecioActual | null
+}
 
 export function nuevoItemFacturaCompraUI(): ItemFacturaCompraUI {
-  return { ...nuevoItemFacturaCompra(), marca: '', codigoBarras: '' }
+  return { ...nuevoItemFacturaCompra(), marca: '', codigoBarras: '', productoPrecio: null }
 }
 
 export type ProblemaItemFacturaCompra = { key: string; numero: number; mensaje: string }

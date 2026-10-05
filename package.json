@@ -13,6 +13,8 @@
     "dev:inventario": "npm run dev --workspace apps/virikyna-inventario",
     "build:inventario": "npm run build --workspace apps/virikyna-inventario",
     "dev:gestion": "npm run dev --workspace apps/virikyna-gestion",
-    "build:gestion": "npm run build --workspace apps/virikyna-gestion"
+    "build:gestion": "npm run build --workspace apps/virikyna-gestion",
+    "test": "node --test \"packages/shared/tests/*.test.ts\"",
+    "paridad-precios": "node packages/shared/scripts/paridad-precios.ts"
   }
 }

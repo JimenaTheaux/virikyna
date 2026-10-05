@@ -1,12 +1,14 @@
 import { useRef } from 'react'
 import type { Proveedor, RolUsuario, UbicacionStock } from '@virikyna/shared'
 import {
+  AvisoCambioPrecioFactura,
   AvisoCodigoFactura,
   formatCurrency,
   ScanButton,
   SugerenciasProductoFactura,
   totalItemFacturaCompra,
   useItemFacturaBusqueda,
+  type CambioPrecioFactura,
   type ItemFacturaCompraUI,
 } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
@@ -22,6 +24,8 @@ type Props = {
   rol: RolUsuario
   // Marcado por la validación de "Guardar factura" (ej. sin producto seleccionado).
   error?: string
+  // Cómo queda el precio de venta del producto al guardar (cambiosPrecioFactura, lo calcula la página).
+  cambioPrecio?: CambioPrecioFactura
   // Ver useItemFacturaBusqueda: foco en "Cód. barras" y avance con el lector.
   focoCodigo?: number
   onAvanzar: () => void
@@ -46,6 +50,7 @@ export function ItemFacturaRow({
   proveedores,
   rol,
   error,
+  cambioPrecio,
   focoCodigo,
   onAvanzar,
   onChange,
@@ -190,6 +195,7 @@ export function ItemFacturaRow({
         <p className="text-right font-sans text-label-bold text-ink">
           Subtotal: {formatCurrency(totalItemFacturaCompra(item))}
         </p>
+        <AvisoCambioPrecioFactura cambio={cambioPrecio} className="text-right" />
       </div>
 
       {busqueda.creandoProducto && (

@@ -3,7 +3,9 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Proveedor, UbicacionStock } from '../../types/database'
 import { formatCurrency } from '../../lib/format'
 import { totalItemFacturaCompra, type ItemFacturaCompraUI } from '../../lib/facturasCompra'
+import type { CambioPrecioFactura } from '../../lib/precios'
 import { selectClass } from './FormField'
+import { AvisoCambioPrecioFactura } from './AvisoCambioPrecioFactura'
 import { AvisoCodigoFactura, SugerenciasProductoFactura, useItemFacturaBusqueda } from './ItemFacturaBusqueda'
 
 // Lo que necesita la planilla de un producto recién creado para dejar el ítem vinculado.
@@ -38,6 +40,8 @@ type Props = {
   crearProducto: CrearProductoRender
   // Ítem marcado por la validación de "Guardar factura" (ej. sin producto seleccionado).
   conError?: boolean
+  // Cómo queda el precio de venta del producto al guardar (cambiosPrecioFactura, lo calcula la planilla).
+  cambioPrecio?: CambioPrecioFactura
   // Ver useItemFacturaBusqueda: foco en "Cód. barras" y avance con el lector.
   focoCodigo?: number
   onAvanzar?: () => void
@@ -62,6 +66,7 @@ export function ItemFacturaRow({
   proveedores,
   crearProducto,
   conError = false,
+  cambioPrecio,
   focoCodigo,
   onAvanzar,
   onChange,
@@ -70,7 +75,9 @@ export function ItemFacturaRow({
   const filaRef = useRef<HTMLTableRowElement>(null)
   const busqueda = useItemFacturaBusqueda({ supabase, item, onChange, onAvanzar, focoCodigo, contenedorRef: filaRef })
   const { codigoRef, productoRef } = busqueda
-  const hayAviso = busqueda.buscandoCodigo || busqueda.avisoCodigo !== null
+  const hayAvisoCodigo = busqueda.buscandoCodigo || busqueda.avisoCodigo !== null
+  // Segunda fila debajo del ítem: aviso de código no encontrado y/o cambio de precio de venta.
+  const hayAviso = hayAvisoCodigo || cambioPrecio !== undefined
   const fondoError = conError ? 'bg-error/10' : ''
 
   return (
@@ -198,7 +205,8 @@ export function ItemFacturaRow({
       {hayAviso && (
         <tr className={`border-b border-line last:border-b-0 ${fondoError}`}>
           <td colSpan={9} className="px-2 pb-2">
-            <AvisoCodigoFactura busqueda={busqueda} />
+            {hayAvisoCodigo && <AvisoCodigoFactura busqueda={busqueda} />}
+            <AvisoCambioPrecioFactura cambio={cambioPrecio} className="px-2" />
           </td>
         </tr>
       )}

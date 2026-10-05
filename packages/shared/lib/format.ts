@@ -12,11 +12,19 @@ export function formatCurrencyCompact(value: number): string {
   }).format(value)
 }
 
-// Espeja la columna generada productos.precio_venta (docs/06_estructura_de_datos.md) —
-// se usa solo para la vista previa en vivo del formulario, el valor real siempre lo calcula la base.
-export function calcularPrecioVenta(costo: number, margen1: number, margen2: number, ivaPorcentaje: number): number {
-  const precio = costo * (1 + margen1 / 100) * (1 + margen2 / 100) * (1 + ivaPorcentaje / 100)
-  return Math.round(precio * 100) / 100
+// Ajuste de redondeo con signo explícito: "−$ 48,37" / "+$ 51,63" (signo menos tipográfico).
+export function formatAjuste(valor: number): string {
+  return `${valor < 0 ? '−' : '+'}${formatCurrency(Math.abs(valor))}`
+}
+
+// Resumen de la vista previa de actualización masiva: "12 productos · 3 sin cambio de precio ·
+// +7,5 % sobre el costo". Lo anuncia el aria-live del modal (escritorio) y del sheet (Inventario).
+export function resumenVistaPreviaPrecios(productos: number, sinCambio: number, porcentaje: number): string {
+  const pct = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 4, signDisplay: 'always' }).format(porcentaje)
+  const partes = [`${productos} producto${productos === 1 ? '' : 's'}`]
+  if (sinCambio > 0) partes.push(`${sinCambio} sin cambio de precio`)
+  partes.push(`${pct} % sobre el costo`)
+  return partes.join(' · ')
 }
 
 export function generarCodigoInterno(): string {

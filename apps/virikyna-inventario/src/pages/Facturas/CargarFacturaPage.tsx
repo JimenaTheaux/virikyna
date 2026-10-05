@@ -9,6 +9,7 @@ import type {
 import {
   cargarFacturaCompra,
   calcularTotalesFacturaCompra,
+  cambiosPrecioFactura,
   fechaHoyISO,
   formatCurrency,
   friendlyError,
@@ -138,6 +139,7 @@ export function CargarFacturaPage() {
     total: totalPreview,
     saldoPendiente: saldoPendientePreview,
   } = calcularTotalesFacturaCompra(items)
+  const cambiosPrecio = cambiosPrecioFactura(items, tipoComprobante, proveedorId, proveedores)
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -348,6 +350,7 @@ export function CargarFacturaPage() {
               proveedores={proveedores}
               rol={rol}
               error={erroresItems[item.key]}
+              cambioPrecio={cambiosPrecio.get(item.key)}
               focoCodigo={foco?.key === item.key ? foco.n : 0}
               onChange={(cambios) => actualizarItem(item.key, cambios)}
               onEliminar={() => eliminarItem(item.key)}

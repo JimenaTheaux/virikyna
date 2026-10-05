@@ -3,7 +3,15 @@ import type { PostgrestError } from '@supabase/supabase-js'
 import type { Auditoria, CambioMargenProducto, EstadoProducto, Proveedor, UbicacionStock } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { friendlyError, nombresPorId } from '@virikyna/shared'
-import { calcularPrecioVenta, formatCurrency, formatFechaHora, generarCodigoInterno, historialDeMargen } from '@virikyna/shared'
+import {
+  calcularPrecio,
+  formatCurrency,
+  formatFechaHora,
+  generarCodigoInterno,
+  historialDeMargen,
+  IVA_DEFAULT,
+  NotaRedondeoPrecio,
+} from '@virikyna/shared'
 import { Modal } from '../../components/Modal'
 import { CodigoBarrasBox } from '@virikyna/shared'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
@@ -11,8 +19,6 @@ import { Field, ErrorText, inputClass } from '../../components/FormField'
 import { AjustarStockModal } from './AjustarStockModal'
 import { HistorialPrecioTab } from './HistorialPrecioTab'
 import type { ProductoConRelaciones } from './types'
-
-const IVA_DEFAULT = 21
 
 // Input compacto para que el formulario completo entre en una sola pantalla sin scroll interno.
 const inputCompacto = inputClass.replace('px-4 py-2.5', 'px-3 py-1.5').replace('text-body-md', 'text-[15px]')
@@ -114,7 +120,10 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, codigo
   const costoNum = Number(costo) || 0
   const margen1Num = Number(margen1) || 0
   const margen2Num = Number(margen2) || 0
-  const precioVenta = calcularPrecioVenta(costoNum, margen1Num, margen2Num, IVA_DEFAULT)
+  // IVA del producto (el formulario no lo edita); un producto nuevo toma el default de la columna.
+  const ivaPorcentaje = producto?.iva_porcentaje ?? IVA_DEFAULT
+  const precio = calcularPrecio({ costo, margen1, margen2, iva: ivaPorcentaje })
+  const precioVenta = precio.venta
 
   async function recargarStock() {
     if (!producto) return
@@ -363,10 +372,12 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, codigo
             </div>
             <div className="mt-2 flex items-center justify-between rounded bg-accent-light/50 px-3 py-1">
               <p className="font-sans text-label-md text-ink-soft">
-                Precio de venta <span className="text-ink-soft/80">· Costo × margen 1 × margen 2 × IVA 21%</span>
+                Precio de venta{' '}
+                <span className="text-ink-soft/80">· Costo × margen 1 × margen 2 × IVA {ivaPorcentaje}%</span>
               </p>
               <p className="font-display text-headline-md text-accent-darker">{formatCurrency(precioVenta)}</p>
             </div>
+            <NotaRedondeoPrecio precio={precio} className="mt-1 text-right" />
             {producto && cambiosMargen.length > 0 && (
               <p className="mt-2 font-sans text-label-md text-ink-soft">
                 Última modificación de margen: {formatFechaHora(cambiosMargen[0].createdAt)}

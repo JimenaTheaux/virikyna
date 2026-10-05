@@ -20,7 +20,22 @@ import { DropdownFlotante } from './DropdownFlotante'
 // que no aparece NUNCA abre el alta solo: se avisa (AvisoCodigoFactura) y la persona elige — antes
 // una lectura errónea de la cámara terminaba dando de alta de nuevo un producto ya cargado.
 
-export type ProductoBusquedaItem = Pick<Producto, 'id' | 'nombre' | 'marca' | 'costo' | 'codigo_barras'>
+// Incluye lo necesario para anticipar el precio de venta al guardar (ItemFacturaCompraUI.productoPrecio).
+export type ProductoBusquedaItem = Pick<
+  Producto,
+  | 'id'
+  | 'nombre'
+  | 'marca'
+  | 'costo'
+  | 'codigo_barras'
+  | 'margen_1'
+  | 'margen_2'
+  | 'iva_porcentaje'
+  | 'proveedor_id'
+  | 'precio_venta'
+>
+
+const SELECT_PRODUCTO_ITEM = 'id, nombre, marca, costo, codigo_barras, margen_1, margen_2, iva_porcentaje, proveedor_id, precio_venta'
 
 export type AvisoCodigo =
   | { tipo: 'no_encontrado'; codigo: string }
@@ -68,6 +83,14 @@ export function useItemFacturaBusqueda({ supabase, item, onChange, onAvanzar, fo
       marca: p.marca ?? '',
       codigoBarras: p.codigo_barras ?? item.codigoBarras,
       precioUnitarioSinIva: String(p.costo),
+      productoPrecio: {
+        costo: Number(p.costo),
+        margen_1: Number(p.margen_1),
+        margen_2: Number(p.margen_2),
+        iva_porcentaje: Number(p.iva_porcentaje),
+        proveedor_id: p.proveedor_id,
+        precio_venta: Number(p.precio_venta),
+      },
     })
     setResultados([])
     setQuery('')
@@ -76,14 +99,14 @@ export function useItemFacturaBusqueda({ supabase, item, onChange, onAvanzar, fo
   }
 
   function buscarPorCodigo(texto: string) {
-    onChange({ codigoBarras: texto, productoId: null })
+    onChange({ codigoBarras: texto, productoId: null, productoPrecio: null })
     setQuery(texto)
     setCampoActivo('codigo')
     setAvisoCodigo(null)
   }
 
   function buscarPorProducto(texto: string) {
-    onChange({ descripcion: texto, productoId: null })
+    onChange({ descripcion: texto, productoId: null, productoPrecio: null })
     setQuery(texto)
     setCampoActivo('producto')
     setAvisoCodigo(null)
@@ -98,7 +121,7 @@ export function useItemFacturaBusqueda({ supabase, item, onChange, onAvanzar, fo
     let cancelado = false
     supabase
       .from('productos')
-      .select('id, nombre, marca, costo, codigo_barras')
+      .select(SELECT_PRODUCTO_ITEM)
       .eq('estado', 'activo')
       .or(armarFiltroBusquedaProducto(q))
       .order('nombre')
@@ -131,7 +154,7 @@ export function useItemFacturaBusqueda({ supabase, item, onChange, onAvanzar, fo
     setResultados([])
     setQuery('')
     setCampoActivo(null)
-    onChange({ codigoBarras: c, productoId: null })
+    onChange({ codigoBarras: c, productoId: null, productoPrecio: null })
     setBuscandoCodigo(true)
     const r = await resolverCodigoBarras(supabase, c)
     setBuscandoCodigo(false)
@@ -179,19 +202,16 @@ export function useItemFacturaBusqueda({ supabase, item, onChange, onAvanzar, fo
     setCreandoProducto(false)
   }
 
-  // Producto recién creado desde el formulario de alta.
-  function alCrear(creado?: ProductoBusquedaItem) {
-    setCreandoProducto(false)
-    if (creado) seleccionarProducto(creado)
+  // Producto recién creado desde el formulario de alta. Se vuelve a leer: el formulario devuelve
+  // solo lo básico y el ítem necesita también márgenes, IVA y precio de venta (productoPrecio).
+  function alCrear(creado?: { id: string }) {
+    if (creado) usarExistente(creado.id)
+    else setCreandoProducto(false)
   }
 
   // "Usar este producto existente" desde el aviso de código duplicado del alta.
   async function usarExistente(id: string) {
-    const { data } = await supabase
-      .from('productos')
-      .select('id, nombre, marca, costo, codigo_barras')
-      .eq('id', id)
-      .maybeSingle()
+    const { data } = await supabase.from('productos').select(SELECT_PRODUCTO_ITEM).eq('id', id).maybeSingle()
     setCreandoProducto(false)
     if (data) seleccionarProducto(data as ProductoBusquedaItem)
   }

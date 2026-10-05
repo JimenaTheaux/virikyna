@@ -1,12 +1,21 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import type { Proveedor } from '@virikyna/shared'
-import { BottomSheet, friendlyError, coincideBusquedaProducto, fijadosPrimero, MostrarMas, PAGINA_LISTA } from '@virikyna/shared'
+import {
+  BottomSheet,
+  ControlSegmentado,
+  ErrorText,
+  EstadoBadge,
+  formatAjuste,
+  formatCurrency,
+  MODOS_ACTUALIZAR_PRECIOS,
+  MostrarMas,
+  resumenVistaPreviaPrecios,
+  useActualizarPrecios,
+} from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
-import { Field, ErrorText, inputClass, selectClass } from '../../components/FormField'
+import { inputClass, selectClass } from '../../components/FormField'
 import type { ProductoConRelaciones } from './types'
-
-type Modo = 'proveedor' | 'seleccion'
 
 type Props = {
   productos: ProductoConRelaciones[]
@@ -15,21 +24,29 @@ type Props = {
   onSaved: (cantidad: number) => void
 }
 
-// Mismo RPC actualizar_precios_masivo que Virikyna Local (docs/04_modulos_y_funciones.md, módulo
-// 5.1) — el % se aplica sobre el costo y el sistema recalcula precio_venta con el margen vigente.
+// Foco visible con contraste AA (accent-dark); el borde `accent` de inputClass no llega a 3:1.
+const FOCO = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-dark'
+const inputAccesible = `${inputClass} focus:border-accent-dark focus:ring-1 focus:ring-accent-dark`
+const selectAccesible = `${selectClass} focus:border-accent-dark focus:ring-1 focus:ring-accent-dark`
+
+// Misma lógica y mismo flujo que el modal de escritorio de Virikyna Local y Gestión
+// (useActualizarPrecios + ActualizarPreciosModal, @virikyna/shared): una sola pantalla, la vista
+// previa se genera abajo y recién ahí se habilita "Aplicar"; cualquier cambio la descarta. Acá la
+// vista previa va en tarjetas (una tabla no entra en 360px) y las dos acciones viven en el pie fijo
+// del sheet, al alcance del pulgar.
 export function ActualizarPreciosSheet({ productos, proveedores, onClose, onSaved }: Props) {
-  const [modo, setModo] = useState<Modo>('proveedor')
-  const [proveedorId, setProveedorId] = useState('')
-  const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
-  const [busqueda, setBusqueda] = useState('')
-  const [visibles, setVisibles] = useState(PAGINA_LISTA)
-  // Lo tildado hasta el último cambio de búsqueda se muestra primero (sin mover filas al tildarlas).
-  const [fijados, setFijados] = useState<Set<string>>(new Set())
-  const [porcentaje, setPorcentaje] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
+  const a = useActualizarPrecios({ supabase, productos, onSaved })
   const [dirty, setDirty] = useState(false)
   const [confirmCerrar, setConfirmCerrar] = useState(false)
+  const vista = a.vistaPrevia
+  const id = useId()
+  const tituloVistaRef = useRef<HTMLHeadingElement>(null)
+
+  useEffect(() => {
+    if (!vista) return
+    tituloVistaRef.current?.focus()
+    tituloVistaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [vista])
 
   function pedirCierre() {
     if (dirty) {
@@ -39,85 +56,88 @@ export function ActualizarPreciosSheet({ productos, proveedores, onClose, onSave
     }
   }
 
-  const productosFiltrados = useMemo(() => {
-    const q = busqueda.trim().toLowerCase()
-    const filtrados = !q
-      ? productos
-      : productos.filter(
-          (p) => coincideBusquedaProducto(p, q) || (p.proveedor?.razon_social ?? '').toLowerCase().includes(q),
-        )
-    return fijadosPrimero(filtrados, fijados)
-  }, [productos, busqueda, fijados])
-
-  function toggle(id: string) {
-    setSeleccion((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+  function cambiar(accion: () => void) {
+    if (vista) a.volver()
+    accion()
   }
 
-  async function handleSubmit(e: FormEvent) {
+  function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    setError(null)
-
-    const porcentajeNum = Number(porcentaje)
-    if (!porcentaje.trim() || Number.isNaN(porcentajeNum) || porcentajeNum === 0) {
-      setError('Ingresá un porcentaje distinto de cero (positivo para aumentar, negativo para bajar).')
-      return
-    }
-    if (modo === 'proveedor' && !proveedorId) {
-      setError('Elegí un proveedor.')
-      return
-    }
-    if (modo === 'seleccion' && seleccion.size === 0) {
-      setError('Tildá al menos un producto.')
-      return
-    }
-
-    setSaving(true)
-    const { data, error: dbError } = await supabase.rpc('actualizar_precios_masivo', {
-      p_porcentaje: porcentajeNum,
-      p_proveedor_id: modo === 'proveedor' ? proveedorId : null,
-      p_producto_ids: modo === 'seleccion' ? Array.from(seleccion) : null,
-    })
-    setSaving(false)
-
-    if (dbError) {
-      setError(friendlyError(dbError))
-      return
-    }
-    onSaved(Number(data) || 0)
+    a.verVistaPrevia()
   }
+
+  const n = vista?.filas.length ?? 0
+  const formId = `${id}-form`
 
   return (
-    <BottomSheet title="Actualización masiva de precios" onClose={pedirCierre}>
-      <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
+    <BottomSheet
+      title="Actualizar precios"
+      onClose={pedirCierre}
+      dialogo={{ onEscape: pedirCierre }}
+      footer={
         <div className="flex flex-col gap-2">
-          <label className="flex items-center gap-2 font-sans text-body-md text-ink">
-            <input
-              type="radio"
-              checked={modo === 'proveedor'}
-              onChange={() => setModo('proveedor')}
-              className="h-4 w-4 accent-accent"
-            />
-            Todos los productos de un proveedor
+          {a.error && <ErrorText>{a.error}</ErrorText>}
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="submit"
+              form={formId}
+              className={`min-h-12 rounded border border-accent-dark bg-surface px-3 font-sans text-label-bold text-accent-dark active:bg-accent-light ${FOCO}`}
+            >
+              Ver vista previa
+            </button>
+            <button
+              type="button"
+              onClick={a.aplicar}
+              disabled={!vista || a.saving}
+              aria-describedby={vista ? undefined : `${id}-sin-vista`}
+              className={`min-h-12 rounded bg-accent-dark px-3 font-sans text-label-bold text-white transition active:bg-accent-darker disabled:opacity-50 ${FOCO}`}
+            >
+              {a.saving ? 'Aplicando...' : vista ? `Aplicar a ${n} producto${n === 1 ? '' : 's'}` : 'Aplicar'}
+            </button>
+          </div>
+        </div>
+      }
+    >
+      <form id={formId} onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
+        <div className="flex flex-col gap-2">
+          <label htmlFor={`${id}-pct`} className="font-sans text-label-md text-ink">
+            Porcentaje sobre el costo (%)
           </label>
-          <label className="flex items-center gap-2 font-sans text-body-md text-ink">
-            <input
-              type="radio"
-              checked={modo === 'seleccion'}
-              onChange={() => setModo('seleccion')}
-              className="h-4 w-4 accent-accent"
-            />
-            Selección puntual
-          </label>
+          <input
+            id={`${id}-pct`}
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            autoFocus
+            value={a.porcentaje}
+            onChange={(e) => cambiar(() => a.setPorcentaje(e.target.value))}
+            aria-describedby={`${id}-pct-hint`}
+            className={`${inputAccesible} tabular-nums`}
+          />
+          <p id={`${id}-pct-hint`} className="font-sans text-label-md text-ink-soft">
+            Positivo para aumentar, negativo para bajar.
+          </p>
         </div>
 
-        {modo === 'proveedor' && (
-          <Field label="Proveedor">
-            <select value={proveedorId} onChange={(e) => setProveedorId(e.target.value)} className={selectClass}>
+        <ControlSegmentado
+          legend="Productos a actualizar"
+          opciones={MODOS_ACTUALIZAR_PRECIOS}
+          value={a.modo}
+          onChange={(m) => cambiar(() => a.setModo(m))}
+          size="touch"
+        />
+
+        {a.modo === 'proveedor' && (
+          <div className="flex flex-col gap-2">
+            <label htmlFor={`${id}-prov`} className="font-sans text-label-md text-ink">
+              Proveedor
+            </label>
+            <select
+              id={`${id}-prov`}
+              value={a.proveedorId}
+              onChange={(e) => cambiar(() => a.setProveedorId(e.target.value))}
+              className={selectAccesible}
+            >
               <option value="">Elegí un proveedor...</option>
               {proveedores.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -125,83 +145,124 @@ export function ActualizarPreciosSheet({ productos, proveedores, onClose, onSave
                 </option>
               ))}
             </select>
-          </Field>
-        )}
-
-        {modo === 'seleccion' && (
-          <div className="flex flex-col gap-2">
-            <span className="font-sans text-label-bold text-ink">
-              Productos ({seleccion.size} seleccionado{seleccion.size === 1 ? '' : 's'})
-            </span>
-            <input
-              value={busqueda}
-              onChange={(e) => {
-                setBusqueda(e.target.value)
-                setFijados(new Set(seleccion))
-                setVisibles(PAGINA_LISTA)
-              }}
-              placeholder="Buscar producto..."
-              className={inputClass}
-            />
-            <div className="overflow-hidden rounded border border-line">
-              {productosFiltrados.slice(0, visibles).map((p) => (
-                <label
-                  key={p.id}
-                  className="flex items-center gap-3 border-b border-line px-3 py-3 last:border-0 active:bg-bg"
-                >
-                  <input
-                    type="checkbox"
-                    checked={seleccion.has(p.id)}
-                    onChange={() => toggle(p.id)}
-                    className="h-4 w-4 flex-shrink-0 accent-accent"
-                  />
-                  <span className="font-sans text-body-md text-ink">{p.nombre}</span>
-                  <span className="ml-auto font-sans text-label-md text-ink-soft">
-                    {p.proveedor?.razon_social ?? '—'}
-                  </span>
-                </label>
-              ))}
-              {productosFiltrados.length === 0 && (
-                <p className="px-3 py-4 text-center font-sans text-body-md text-ink-soft">Sin resultados.</p>
-              )}
-            </div>
-            <MostrarMas
-              restantes={productosFiltrados.length - visibles}
-              onClick={() => setVisibles((n) => n + PAGINA_LISTA)}
-              size="touch"
-            />
           </div>
         )}
 
-        <Field label="Porcentaje (%)" hint="Positivo para aumentar, negativo para bajar. Se aplica sobre el costo.">
-          <input
-            type="number"
-            inputMode="decimal"
-            step="0.01"
-            value={porcentaje}
-            onChange={(e) => setPorcentaje(e.target.value)}
-            className={inputClass}
-          />
-        </Field>
+        {a.modo === 'seleccion' && (
+          <div className="flex flex-col gap-2">
+            <label htmlFor={`${id}-buscar`} className="font-sans text-label-md text-ink">
+              Buscar producto
+            </label>
+            <input
+              id={`${id}-buscar`}
+              type="search"
+              value={a.busqueda}
+              onChange={(e) => a.buscar(e.target.value)}
+              placeholder="Nombre, marca, código o proveedor"
+              className={inputAccesible}
+            />
+            <p aria-live="polite" className="font-sans text-label-bold text-ink">
+              {a.seleccion.size} seleccionado{a.seleccion.size === 1 ? '' : 's'}
+            </p>
+            <ul className="overflow-hidden rounded-lg border border-line bg-surface" aria-label="Productos">
+              {a.productosVisibles.map((p) => (
+                <li key={p.id} className="flex items-center gap-3 border-b border-line px-3 last:border-0">
+                  <input
+                    id={`${id}-chk-${p.id}`}
+                    type="checkbox"
+                    checked={a.seleccion.has(p.id)}
+                    onChange={() => cambiar(() => a.toggle(p.id))}
+                    aria-labelledby={`${id}-nom-${p.id}`}
+                    aria-describedby={`${id}-prv-${p.id}`}
+                    className={`h-5 w-5 flex-shrink-0 accent-accent-dark ${FOCO}`}
+                  />
+                  {/* Toda la fila (48px) es tocable; el nombre accesible es solo el del producto. */}
+                  <label
+                    htmlFor={`${id}-chk-${p.id}`}
+                    className="flex min-h-12 flex-1 cursor-pointer flex-col justify-center py-2 active:bg-bg"
+                  >
+                    <span id={`${id}-nom-${p.id}`} className="font-sans text-body-md text-ink [overflow-wrap:anywhere]">
+                      {p.nombre}
+                    </span>
+                    <span id={`${id}-prv-${p.id}`} className="font-sans text-label-md text-ink-soft">
+                      {p.proveedor?.razon_social ?? 'Sin proveedor'}
+                    </span>
+                  </label>
+                </li>
+              ))}
+              {a.sinResultados && (
+                <li className="px-3 py-4 text-center font-sans text-body-md text-ink-soft">Sin resultados.</li>
+              )}
+            </ul>
+            <MostrarMas restantes={a.restantes} onClick={a.verMas} size="touch" />
+          </div>
+        )}
 
-        {error && <ErrorText>{error}</ErrorText>}
+        <section aria-labelledby={`${id}-vp`} className="flex flex-col gap-2 border-t border-line pt-stack-md">
+          <h3
+            id={`${id}-vp`}
+            ref={tituloVistaRef}
+            tabIndex={-1}
+            className="scroll-mt-4 font-sans text-label-bold text-ink outline-none"
+          >
+            Vista previa
+          </h3>
+          <p role="status" aria-live="polite" className="font-sans text-body-md text-ink">
+            {vista ? resumenVistaPreviaPrecios(n, vista.sinCambio, vista.porcentaje) : ''}
+          </p>
+          {!vista && (
+            <p id={`${id}-sin-vista`} className="font-sans text-label-md text-ink-soft">
+              Tocá “Ver vista previa” para ver cómo queda cada precio antes de aplicar.
+            </p>
+          )}
 
-        <div className="mt-stack-md flex flex-col gap-3">
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded bg-accent px-4 py-4 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-60"
-          >
-            {saving ? 'Aplicando...' : 'Aplicar'}
-          </button>
-          <button
-            type="button"
-            onClick={pedirCierre}
-            className="rounded px-4 py-3 font-sans text-label-bold text-ink-soft hover:bg-bg"
-          >
-            Cancelar
-          </button>
-        </div>
+          {vista && (
+            <>
+              <ul className="flex flex-col gap-2" aria-label="Precio actual y nuevo por producto">
+                {a.filasVisibles.map((f) => {
+                  const diferencia = f.precioNuevo - f.precioActual
+                  return (
+                    <li key={f.id} className="rounded-lg border border-line bg-surface p-4 font-sans">
+                      <p className="text-body-md text-ink [overflow-wrap:anywhere]">{f.nombre}</p>
+                      <p className="mt-1 flex items-baseline justify-between gap-2 tabular-nums">
+                        <span className="text-label-md text-ink-soft">
+                          <span className="sr-only">Precio actual </span>
+                          {formatCurrency(f.precioActual)} <span aria-hidden="true">→</span>
+                        </span>
+                        <span className="font-display text-headline-md text-accent-darker">
+                          <span className="sr-only">Precio nuevo </span>
+                          {formatCurrency(f.precioNuevo)}
+                        </span>
+                      </p>
+                      <p className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-label-md tabular-nums">
+                        {diferencia > 0 ? (
+                          <span className="font-semibold text-accent-dark">
+                            <span className="sr-only">Diferencia </span>
+                            {formatAjuste(diferencia)}
+                          </span>
+                        ) : diferencia === 0 ? (
+                          <EstadoBadge variant="neutral">Sin cambio</EstadoBadge>
+                        ) : (
+                          <span className="text-ink">
+                            <span className="sr-only">Diferencia </span>
+                            {formatAjuste(diferencia)}
+                          </span>
+                        )}
+                        <span className="text-ink-soft">
+                          {f.ajuste === 0 ? 'Sin redondeo' : `Redondeo ${formatAjuste(f.ajuste)}`}
+                        </span>
+                      </p>
+                      <p className="mt-1 text-label-md text-ink-soft tabular-nums">
+                        Costo {formatCurrency(f.costoActual)} → {formatCurrency(f.costoNuevo)}
+                      </p>
+                    </li>
+                  )
+                })}
+              </ul>
+              <MostrarMas restantes={a.filasRestantes} onClick={a.verMasFilas} size="touch" />
+            </>
+          )}
+        </section>
       </form>
 
       {confirmCerrar && (

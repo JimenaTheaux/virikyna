@@ -11,6 +11,7 @@ import {
   type ItemFacturaCompraUI,
 } from '../../lib/facturasCompra'
 import { fechaHoyISO, formatCurrency } from '../../lib/format'
+import { cambiosPrecioFactura } from '../../lib/precios'
 import { mensajeErrorGuardado } from '../../lib/supabaseErrors'
 import { Modal } from './Modal'
 import { ConfirmDialog } from './ConfirmDialog'
@@ -127,6 +128,7 @@ export function CargarFacturaCompraModal({ supabase, crearProducto, onClose, onS
     total: totalPreview,
     saldoPendiente: saldoPendientePreview,
   } = calcularTotalesFacturaCompra(items)
+  const cambiosPrecio = cambiosPrecioFactura(items, tipoComprobante, proveedorId, proveedores)
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -389,6 +391,7 @@ export function CargarFacturaCompraModal({ supabase, crearProducto, onClose, onS
                 supabase={supabase}
                 crearProducto={crearProducto}
                 conError={itemsConError.has(item.key)}
+                cambioPrecio={cambiosPrecio.get(item.key)}
                 focoCodigo={foco?.key === item.key ? foco.n : 0}
                 onAvanzar={() => avanzarDesde(item.key)}
                 onChange={(cambios) => actualizarItem(item.key, cambios)}

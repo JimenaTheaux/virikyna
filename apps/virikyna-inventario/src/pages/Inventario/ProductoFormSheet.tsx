@@ -3,11 +3,12 @@ import type { PostgrestError } from '@supabase/supabase-js'
 import type { EstadoProducto, Proveedor, RolUsuario, UbicacionStock } from '@virikyna/shared'
 import {
   BottomSheet,
-  calcularPrecioVenta,
+  calcularPrecio,
   formatCurrency,
   friendlyError,
   generarCodigoInterno,
   IVA_DEFAULT,
+  NotaRedondeoPrecio,
 } from '@virikyna/shared'
 import { CodigoBarrasBox } from '@virikyna/shared'
 import { buscarProductoPorCodigoBarras } from '../../lib/productos'
@@ -94,7 +95,10 @@ export function ProductoFormSheet({
   const costoNum = Number(costo) || 0
   const margen1Num = Number(margen1) || 0
   const margen2Num = Number(margen2) || 0
-  const precioVenta = calcularPrecioVenta(costoNum, margen1Num, margen2Num, IVA_DEFAULT)
+  // IVA del producto (el formulario no lo edita); un producto nuevo toma el default de la columna.
+  const ivaPorcentaje = producto?.iva_porcentaje ?? IVA_DEFAULT
+  const precio = calcularPrecio({ costo, margen1, margen2, iva: ivaPorcentaje })
+  const precioVenta = precio.venta
 
   async function recargarStock() {
     if (!producto) return
@@ -316,7 +320,8 @@ export function ProductoFormSheet({
           <p className="mt-3 font-display text-headline-md text-accent-darker">
             Precio de venta: {formatCurrency(precioVenta)}
           </p>
-          <p className="font-sans text-label-md text-ink-soft">Costo × margen 1 × margen 2 × IVA 21%</p>
+          <NotaRedondeoPrecio precio={precio} />
+          <p className="font-sans text-label-md text-ink-soft">Costo × margen 1 × margen 2 × IVA {ivaPorcentaje}%</p>
         </div>
 
         <Field label="Stock mínimo" hint="Dispara la alerta de stock bajo.">

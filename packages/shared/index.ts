@@ -3,6 +3,9 @@
 
 export * from './types/database'
 export * from './lib/format'
+export * from './lib/precios'
+export * from './lib/useActualizarPrecios'
+export * from './lib/useFocoAtrapado'
 export * from './lib/supabaseErrors'
 export * from './lib/inventario'
 export * from './lib/facturasCompra'
@@ -35,4 +38,7 @@ export type { CrearProductoRender, ProductoCreadoFactura } from './src/component
 export * from './src/components/ItemFacturaBusqueda'
 export * from './src/components/MostrarMas'
 export * from './lib/listaSeleccion'
-export { ActualizarPreciosModal } from './src/components/ActualizarPreciosModal'
+export { ActualizarPreciosModal, MODOS_ACTUALIZAR_PRECIOS } from './src/components/ActualizarPreciosModal'
+export * from './src/components/NotaRedondeoPrecio'
+export * from './src/components/ControlSegmentado'
+export * from './src/components/AvisoCambioPrecioFactura'
