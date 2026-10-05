@@ -1,8 +1,17 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { Pencil, Trash2 } from 'lucide-react'
 import type { ProveedorSaldo } from '@virikyna/shared'
 import { supabase } from '../lib/supabaseClient'
-import { formatCurrency, friendlyError, RowActionsMenu, type RowActionsMenuItem } from '@virikyna/shared'
+import {
+  formatCurrency,
+  friendlyError,
+  proveedorQueryKeys,
+  RowActionsMenu,
+  useProveedoresSaldo,
+  type RowActionsMenuItem,
+} from '@virikyna/shared'
 import { SearchInput } from '../components/SearchInput'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { ProveedorFormModal } from './Proveedores/ProveedorFormModal'
@@ -15,8 +24,11 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]['id']
 
+// La pestaña vive en la URL (?tab=proveedores): volver desde la cuenta corriente de un proveedor
+// (/proveedores/:id) cae en la lista de proveedores y no en Facturas, que es la de por defecto.
 export function ProveedoresPage() {
-  const [tab, setTab] = useState<TabId>('facturas')
+  const [params, setParams] = useSearchParams()
+  const tab: TabId = params.get('tab') === 'proveedores' ? 'proveedores' : 'facturas'
 
   return (
     <section className="flex h-full flex-col rounded-lg bg-surface p-card shadow-sm">
@@ -29,7 +41,8 @@ export function ProveedoresPage() {
           <button
             key={t.id}
             type="button"
-            onClick={() => setTab(t.id)}
+            aria-pressed={tab === t.id}
+            onClick={() => setParams(t.id === 'facturas' ? {} : { tab: t.id }, { replace: true })}
             className={[
               'rounded-t px-4 py-2 font-sans text-label-bold',
               tab === t.id
@@ -51,8 +64,9 @@ export function ProveedoresPage() {
 }
 
 function ProveedoresTab() {
-  const [proveedores, setProveedores] = useState<ProveedorSaldo[]>([])
-  const [loading, setLoading] = useState(true)
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const { data: proveedores = [], isPending: loading, error: queryError } = useProveedoresSaldo(supabase)
   const [error, setError] = useState<string | null>(null)
   const [modal, setModal] = useState<'nuevo' | ProveedorSaldo | null>(null)
   const [aEliminar, setAEliminar] = useState<ProveedorSaldo | null>(null)
@@ -67,21 +81,12 @@ function ProveedoresTab() {
     )
   }, [proveedores, busqueda])
 
-  async function cargar() {
-    setLoading(true)
-    setError(null)
-    const { data, error: dbError } = await supabase.from('proveedores_saldo').select('*').order('razon_social')
-    if (dbError) {
-      setError(friendlyError(dbError))
-    } else {
-      setProveedores((data ?? []) as ProveedorSaldo[])
-    }
-    setLoading(false)
-  }
-
-  useEffect(() => {
-    cargar()
-  }, [])
+  // Lista + cabecera de cualquier cuenta corriente abierta (prefijo ['proveedor']).
+  const recargar = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: proveedorQueryKeys.saldos }),
+      queryClient.invalidateQueries({ queryKey: ['proveedor'] }),
+    ])
 
   async function eliminar() {
     if (!aEliminar) return
@@ -94,13 +99,15 @@ function ProveedoresTab() {
       return
     }
     setAEliminar(null)
-    cargar()
+    recargar()
   }
+
+  const mensajeError = error ?? (queryError ? friendlyError(queryError as Error) : null)
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between">
-        <p className="font-sans text-body-md text-ink-soft">Datos de contacto y márgenes por defecto.</p>
+        <p className="font-sans text-body-md text-ink-soft">Tocá un proveedor para ver su cuenta corriente y registrar pagos.</p>
         <div className="flex items-center gap-3">
           <SearchInput value={busqueda} onChange={setBusqueda} placeholder="Buscar proveedor..." />
           <button
@@ -113,8 +120,8 @@ function ProveedoresTab() {
         </div>
       </div>
 
-      {error && (
-        <p className="mt-stack-md rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>
+      {mensajeError && (
+        <p className="mt-stack-md rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{mensajeError}</p>
       )}
 
       <div className="mt-stack-md flex-1 overflow-auto rounded-xl shadow-sm">
@@ -127,7 +134,9 @@ function ProveedoresTab() {
               <th className="whitespace-nowrap px-3 py-2.5">Margen 1</th>
               <th className="whitespace-nowrap px-3 py-2.5">Margen 2</th>
               <th className="whitespace-nowrap px-3 py-2.5 text-right">Saldo</th>
-              <th className="whitespace-nowrap px-3 py-2.5"></th>
+              <th className="whitespace-nowrap px-3 py-2.5">
+                <span className="sr-only">Acciones</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -158,16 +167,33 @@ function ProveedoresTab() {
                 { label: 'Eliminar', icon: Trash2, onClick: () => setAEliminar(proveedor), destructive: true },
               ]
               return (
-                <tr key={proveedor.id} className="border-b border-table-divider last:border-0 even:bg-table-row-alt">
-                  <td className="px-3 py-3 text-ink">{proveedor.razon_social}</td>
+                <tr
+                  key={proveedor.id}
+                  onClick={() => navigate(`/proveedores/${proveedor.id}`)}
+                  className="cursor-pointer border-b border-table-divider last:border-0 even:bg-table-row-alt hover:bg-accent-light/40"
+                >
+                  <td className="px-3 py-3 text-ink">
+                    {/* El link es el foco de teclado de la fila (Enter abre); el click en la fila es atajo de mouse. */}
+                    <Link
+                      to={`/proveedores/${proveedor.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="rounded hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+                    >
+                      {proveedor.razon_social}
+                    </Link>
+                  </td>
                   <td className="px-3 py-3 text-ink-soft">{proveedor.cuit ?? '—'}</td>
                   <td className="px-3 py-3 text-ink-soft">{proveedor.telefono ?? '—'}</td>
                   <td className="px-3 py-3 text-ink-soft">{proveedor.margen_1_default}%</td>
                   <td className="px-3 py-3 text-ink-soft">{proveedor.margen_2_default}%</td>
-                  <td className={`px-3 py-3 text-right font-semibold ${proveedor.saldo_actual > 0 ? 'text-error' : 'text-ink-soft'}`}>
+                  <td
+                    className={`px-3 py-3 text-right font-semibold tabular-nums ${
+                      proveedor.saldo_actual > 0 ? 'text-error' : proveedor.saldo_actual < 0 ? 'text-success' : 'text-ink-soft'
+                    }`}
+                  >
                     {formatCurrency(proveedor.saldo_actual)}
                   </td>
-                  <td className="px-3 py-3 text-right">
+                  <td className="px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                     <RowActionsMenu ariaLabel={`Más acciones para ${proveedor.razon_social}`} items={items} />
                   </td>
                 </tr>
@@ -183,7 +209,7 @@ function ProveedoresTab() {
           onClose={() => setModal(null)}
           onSaved={() => {
             setModal(null)
-            cargar()
+            recargar()
           }}
         />
       )}

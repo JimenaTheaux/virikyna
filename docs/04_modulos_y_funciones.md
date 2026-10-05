@@ -158,7 +158,7 @@ Mismo cuadro de acciones que Inventario de escritorio (excepto ajuste de stock, 
 | **Editar datos de una factura ya cargada** (fecha, número, tipo, forma de pago — no ítems/montos) | ✅ (exclusivo Virikyna Gestión) | ❌ |
 | **Anular una factura cargada por error** (revierte el stock que había sumado) | ✅ (exclusivo Virikyna Gestión) | ❌ |
 
-**Sobre editar/anular (exclusivo Virikyna Gestión):** editar una factura solo corrige datos descriptivos (fecha, número, tipo de comprobante, forma de pago) — si el error está en los ítems o montos, se anula la factura completa (repone el stock que había sumado) y se vuelve a cargar bien. Anular no funciona si la factura ya tiene pagos registrados — primero hay que resolver esos pagos.
+**Sobre editar/anular (exclusivo Virikyna Gestión):** editar una factura solo corrige datos descriptivos (fecha, número, tipo de comprobante, forma de pago) — si el error está en los ítems o montos, se anula la factura completa (repone el stock que había sumado) y se vuelve a cargar bien. Anular no funciona si el comprobante tiene pagos o notas de crédito aplicadas vigentes — primero hay que revertir esos pagos desde Historial. Tampoco se puede cambiar un comprobante a nota de crédito (o al revés) si ya tiene aplicaciones.
 
 **Regla (agregada en QA):** un proveedor con historial (facturas de compra o pagos ya cargados) no se puede eliminar — protegido a nivel base, mismo criterio que ya existía para Clientes.
 
@@ -179,10 +179,29 @@ Mismo cuadro de acciones que Inventario de escritorio (excepto ajuste de stock, 
 - Cargar una factura de compra actualiza el stock automático de esos productos, en la ubicación indicada por ítem. Queda registrado qué usuario realizó la carga.
 - También actualiza el **costo** de cada producto con el precio unitario sin IVA del ítem (antes del descuento de la línea), y con eso su precio de venta. Aplica a factura, remito, presupuesto y cupón — **no** a nota de crédito ni nota de débito. Si el mismo producto aparece dos veces, vale la última línea. Un ítem con precio 0 no cambia el costo. El cambio queda en Historial y se puede revertir.
 - Anular una factura de compra devuelve el stock pero **no** el costo: para volverlo atrás, revertir ese cambio desde Historial.
-- Registrar un pago a proveedor genera una **salida de dinero** → se refleja como egreso en el Cierre de Caja del día, y afecta la cuenta corriente del proveedor.
+- Registrar un pago a proveedor genera una **salida de dinero** → egreso y cuenta corriente del proveedor. Entra en el Cierre de Caja de Local **solo si se pagó desde la caja de Local** (`origen='turno'`); un pago hecho desde Gestión (`origen='general'`) no sale del cajón y no se cuenta ahí.
 - Pago a proveedores: efectivo, transferencia, cheque físico o echeq.
+- **Presupuesto** se comporta igual que remito: suma deuda, actualiza costo y se paga.
+- **Nota de crédito resta** deuda: baja el saldo del proveedor y nunca aparece como algo a pagar. Su crédito se aplica a facturas (ver abajo). El stock que suma al cargarla no cambia por ahora.
 
-**Detalle y saldo por factura:** cada factura de compra muestra su propio saldo pendiente (total facturado − suma de pagos aplicados a esa factura puntual) y el historial de pagos que se le hicieron — no solo el saldo general del proveedor. Un pago puede quedar aplicado a una factura específica, o a la cuenta general del proveedor sin apuntar a ninguna en particular (por ejemplo, un pago a cuenta antes de que llegue la factura).
+**Cuenta corriente del proveedor (docs/31):**
+- Saldo del proveedor = saldo inicial + comprobantes − notas de crédito − pagos.
+- Cada comprobante tiene **estado** calculado: pendiente / parcial / pagada / anulada, y su saldo pendiente = total − lo aplicado (pagos + notas de crédito). Una nota de crédito muestra su **crédito disponible**.
+- **Un pago puede cancelar varias facturas a la vez.** El monto se reparte de la más vieja a la más nueva (por fecha del comprobante).
+  - Si se eligen facturas: el pago no puede superar lo que falta de esas facturas (error).
+  - Si no se elige ninguna: se reparte entre todas las pendientes, y lo que sobra queda **a cuenta**.
+- En el mismo pago se pueden usar notas de crédito: primero se aplica su crédito a las facturas, después la plata. Se puede registrar una aplicación de NC sin plata (monto 0): no genera egreso.
+- No se puede pagar un comprobante anulado, una nota de crédito, ni un comprobante de otro proveedor.
+- Revertir un pago desde Historial devuelve los comprobantes (y las notas de crédito usadas en ese pago) a su estado anterior.
+
+**Detalle y saldo por factura:** cada factura de compra muestra su propio saldo pendiente y estado, y el historial de pagos que se le aplicaron — no solo el saldo general del proveedor.
+
+**Pantalla de cuenta corriente (Gestión, `/proveedores/:id`):** se abre tocando un proveedor en la lista.
+- Cabecera con datos y márgenes, y 4 indicadores: saldo, comprobantes pendientes, crédito de NC disponible, último pago.
+- Pestañas Pendientes / Pagados / Todos / Pagos, con filtros por tipo, fechas y número que quedan en la URL.
+- Se pueden tildar comprobantes y notas de crédito y pagarlos juntos. El modal muestra cómo se reparte el pago antes de confirmar.
+- Todo pago desde Gestión se registra con `origen='general'`: no entra en el Cierre de Caja de Local.
+- Es un componente compartido (`ProveedorCuentaCorriente`): Local lo va a poder usar con `origen='turno'` y sin Editar/Anular.
 
 **Dos puntos de entrada, una sola operación real:** el cajero puede registrar un pago a proveedor desde dos lugares distintos en la UI —
 1. Desde el detalle de una factura puntual ("Registrar pago" sobre esa factura), o
@@ -215,6 +234,8 @@ Ambos caminos ejecutan la misma función del sistema — no son dos flujos disti
 **Qué debe ver:** total vendido desglosado por medio de pago (efectivo / cuenta Mercado Pago / cuenta Galicia / cta. cte.), total de egresos del día (pagos a proveedores, otros gastos, retiros), monto esperado en caja (efectivo) según el sistema — incluye el monto real de apertura del período (módulo 6.5) como base —, campo para ingresar el efectivo contado, diferencia (coincide / sobra / falta y por cuánto), usuario que hizo el cierre.
 
 **Regla de cálculo (corregida en QA):** el "efectivo esperado" es el monto real de apertura del período más ventas en efectivo menos **solo los egresos pagados en efectivo** — un egreso pagado por transferencia, cheque o echeq no debe descontarse del cajón físico, aunque sí forma parte del total general de egresos que se muestra como referencia.
+
+**Solo egresos de la caja de Local (docs/31):** el cierre suma únicamente egresos `origen='turno'` (los que carga el cajero en Local). Los egresos de Gestión (`origen='general'`: sueldos, servicios, pagos a proveedor hechos desde Gestión) no salieron del cajón y no entran — antes sí entraban y desajustaban el efectivo esperado.
 
 **Regla de impacto en cuentas (corregida en QA — evita un doble conteo real que hubo):** cada egreso descuenta su cuenta **en el momento en que se registra** (vía `registrar_pago_proveedor` o `registrar_egreso_general`), nunca de nuevo al validar el Cierre Z. `validar_cierre_z` solo vuelca **transferencia, QR y tarjeta** del día a las cuentas — los egresos ya impactaron antes.
 

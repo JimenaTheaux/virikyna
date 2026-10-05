@@ -1,22 +1,25 @@
 import { useState, type FormEvent } from 'react'
-import type { FacturaCompraSaldo } from '@virikyna/shared'
-import { anularFacturaCompra, formatCurrency, friendlyError } from '@virikyna/shared'
-import { supabase } from '../../lib/supabaseClient'
-import { Modal } from '../../components/Modal'
-import { ConfirmDialog } from '../../components/ConfirmDialog'
-import { Field, ErrorText, inputClass } from '../../components/FormField'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { FacturaCompraSaldo } from '../../types/database'
+import { anularFacturaCompra } from '../../lib/facturasCompra'
+import { formatCurrency } from '../../lib/format'
+import { friendlyError } from '../../lib/supabaseErrors'
+import { Modal } from './Modal'
+import { ConfirmDialog } from './ConfirmDialog'
+import { Field, ErrorText, inputClass } from './FormField'
 
 type Props = {
+  supabase: SupabaseClient
   factura: FacturaCompraSaldo
   onClose: () => void
   onAnulada: () => void
 }
 
-// anular_factura_compra (docs/06_estructura_de_datos.md, RPC 11) — exclusivo Virikyna Gestión.
-// Revierte el stock que la carga original había sumado y marca la factura como anulada. Si ya
-// tiene pagos registrados, el RPC rechaza la anulación con su propio mensaje — se muestra tal
+// anular_factura_compra (docs/06_estructura_de_datos.md, RPC 11). Revierte el stock que la carga
+// original había sumado y marca la factura como anulada. Si tiene pagos o notas de crédito
+// aplicadas vigentes (docs/31), el RPC rechaza la anulación con su propio mensaje — se muestra tal
 // cual acá (friendlyError no lo reinterpreta), nunca un mensaje genérico inventado en el cliente.
-export function AnularFacturaCompraModal({ factura, onClose, onAnulada }: Props) {
+export function AnularFacturaCompraModal({ supabase, factura, onClose, onAnulada }: Props) {
   const [motivo, setMotivo] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -52,18 +55,23 @@ export function AnularFacturaCompraModal({ factura, onClose, onAnulada }: Props)
   }
 
   return (
-    <Modal title="Anular factura de compra" onClose={pedirCierre} widthClassName="max-w-[480px]">
+    <Modal
+      title="Anular factura de compra"
+      onClose={pedirCierre}
+      widthClassName="max-w-[480px]"
+      dialogo={{ onEscape: pedirCierre }}
+    >
       <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
         <div className="rounded border border-error/40 bg-error/5 p-4">
           <p className="font-sans text-body-md text-ink">
-            El stock que esta factura había sumado se revierte. No se puede anular si ya tiene
-            pagos registrados — resolvé esos pagos antes.
+            El stock que esta factura había sumado se revierte. No se puede anular si tiene pagos o
+            notas de crédito aplicadas — revertí esos pagos desde Historial antes.
           </p>
           <p className="mt-2 font-sans text-label-bold text-ink">Total: {formatCurrency(factura.total)}</p>
         </div>
 
         <Field label="Motivo de la anulación">
-          <input autoFocus value={motivo} onChange={(e) => setMotivo(e.target.value)} className={inputClass} />
+          <input data-autofocus value={motivo} onChange={(e) => setMotivo(e.target.value)} className={inputClass} />
         </Field>
 
         {error && <ErrorText>{error}</ErrorText>}

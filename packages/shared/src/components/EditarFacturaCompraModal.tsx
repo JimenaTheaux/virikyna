@@ -1,29 +1,25 @@
 import { useState, type FormEvent } from 'react'
-import type { FacturaCompraSaldo, FormaPagoCompra, TipoComprobanteCompra } from '@virikyna/shared'
-import { editarFacturaCompra, friendlyError } from '@virikyna/shared'
-import { supabase } from '../../lib/supabaseClient'
-import { Modal } from '../../components/Modal'
-import { ConfirmDialog } from '../../components/ConfirmDialog'
-import { Field, ErrorText, inputClass, selectClass } from '../../components/FormField'
-
-const TIPOS: { value: TipoComprobanteCompra; label: string }[] = [
-  { value: 'factura', label: 'Factura' },
-  { value: 'remito', label: 'Remito' },
-  { value: 'cupon', label: 'Cupón (no facturado)' },
-  { value: 'nota_credito', label: 'Nota de crédito' },
-  { value: 'nota_debito', label: 'Nota de débito' },
-]
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { FacturaCompraSaldo, FormaPagoCompra, TipoComprobanteCompra } from '../../types/database'
+import { editarFacturaCompra, TIPO_COMPROBANTE_COMPRA_LABEL, TIPOS_COMPROBANTE_COMPRA } from '../../lib/facturasCompra'
+import { friendlyError } from '../../lib/supabaseErrors'
+import { Modal } from './Modal'
+import { ConfirmDialog } from './ConfirmDialog'
+import { Field, ErrorText, inputClass, selectClass } from './FormField'
 
 type Props = {
+  supabase: SupabaseClient
   factura: FacturaCompraSaldo
   onClose: () => void
   onSaved: () => void
 }
 
-// editar_factura_compra (docs/06_estructura_de_datos.md, RPC 10) — exclusivo Virikyna Gestión,
-// solo campos descriptivos. Si el error está en ítems o montos, la corrección real es anular la
-// factura y recargarla de nuevo — este formulario ni siquiera ofrece esos campos.
-export function EditarFacturaCompraModal({ factura, onClose, onSaved }: Props) {
+// editar_factura_compra (docs/06_estructura_de_datos.md, RPC 10) — solo campos descriptivos. Si el
+// error está en ítems o montos, la corrección real es anular la factura y recargarla de nuevo —
+// este formulario ni siquiera ofrece esos campos. Hoy solo lo habilita Virikyna Gestión (prop
+// permitirEditarAnular de ProveedorCuentaCorriente y su propio detalle de factura). El RPC no deja
+// pasar un comprobante con pagos aplicados de/a nota de crédito (docs/31).
+export function EditarFacturaCompraModal({ supabase, factura, onClose, onSaved }: Props) {
   const [tipoComprobante, setTipoComprobante] = useState<TipoComprobanteCompra>(factura.tipo_comprobante)
   const [numeroComprobante, setNumeroComprobante] = useState(factura.numero_comprobante ?? '')
   const [fechaComprobante, setFechaComprobante] = useState(factura.fecha_comprobante)
@@ -68,7 +64,12 @@ export function EditarFacturaCompraModal({ factura, onClose, onSaved }: Props) {
   }
 
   return (
-    <Modal title="Editar factura de compra" onClose={pedirCierre} widthClassName="max-w-[480px]">
+    <Modal
+      title="Editar factura de compra"
+      onClose={pedirCierre}
+      widthClassName="max-w-[480px]"
+      dialogo={{ onEscape: pedirCierre }}
+    >
       <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
         <p className="font-sans text-body-md text-ink-soft">
           Solo datos descriptivos — ítems y montos no se editan acá. Queda registrado en el
@@ -81,9 +82,9 @@ export function EditarFacturaCompraModal({ factura, onClose, onSaved }: Props) {
             onChange={(e) => setTipoComprobante(e.target.value as TipoComprobanteCompra)}
             className={selectClass}
           >
-            {TIPOS.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
+            {TIPOS_COMPROBANTE_COMPRA.map((t) => (
+              <option key={t} value={t}>
+                {TIPO_COMPROBANTE_COMPRA_LABEL[t]}
               </option>
             ))}
           </select>
@@ -91,6 +92,7 @@ export function EditarFacturaCompraModal({ factura, onClose, onSaved }: Props) {
 
         <Field label="Número de comprobante">
           <input
+            data-autofocus
             value={numeroComprobante}
             onChange={(e) => setNumeroComprobante(e.target.value)}
             className={inputClass}

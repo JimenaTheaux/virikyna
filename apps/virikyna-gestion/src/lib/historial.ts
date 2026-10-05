@@ -22,6 +22,9 @@ export const TABLA_LABEL: Record<string, string> = {
   movimientos_stock: 'Movimientos de stock',
   egresos: 'Egresos',
   pagos_proveedor: 'Pagos a proveedor',
+  // docs/31: una fila por "este monto cancela este comprobante". Se revierte desde el pago, no acá
+  // (accionRevertible no la incluye): revertir el pago marca revertidas todas sus aplicaciones.
+  pagos_proveedor_aplicaciones: 'Aplicación de pago a proveedor',
   pagos_cliente: 'Pagos de cliente',
   movimientos_cuenta: 'Movimientos de cuenta',
   cierres_caja: 'Cierres de caja',

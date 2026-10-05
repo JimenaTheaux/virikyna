@@ -18,7 +18,8 @@ export type FormaPagoVenta =
   | 'cuenta_corriente'
   | 'combinado'
 export type EstadoComprobante = 'sin_facturar' | 'facturado' | 'anulada'
-export type TipoComprobanteCompra = 'factura' | 'remito' | 'cupon' | 'nota_credito' | 'nota_debito'
+// 'presupuesto' (docs/31): se comporta igual que remito — suma deuda, actualiza costo, se paga.
+export type TipoComprobanteCompra = 'factura' | 'remito' | 'cupon' | 'presupuesto' | 'nota_credito' | 'nota_debito'
 export type LetraComprobanteCompra = 'A' | 'B' | 'R' | 'X'
 export type FormaPagoCompra = 'contado' | 'cuenta_corriente'
 export type FormaPagoEgreso = 'efectivo' | 'transferencia' | 'cheque' | 'echeq'
@@ -264,8 +265,10 @@ export type FacturaCompraItem = {
 export type PagoProveedor = {
   id: string
   proveedor_id: string
-  factura_compra_id: string | null // null = pago a cuenta general
-  monto: number
+  // DEPRECATED (docs/31): la imputación vive en pagos_proveedor_aplicaciones. Solo se completa
+  // cuando todo el pago cancela una única factura — no usar para calcular saldos.
+  factura_compra_id: string | null
+  monto: number // 0 = operación que solo aplicó notas de crédito (sin egreso)
   forma_pago: FormaPagoEgreso
   usuario_id: string
   revierte_pago_proveedor_id: string | null // Fase 8: si esta fila revierte a otra, apunta a la original
@@ -273,7 +276,40 @@ export type PagoProveedor = {
   cheque_numero: string | null
   cheque_fecha_salida: string | null // DATE
   cheque_fecha_vencimiento: string | null // DATE
+  fecha: string // DATE — docs/31, fecha del pago (default hoy AR)
+  nota: string | null // docs/31
   created_at: string
+}
+
+// docs/31 — una fila = "este monto cancela este comprobante, y sale de un pago o de una NC".
+// Nunca se borra: revertir el pago marca revertida_at; las vistas solo cuentan las vigentes.
+export type PagoProveedorAplicacion = {
+  id: string
+  factura_compra_id: string // comprobante cancelado
+  monto: number // > 0
+  pago_proveedor_id: string | null // fuente: plata de un pago
+  nota_credito_id: string | null // fuente: crédito de una NC (exactamente una de las dos fuentes)
+  operacion_id: string // pagos_proveedor de la operación que creó la fila (lo que se revierte)
+  usuario_id: string
+  revertida_at: string | null // null = vigente
+  revertida_por: string | null
+  created_at: string
+}
+
+// Retorno de registrar_pago_proveedor_v2 (docs/31).
+export type RegistrarPagoProveedorV2Resultado = {
+  pago_id: string
+  monto: number
+  aplicado_pago: number
+  aplicado_nota_credito: number
+  a_cuenta: number // sobrante sin comprobante (solo posible sin selección de facturas)
+  aplicaciones: {
+    id: string
+    factura_compra_id: string
+    monto: number
+    fuente: 'pago' | 'nota_credito'
+    nota_credito_id: string | null
+  }[]
 }
 
 export type PagoCliente = {
@@ -350,6 +386,7 @@ export type Egreso = {
   revierte_egreso_id: string | null // Fase 8: si esta fila revierte a otra, apunta a la original
   fecha: string // DATE ('YYYY-MM-DD') — fecha real del egreso, editable desde el módulo Egresos
   // (default hoy). created_at sigue siendo el timestamp de carga en el sistema, no se toca.
+  pago_proveedor_id: string | null // docs/31: pago que generó este egreso (categoria 'pago_proveedor')
   created_at: string
 }
 
@@ -390,9 +427,15 @@ export type NotaInterna = {
 // tablas que consultan, no hace falta política propia.
 // ─────────────────────────────────────────────────────────────
 
+// docs/31 — calculado en la vista, nunca guardado. En una NC: pendiente = sin usar, pagada = agotada.
+export type EstadoFacturaCompra = 'anulada' | 'pendiente' | 'parcial' | 'pagada'
+
 export type FacturaCompraSaldo = FacturaCompra & {
-  total_pagado: number
-  saldo_pendiente: number
+  total_pagado: number // = total_aplicado (se mantiene por compatibilidad)
+  saldo_pendiente: number // lo que falta pagar; 0 en notas de crédito y anuladas
+  total_aplicado: number // comprobante: pagos + NC aplicadas · NC: crédito ya usado
+  credito_disponible: number // solo NC no anuladas: total − aplicado; 0 en el resto
+  estado: EstadoFacturaCompra
 }
 
 export type ProveedorSaldo = Proveedor & {

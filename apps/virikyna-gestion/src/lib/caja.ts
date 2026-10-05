@@ -1,5 +1,5 @@
 // Labels y helpers para Cierre de Caja + Caja Gestión + Egresos (docs/04_modulos_y_funciones.md, módulos 7 y 7.1).
-import type { CategoriaEgreso, FormaPagoEgreso, OrigenEgreso, TipoMovimientoCuenta } from '@virikyna/shared'
+import type { CategoriaEgreso, OrigenEgreso, TipoMovimientoCuenta } from '@virikyna/shared'
 import { formatCurrency } from '@virikyna/shared'
 
 export const CATEGORIA_EGRESO_LABEL: Record<CategoriaEgreso, string> = {
@@ -12,12 +12,8 @@ export const CATEGORIA_EGRESO_LABEL: Record<CategoriaEgreso, string> = {
   super: 'Super',
 }
 
-export const FORMA_PAGO_EGRESO_LABEL: Record<FormaPagoEgreso, string> = {
-  efectivo: 'Efectivo',
-  transferencia: 'Transferencia',
-  cheque: 'Cheque',
-  echeq: 'E-cheq',
-}
+// Vive en packages/shared (la usa también la cuenta corriente de proveedores).
+export { FORMA_PAGO_EGRESO_LABEL } from '@virikyna/shared'
 
 export const ORIGEN_EGRESO_LABEL: Record<OrigenEgreso, string> = {
   general: 'Gestión',

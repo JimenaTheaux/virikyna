@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ComponentType } from 'react'
+import { useEffect, useRef, useState, type ComponentType, type KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { MoreVertical } from 'lucide-react'
 
@@ -55,6 +55,43 @@ export function RowActionsMenu({ items, size = 'sm', ariaLabel = 'Más acciones'
     setAbierto(true)
   }
 
+  // Teclado (patrón "menu button"): al abrir, el foco entra al primer ítem habilitado — el menú
+  // vive en un portal al final del body, así que con Tab nunca se llegaba a él.
+  useEffect(() => {
+    if (abierto && pos) itemsHabilitados()[0]?.focus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abierto, pos])
+
+  function itemsHabilitados(): HTMLButtonElement[] {
+    return Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not([disabled])') ?? [])
+  }
+
+  function cerrarYVolver() {
+    setAbierto(false)
+    botonRef.current?.focus()
+  }
+
+  // Flechas / Home / End recorren los ítems; Esc y Tab cierran y devuelven el foco al botón ⋮
+  // (desde ahí Tab sigue con la fila de siempre).
+  function onMenuKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    const lista = itemsHabilitados()
+    const i = lista.indexOf(document.activeElement as HTMLButtonElement)
+    const ir = (n: number) => {
+      e.preventDefault()
+      lista[(n + lista.length) % lista.length]?.focus()
+    }
+    if (e.key === 'ArrowDown') ir(i + 1)
+    else if (e.key === 'ArrowUp') ir(i - 1)
+    else if (e.key === 'Home') ir(0)
+    else if (e.key === 'End') ir(lista.length - 1)
+    else if (e.key === 'Escape' || e.key === 'Tab') {
+      e.preventDefault()
+      // Que el Esc no llegue a un diálogo de abajo (useFocoAtrapado escucha en el DOM).
+      e.nativeEvent.stopImmediatePropagation()
+      cerrarYVolver()
+    }
+  }
+
   useEffect(() => {
     if (!abierto) return
     function onClickFuera(e: MouseEvent) {
@@ -82,7 +119,15 @@ export function RowActionsMenu({ items, size = 'sm', ariaLabel = 'Más acciones'
 
   return (
     <>
-      <button type="button" ref={botonRef} aria-label={ariaLabel} onClick={toggle} className={botonClase}>
+      <button
+        type="button"
+        ref={botonRef}
+        aria-label={ariaLabel}
+        aria-haspopup="menu"
+        aria-expanded={abierto}
+        onClick={toggle}
+        className={`${botonClase} focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent`}
+      >
         <MoreVertical className={size === 'touch' ? 'h-5 w-5' : 'h-4 w-4'} />
       </button>
       {abierto &&
@@ -90,7 +135,10 @@ export function RowActionsMenu({ items, size = 'sm', ariaLabel = 'Más acciones'
         createPortal(
           <div
             ref={menuRef}
+            role="menu"
+            aria-label={ariaLabel}
             onMouseDown={(e) => e.stopPropagation()}
+            onKeyDown={onMenuKeyDown}
             style={{ position: 'fixed', width: ANCHO_MENU, ...pos }}
             className="z-50 overflow-hidden rounded-lg border border-line bg-surface shadow-lg"
           >
@@ -98,13 +146,17 @@ export function RowActionsMenu({ items, size = 'sm', ariaLabel = 'Más acciones'
               <button
                 key={item.label}
                 type="button"
+                role="menuitem"
+                tabIndex={-1}
                 disabled={item.disabled}
                 title={item.disabled ? item.disabledReason : undefined}
                 onClick={() => {
-                  setAbierto(false)
+                  // El foco vuelve al ⋮ ANTES de la acción: si abre un modal, ese modal lo
+                  // devuelve acá al cerrarse (y no a un ítem que ya no existe).
+                  cerrarYVolver()
                   item.onClick()
                 }}
-                className={`flex w-full items-center gap-2.5 px-3 text-left font-sans text-label-md ${
+                className={`flex w-full items-center gap-2.5 px-3 text-left font-sans text-label-md outline-none focus-visible:bg-accent-light ${
                   size === 'touch' ? 'min-h-11 py-2.5' : 'py-2'
                 } ${i > 0 ? 'border-t border-line' : ''} ${
                   item.disabled

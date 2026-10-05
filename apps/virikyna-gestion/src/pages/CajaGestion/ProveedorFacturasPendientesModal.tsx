@@ -1,18 +1,16 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Wallet } from 'lucide-react'
 import type { FacturaCompraSaldo, ProveedorSaldo } from '@virikyna/shared'
-import { formatCurrency, formatFechaCorta, friendlyError } from '@virikyna/shared'
+import {
+  formatCurrency,
+  formatFechaCorta,
+  friendlyError,
+  TIPO_COMPROBANTE_COMPRA_LABEL as TIPO_LABEL,
+} from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { Modal } from '../../components/Modal'
 import { FacturaCompraDetalleModal } from '../Proveedores/FacturaCompraDetalleModal'
-
-const TIPO_LABEL: Record<string, string> = {
-  factura: 'Factura',
-  remito: 'Remito',
-  cupon: 'Cupón',
-  nota_credito: 'Nota de crédito',
-  nota_debito: 'Nota de débito',
-}
 
 type Props = {
   proveedor: ProveedorSaldo
@@ -22,7 +20,8 @@ type Props = {
 
 // Facturas con saldo pendiente de un proveedor puntual, abierto desde la card "Pendiente de
 // pago" de Resumen Cuentas. El pago en sí se registra desde el mismo FacturaCompraDetalleModal
-// que ya usan Proveedores y Virikyna Local — ningún RPC ni modal nuevo, solo un filtro puntual.
+// de Proveedores (registrar_pago_proveedor_v2, origen 'general'). Para pagar varias juntas o usar
+// notas de crédito, "Ver cuenta corriente" lleva a /proveedores/:id.
 export function ProveedorFacturasPendientesModal({ proveedor, onClose, onChanged }: Props) {
   const [facturas, setFacturas] = useState<FacturaCompraSaldo[]>([])
   const [loading, setLoading] = useState(true)
@@ -54,11 +53,19 @@ export function ProveedorFacturasPendientesModal({ proveedor, onClose, onChanged
   }, [proveedor.id])
 
   return (
-    <Modal title={proveedor.razon_social} onClose={onClose} widthClassName="max-w-[600px]">
+    <Modal title={proveedor.razon_social} onClose={onClose} widthClassName="max-w-[600px]" dialogo={{ onEscape: onClose }}>
       <div className="flex flex-col gap-stack-md">
         <div className="flex items-center justify-between rounded-lg border border-line p-4">
-          <p className="font-sans text-label-md text-ink-soft">Saldo total pendiente</p>
-          <p className="font-display text-headline-md text-error">{formatCurrency(proveedor.saldo_actual)}</p>
+          <div>
+            <p className="font-sans text-label-md text-ink-soft">Saldo total pendiente</p>
+            <p className="font-display text-headline-md text-error tabular-nums">{formatCurrency(proveedor.saldo_actual)}</p>
+          </div>
+          <Link
+            to={`/proveedores/${proveedor.id}`}
+            className="rounded font-sans text-label-bold text-accent-dark hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+          >
+            Ver cuenta corriente →
+          </Link>
         </div>
 
         {error && <p className="rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>}

@@ -334,6 +334,8 @@ CREATE TABLE facturas_compra_items (
 );
 
 -- Pagos a proveedor (cuenta corriente)
+-- ⚠ docs/31 (sección 22): + fecha, + nota; factura_compra_id DEPRECATED — la imputación vive en
+-- pagos_proveedor_aplicaciones (un pago puede cancelar varias facturas y usar notas de crédito).
 CREATE TABLE pagos_proveedor (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   proveedor_id UUID NOT NULL REFERENCES proveedores(id),
@@ -871,6 +873,8 @@ $$;
 
 -- ============================================================
 -- 5. registrar_pago_proveedor
+-- ⚠ No es la versión vigente: docs/15 agregó los campos de cheque y docs/31 (sección 22) la
+-- convirtió en un envoltorio de registrar_pago_proveedor_v2 (imputación + notas de crédito).
 -- Impacta en cuentas SOLO si es efectivo o transferencia — cheque y echeq no son
 -- plata líquida en Efectivo/MP/Galicia al momento de registrarse (decisión confirmada).
 -- ============================================================
@@ -1408,6 +1412,8 @@ ON CONFLICT (forma_pago) DO NOTHING;
 ## 9. Vistas de saldo (facturas, proveedores y clientes)
 
 Para no recalcular esto a mano en el frontend cada vez — la fuente de verdad vive en la base:
+
+> ⚠ `facturas_compra_saldo` y `proveedores_saldo` de abajo no son las vigentes: docs/31 (sección 22) las calcula desde `pagos_proveedor_aplicaciones`, hace que las notas de crédito resten y agrega `total_aplicado`, `credito_disponible` y `estado`.
 
 ```sql
 -- Saldo pendiente por cada factura de compra puntual
@@ -2131,7 +2137,7 @@ precio_venta NUMERIC(12,2) GENERATED ALWAYS AS (   -- vía ALTER COLUMN … SET 
 **Costo desde la factura de compra.** Versión vigente de `cargar_factura_compra` (reemplaza la de la sección 13). Por cada producto vinculado en la factura:
 
 - `productos.costo` = `precio_unitario_sin_iva` del ítem: precio de lista, antes del `descuento_porcentaje` de la línea (es el mismo valor con el que la pantalla precarga el ítem la próxima vez). `precio_venta` y `precio_calculado` se recalculan solos.
-- Aplica a todo tipo de comprobante **salvo `nota_credito` y `nota_debito`**. Hoy el enum vivo es `factura, remito, cupon, nota_credito, nota_debito` — `presupuesto` figura en la sección 1 pero nunca se aplicó a la base; si se agrega, también actualiza costo.
+- Aplica a todo tipo de comprobante **salvo `nota_credito` y `nota_debito`**. `presupuesto` se agregó al enum vivo en docs/31 (sección 22) y actualiza costo como cualquier otro tipo.
 - Producto repetido en la misma factura: gana la **última línea**.
 - Ítem con precio 0 (bonificación, sin cargo): no pisa el costo.
 - La regla de proveedor y márgenes de la sección 13 sigue igual (también en NC/ND).
@@ -2200,3 +2206,67 @@ ALTER TABLE productos ALTER COLUMN precio_venta SET EXPRESSION AS (
 **Frontend** (`packages/shared/lib/precios.ts`): `redondearPrecioVenta(precio)` es el espejo de la función SQL, en centavos enteros (`BigInt`). Es la única implementación de la regla y la usa `calcularPrecio()` (formularios de producto, aviso de factura de compra, vista previa de Actualizar precios). Los 29 casos de la tabla están como test en SQL (bloque 3 de docs/30) y en TS (`packages/shared/tests/precios.test.ts`). Paridad contra la base: `npm run paridad-precios`.
 
 **Orden de despliegue:** primero el SQL, después el frontend. Si el frontend nuevo corre contra la base vieja, los avisos de factura y Actualizar precios muestran el precio "antes" con la regla vieja y el "después" con la nueva.
+
+## 22. Cuenta corriente de proveedores: imputaciones, notas de crédito y origen del pago
+
+SQL completo, verificaciones y tests en `docs/31_cuenta_corriente_proveedor.sql`. Las definiciones que reemplaza se tomaron de la base real (`pg_get_functiondef`), no de este documento.
+
+**Qué estaba mal:**
+
+- Un pago se aplicaba a una sola factura o a ninguna, sin validar monto, proveedor ni anulación.
+- Las notas de crédito **sumaban** deuda: `proveedores_saldo` sumaba `total` de todo comprobante, y `facturas_compra_saldo` las mostraba como pendientes de pago.
+- Todo pago quedaba con `origen='turno'`, y `cerrar_caja` sumaba **todos** los egresos del día. Un pago en efectivo desde Gestión, o un sueldo cargado en Egresos de Gestión, bajaba el efectivo esperado del Cierre de Caja de Local.
+- `egresos` no sabía qué pago lo había generado: la reversión ponía `origen='turno'` fijo.
+
+**Tablas:**
+
+- `tipo_comprobante_compra` + `'presupuesto'`: se comporta igual que remito (suma deuda, actualiza costo, se paga). Ninguna función tuvo que cambiar para eso.
+- `pagos_proveedor` + `fecha DATE NOT NULL` (default día AR; backfill desde `created_at`) + `nota TEXT`. **`factura_compra_id` queda deprecated**: solo se completa cuando todo el pago cancela una única factura, para que las pantallas actuales sigan mostrando el pago en el detalle. No usarlo para saldos.
+- `egresos` + `pago_proveedor_id` (FK): qué pago generó el egreso. Backfill 1:1 por `created_at` + monto + forma + usuario (pago y egreso se insertan en la misma transacción). Índice único parcial: un egreso original por pago.
+- **`pagos_proveedor_aplicaciones`** — una fila = "este monto cancela este comprobante, y sale de X":
+
+| Columna | |
+|---|---|
+| `factura_compra_id` | comprobante que se cancela (NOT NULL) |
+| `monto` | `> 0` |
+| `pago_proveedor_id` / `nota_credito_id` | la fuente: plata de un pago o crédito de una NC. **Exactamente una** (CHECK) |
+| `operacion_id` | el `pagos_proveedor` de la operación que creó la fila. Para la fuente pago es igual a `pago_proveedor_id`; para una NC, el pago en el que se usó. Es lo que se revierte junto |
+| `revertida_at` / `revertida_por` | NULL = vigente. Nunca se borra ni se pone un monto negativo |
+
+  RLS igual a `pagos_proveedor` (cualquier perfil activo). Auditoría por trigger (`alta` al aplicar, `edicion` al marcar revertida). Los pagos existentes con `factura_compra_id` se migran a una aplicación cada uno.
+
+**Vistas** (mismas columnas, las nuevas al final):
+
+- `facturas_compra_saldo`:
+  - `total_aplicado`: en un comprobante, pagos + NC aplicados; en una NC, el crédito ya usado.
+  - `saldo_pendiente`: `total − total_aplicado`. **0 en NC y en anuladas**.
+  - `credito_disponible`: solo NC no anuladas, `total − total_aplicado`.
+  - `estado` calculado: `anulada | pendiente | parcial | pagada`. En una NC, `pendiente` = sin usar y `pagada` = agotada.
+  - `total_pagado` se mantiene (= `total_aplicado`).
+- `proveedores_saldo`: la NC resta (`-total`), el resto de los tipos suma.
+
+Identidad (test 7 de docs/31): `saldo_actual = saldo_inicial + Σ saldo_pendiente − Σ credito_disponible − pagos sin aplicar ("a cuenta")`.
+
+**RPC `registrar_pago_proveedor_v2`** `(p_proveedor_id, p_monto, p_forma_pago, p_factura_ids[], p_nota_credito_ids[], p_origen, p_cierre_caja_id, p_fecha, p_nota, cheque…) → JSONB`
+
+1. Valida: comprobantes del proveedor, no anulados, las facturas no son NC y las NC sí lo son. `origen='general'` solo admin (mismo criterio que `registrar_egreso_general`). Bloquea la fila del proveedor (`FOR UPDATE`): dos pagos simultáneos al mismo proveedor no pueden sobrepagar.
+2. Aplica primero el crédito de las NC a las facturas elegidas (o a todas las pendientes si no hay selección), más viejas primero (`fecha_comprobante`).
+3. Reparte `p_monto` en el mismo orden. **Con selección**: error si `p_monto` supera el saldo que queda después de las NC. **Sin selección**: el excedente queda a cuenta.
+4. `p_monto = 0` solo vale si se aplican NC: crea la fila en `pagos_proveedor` (para Historial y reversión), pero no egreso ni movimiento.
+5. Un `pagos_proveedor`, un `egresos` con el origen recibido y `pago_proveedor_id`, y un `movimientos_cuenta` (solo efectivo/transferencia, vía `cuenta_forma_pago`).
+6. Devuelve `{pago_id, monto, aplicado_pago, aplicado_nota_credito, a_cuenta, aplicaciones[]}`.
+
+**`registrar_pago_proveedor`** (las dos sobrecargas vivas, la de 9 y la vieja de 6 parámetros) delega en v2, con la misma firma y el mismo retorno. Cambios de comportamiento: con factura, error si está anulada, si es de otro proveedor, si es NC o si el monto supera su saldo; **sin factura, ahora se aplica a las pendientes más viejas** (antes quedaba sin aplicar).
+
+**Otros RPC:**
+
+- `revertir_movimiento` (rama `pagos_proveedor`): marca revertidas todas las aplicaciones de la operación (también las NC usadas), y revierte el egreso con **su origen real**. No permite revertir una reversión.
+- `anular_factura_compra`: bloquea si hay aplicaciones vigentes (como comprobante o como NC), en lugar de mirar `pagos_proveedor.factura_compra_id`. Un pago ya revertido ya no bloquea.
+- `editar_factura_compra`: no deja convertir un comprobante en NC (ni al revés) si tiene aplicaciones vigentes.
+- `cerrar_caja`: suma solo egresos `origen='turno'`. Conserva `SET timezone` (docs/28). La pantalla de Cierre de Caja de Local ya filtraba `turno`.
+
+**Sin cambios:** stock de NC (`cargar_factura_compra` sigue sumando stock en todo tipo de comprobante), clientes, Inventario.
+
+**Pagos a cuenta anteriores a docs/31** (sin factura): siguen restando del saldo del proveedor, pero no quedan aplicados a ningún comprobante. La verificación V6 de docs/31 los lista.
+
+**Orden de despliegue:** parte A sola, después la parte B, después los tests (parte C, con ROLLBACK). Local y Gestión siguen funcionando sin cambios de código. **Pendiente de frontend:** Gestión todavía llama sin `origen`, así que sus pagos siguen entrando como `turno` (y en el cierre de Local) hasta que pase `origen: 'general'`.

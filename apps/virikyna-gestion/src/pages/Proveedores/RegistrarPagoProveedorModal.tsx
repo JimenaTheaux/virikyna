@@ -1,6 +1,15 @@
 import { useState, type FormEvent } from 'react'
 import type { FormaPagoEgreso } from '@virikyna/shared'
-import { fechaHoyISO, formatCurrency, friendlyError, registrarPagoProveedor } from '@virikyna/shared'
+import {
+  ErrorRegistrarPago,
+  esCheque,
+  fechaHoyISO,
+  formatCurrency,
+  friendlyError,
+  mensajeErrorGuardado,
+  useRegistrarPagoProveedorV2,
+  validarPagoProveedor,
+} from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { FORMA_PAGO_EGRESO_LABEL } from '../../lib/caja'
 import { Modal } from '../../components/Modal'
@@ -8,20 +17,20 @@ import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field, ErrorText, inputClass, selectClass } from '../../components/FormField'
 
 const FORMAS_PAGO = Object.keys(FORMA_PAGO_EGRESO_LABEL) as FormaPagoEgreso[]
-const ES_CHEQUE = (f: FormaPagoEgreso) => f === 'cheque' || f === 'echeq'
 
 type Props = {
   proveedorId: string
   proveedorNombre: string
-  facturaCompraId: string | null // null = pago a cuenta general del proveedor
+  facturaCompraId: string | null // null = se aplica a las pendientes más viejas
   saldoPendiente?: number
   onClose: () => void
   onSaved: () => void
 }
 
-// Misma UI y mismo RPC compartido `registrarPagoProveedor` que usa Virikyna Local desde el
-// detalle de una factura puntual (docs/04_modulos_y_funciones.md, módulo 7.1: "registra pagos —
-// mismas acciones y misma función de sistema que usa el cajero desde Virikyna Local").
+// Pago de una factura puntual desde Gestión. Va por registrar_pago_proveedor_v2 (docs/31) con
+// origen 'general': un pago hecho desde Gestión no sale de la caja de Local y no entra en su
+// Cierre. Mismas validaciones que el pago desde la cuenta corriente (validarPagoProveedor), y la
+// misma mutation, que refresca la cuenta del proveedor en todas las pantallas abiertas.
 export function RegistrarPagoProveedorModal({
   proveedorId,
   proveedorNombre,
@@ -36,9 +45,9 @@ export function RegistrarPagoProveedorModal({
   const [chequeFechaSalida, setChequeFechaSalida] = useState(fechaHoyISO())
   const [chequeFechaVencimiento, setChequeFechaVencimiento] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [confirmCerrar, setConfirmCerrar] = useState(false)
+  const mutation = useRegistrarPagoProveedorV2(supabase)
 
   function pedirCierre() {
     if (dirty) {
@@ -53,47 +62,51 @@ export function RegistrarPagoProveedorModal({
     setError(null)
 
     const montoNum = Number(monto)
-    if (!montoNum || montoNum <= 0) {
-      setError('Ingresá un monto mayor a cero.')
-      return
-    }
-
-    if (ES_CHEQUE(formaPago)) {
-      if (!chequeNumero.trim()) {
-        setError('Ingresá el número de cheque.')
-        return
-      }
-      if (!chequeFechaSalida) {
-        setError('Ingresá la fecha de salida del cheque.')
-        return
-      }
-      if (!chequeFechaVencimiento) {
-        setError('Ingresá la fecha de vencimiento del cheque.')
-        return
-      }
-    }
-
-    setSaving(true)
-    const { error: dbError } = await registrarPagoProveedor(supabase, {
-      proveedorId,
-      facturaCompraId,
-      monto: montoNum,
+    const invalido = validarPagoProveedor({
+      monto: monto.trim() === '' ? NaN : montoNum,
       formaPago,
-      chequeNumero: ES_CHEQUE(formaPago) ? chequeNumero.trim() : null,
-      chequeFechaSalida: ES_CHEQUE(formaPago) ? chequeFechaSalida : null,
-      chequeFechaVencimiento: ES_CHEQUE(formaPago) ? chequeFechaVencimiento : null,
+      permiteMontoCero: false,
+      chequeNumero,
+      chequeFechaSalida,
+      chequeFechaVencimiento,
     })
-    setSaving(false)
-
-    if (dbError) {
-      setError(friendlyError(dbError))
+    if (invalido) {
+      setError(invalido)
       return
     }
-    onSaved()
+    if (saldoPendiente !== undefined && facturaCompraId && montoNum > saldoPendiente) {
+      setError(`El monto supera el saldo pendiente de esta factura (${formatCurrency(saldoPendiente)}).`)
+      return
+    }
+
+    try {
+      await mutation.mutateAsync({
+        proveedorId,
+        facturaIds: facturaCompraId ? [facturaCompraId] : [],
+        monto: montoNum,
+        formaPago,
+        origen: 'general',
+        chequeNumero,
+        chequeFechaSalida,
+        chequeFechaVencimiento,
+      })
+      onSaved()
+    } catch (err) {
+      setError(
+        err instanceof ErrorRegistrarPago
+          ? mensajeErrorGuardado(err.causa, err.status, 'registrar el pago', 'los datos siguen acá')
+          : friendlyError(err as Error),
+      )
+    }
   }
 
   return (
-    <Modal title="Registrar pago a proveedor" onClose={pedirCierre} widthClassName="max-w-[460px]">
+    <Modal
+      title="Registrar pago a proveedor"
+      onClose={pedirCierre}
+      widthClassName="max-w-[460px]"
+      dialogo={{ onEscape: pedirCierre }}
+    >
       <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
         <p className="font-sans text-body-md text-ink-soft">
           Proveedor: <span className="text-ink">{proveedorNombre}</span>
@@ -108,10 +121,12 @@ export function RegistrarPagoProveedorModal({
           <input
             type="number"
             step="0.01"
-            autoFocus
+            min={0}
+            max={saldoPendiente}
+            data-autofocus
             value={monto}
             onChange={(e) => setMonto(e.target.value)}
-            className={inputClass}
+            className={`${inputClass} tabular-nums`}
           />
         </Field>
 
@@ -129,7 +144,7 @@ export function RegistrarPagoProveedorModal({
           </select>
         </Field>
 
-        {ES_CHEQUE(formaPago) && (
+        {esCheque(formaPago) && (
           <div className="flex flex-col gap-stack-sm">
             <Field label="Nro. de cheque">
               <input
@@ -171,10 +186,10 @@ export function RegistrarPagoProveedorModal({
           </button>
           <button
             type="submit"
-            disabled={saving}
+            disabled={mutation.isPending}
             className="rounded bg-accent px-4 py-3 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-60"
           >
-            {saving ? 'Guardando...' : 'Registrar pago'}
+            {mutation.isPending ? 'Guardando...' : 'Registrar pago'}
           </button>
         </div>
       </form>

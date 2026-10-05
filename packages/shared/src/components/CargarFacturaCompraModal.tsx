@@ -8,6 +8,8 @@ import {
   itemsValidosFacturaCompra,
   nuevoItemFacturaCompraUI,
   problemasItemsFacturaCompra,
+  TIPO_COMPROBANTE_COMPRA_LABEL,
+  TIPOS_COMPROBANTE_COMPRA,
   type ItemFacturaCompraUI,
 } from '../../lib/facturasCompra'
 import { fechaHoyISO, formatCurrency } from '../../lib/format'
@@ -18,13 +20,13 @@ import { ConfirmDialog } from './ConfirmDialog'
 import { Field, ErrorText, inputClass, selectClass } from './FormField'
 import { ItemFacturaRow, type CrearProductoRender } from './ItemFacturaRow'
 
-const TIPOS: { value: TipoComprobanteCompra; label: string }[] = [
-  { value: 'factura', label: 'Factura' },
-  { value: 'remito', label: 'Remito' },
-  { value: 'cupon', label: 'Cupón (no facturado)' },
-  { value: 'nota_credito', label: 'Nota de crédito' },
-  { value: 'nota_debito', label: 'Nota de débito' },
-]
+// Etiquetas compartidas (TIPO_COMPROBANTE_COMPRA_LABEL); acá se aclara cuáles no son fiscales.
+// Presupuesto (docs/31) se carga igual que un remito: suma stock y deuda, y actualiza costo.
+const SIN_RESPALDO_FISCAL: TipoComprobanteCompra[] = ['cupon', 'presupuesto']
+const TIPOS: { value: TipoComprobanteCompra; label: string }[] = TIPOS_COMPROBANTE_COMPRA.map((t) => ({
+  value: t,
+  label: SIN_RESPALDO_FISCAL.includes(t) ? `${TIPO_COMPROBANTE_COMPRA_LABEL[t]} (no facturado)` : TIPO_COMPROBANTE_COMPRA_LABEL[t],
+}))
 
 const LETRAS: LetraComprobanteCompra[] = ['A', 'B', 'R', 'X']
 

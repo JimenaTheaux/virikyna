@@ -1,18 +1,16 @@
 import { useEffect, useState } from 'react'
 import type { FacturaCompraSaldo, Proveedor } from '@virikyna/shared'
-import { formatCurrency, formatFechaCorta, friendlyError, EstadoBadge } from '@virikyna/shared'
+import {
+  formatCurrency,
+  formatFechaCorta,
+  friendlyError,
+  EstadoBadge,
+  TIPO_COMPROBANTE_COMPRA_LABEL as TIPO_LABEL,
+} from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { CargarFacturaCompraModal } from './CargarFacturaCompraModal'
 import { FacturaCompraDetalleModal } from './FacturaCompraDetalleModal'
 import type { FacturaCompraConProveedor } from './types'
-
-const TIPO_LABEL: Record<string, string> = {
-  factura: 'Factura',
-  remito: 'Remito',
-  cupon: 'Cupón',
-  nota_credito: 'Nota de crédito',
-  nota_debito: 'Nota de débito',
-}
 
 // Facturas de compra vistas desde Virikyna Gestión — la carga usa el mismo RPC atómico
 // `cargar_factura_compra` que Virikyna Local e Inventario (ver CargarFacturaCompraModal), así
