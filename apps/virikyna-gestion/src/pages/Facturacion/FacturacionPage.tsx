@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { VentasDelDiaTab } from './VentasDelDiaTab'
 import { FacturacionTab } from './FacturacionTab'
 
@@ -10,7 +11,11 @@ const TABS = [
 type TabId = (typeof TABS)[number]['id']
 
 export function FacturacionPage() {
-  const [tab, setTab] = useState<TabId>('ventas_dia')
+  // Si la URL trae filtros de la tab Facturación (?notas=1&q=…), se abre esa tab al recargar.
+  const [searchParams] = useSearchParams()
+  const [tab, setTab] = useState<TabId>(() =>
+    searchParams.has('notas') || searchParams.has('q') ? 'facturacion' : 'ventas_dia',
+  )
 
   return (
     <section className="flex h-full flex-col rounded-lg bg-surface p-card shadow-sm">

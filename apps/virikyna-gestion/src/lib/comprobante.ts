@@ -27,6 +27,10 @@ export type DatosComprobante = {
   precioOficial: number // calculado por el sistema, antes del redondeo manual del cajero
   total: number // = precio cobrado (puede diferir de precioOficial por redondeo)
   cae: string | null
+  // ventas.nota, la que carga el cajero en Local. Solo se muestra en pantalla (no va al PDF ni al
+  // mensaje de envío: es interna). Opcional porque "Ventas del día" (packages/shared) arma su
+  // propio DatosComprobante sin nota.
+  nota?: string | null
 }
 
 export const FORMA_PAGO_LABEL: Record<FormaPagoVenta, string> = {

@@ -48,6 +48,15 @@ export function ComprobanteModal({ datos, onClose, footer }: Props) {
           <p>{formatFechaHora(datos.fecha)}</p>
         </div>
 
+        {datos.nota?.trim() && (
+          <div className="rounded-lg border border-line bg-bg px-4 py-3">
+            <p className="font-sans text-label-bold text-ink">Nota</p>
+            <p className="mt-1 whitespace-pre-wrap font-sans text-body-md text-ink [overflow-wrap:anywhere]">
+              {datos.nota}
+            </p>
+          </div>
+        )}
+
         <div className="overflow-x-auto rounded-lg border border-line">
           <table className="w-full text-left font-sans text-body-md">
             <thead>
