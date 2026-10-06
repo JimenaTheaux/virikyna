@@ -158,6 +158,7 @@ export function FacturacionTab() {
       precioOficial: venta.precio_oficial,
       total: venta.total,
       cae: venta.factura_c?.cae ?? null,
+      nota: venta.nota,
     })
   }
 

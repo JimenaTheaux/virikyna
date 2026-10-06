@@ -20,9 +20,10 @@ type Props = {
 }
 
 // Único punto de armado de UI para "Registrar pago" desde el detalle de una factura puntual —
-// llama a la misma función compartida `registrarPagoProveedor` (packages/shared) que usa el
-// flujo de egresos (CierreCaja/RegistrarEgresoModal), así que un pago acá o desde egresos
-// produce siempre el mismo resultado: fila en pagos_proveedor + egreso + movimiento de cuenta.
+// llama a `registrarPagoProveedor` (packages/shared), que en la base delega en
+// `registrar_pago_proveedor_v2` con origen 'turno': el mismo RPC que usa el flujo de egresos
+// (CierreCaja/RegistrarEgresoModal), así que un pago acá o desde egresos produce siempre el mismo
+// resultado: pago + aplicaciones + egreso + movimiento de cuenta.
 // Campos de cheque/echeq: misma UI y misma validación que Virikyna Gestión (docs/15_cheques_proveedor.sql).
 export function RegistrarPagoProveedorModal({
   proveedorId,

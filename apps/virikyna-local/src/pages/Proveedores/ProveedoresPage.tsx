@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { ProveedoresTab } from './ProveedoresTab'
 import { FacturasCompraTab } from './FacturasCompraTab'
 
@@ -9,8 +9,11 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]['id']
 
+// La pestaña vive en la URL (?tab=proveedores): volver desde la cuenta corriente de un proveedor
+// (/proveedores/:id) cae en la lista de proveedores y no en Facturas, que es la de por defecto.
 export function ProveedoresPage() {
-  const [tab, setTab] = useState<TabId>('facturas')
+  const [params, setParams] = useSearchParams()
+  const tab: TabId = params.get('tab') === 'proveedores' ? 'proveedores' : 'facturas'
 
   return (
     <section className="flex h-full flex-col rounded-lg bg-surface p-card shadow-sm">
@@ -23,7 +26,8 @@ export function ProveedoresPage() {
           <button
             key={t.id}
             type="button"
-            onClick={() => setTab(t.id)}
+            aria-pressed={tab === t.id}
+            onClick={() => setParams(t.id === 'facturas' ? {} : { tab: t.id }, { replace: true })}
             className={[
               'rounded-t px-4 py-2 font-sans text-label-bold',
               tab === t.id

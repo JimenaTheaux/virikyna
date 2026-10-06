@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import type { CategoriaEgreso, FacturaCompraSaldo, FormaPagoEgreso, Proveedor } from '@virikyna/shared'
 import { useAuth } from '../../auth/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
-import { fechaHoyISO, formatCurrency, mensajeErrorGuardado, registrarEgresoGeneral, registrarPagoProveedor } from '@virikyna/shared'
+import { fechaHoyISO, formatCurrency, mensajeErrorGuardado, registrarEgresoGeneral, registrarPagoProveedorV2 } from '@virikyna/shared'
 import { CATEGORIA_EGRESO_LABEL, CATEGORIAS_LOCAL, FORMA_PAGO_EGRESO_LABEL } from '../../lib/caja'
 import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
@@ -34,9 +34,10 @@ export function RegistrarEgresoModal({ onClose, onSaved }: { onClose: () => void
     }
   }
 
-  // Categoría "Pago a proveedor": segundo punto de entrada al mismo RPC `registrar_pago_proveedor`
-  // que usa el detalle de factura (Proveedores/RegistrarPagoProveedorModal) — ver
-  // docs/04_modulos_y_funciones.md, módulo 6, "Dos puntos de entrada, una sola operación real".
+  // Categoría "Pago a proveedor": llama directo a `registrar_pago_proveedor_v2` (docs/31) con origen
+  // 'turno' — sale de la caja y entra en el Cierre. El detalle de factura
+  // (Proveedores/RegistrarPagoProveedorModal) usa todavía `registrar_pago_proveedor`, que en la base
+  // delega en v2 con el mismo origen: la operación real es una sola (docs/04, módulo 6).
   const esPagoProveedor = categoria === 'pago_proveedor'
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [proveedorId, setProveedorId] = useState('')
@@ -101,11 +102,13 @@ export function RegistrarEgresoModal({ onClose, onSaved }: { onClose: () => void
         }
       }
       setSaving(true)
-      const { error: dbError, status } = await registrarPagoProveedor(supabase, {
+      const { error: dbError, status } = await registrarPagoProveedorV2(supabase, {
         proveedorId,
-        facturaCompraId: facturaCompraId || null,
+        // Sin factura elegida: el RPC aplica el pago a las pendientes más viejas primero.
+        facturaIds: facturaCompraId ? [facturaCompraId] : [],
         monto: montoNum,
         formaPago,
+        origen: 'turno',
         chequeNumero: ES_CHEQUE(formaPago) ? chequeNumero.trim() : null,
         chequeFechaSalida: ES_CHEQUE(formaPago) ? chequeFechaSalida : null,
         chequeFechaVencimiento: ES_CHEQUE(formaPago) ? chequeFechaVencimiento : null,

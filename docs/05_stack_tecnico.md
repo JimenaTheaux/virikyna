@@ -72,7 +72,7 @@ Una sola caja física para arrancar (Terminal #001). El campo `terminal_id` qued
 | Datos | Lectura **y escritura** directa a Supabase, con rol admin + RLS | Gestiona de verdad, no solo consulta |
 | Alcance | Todo lo que ve el Admin en la Caja, **excepto la pantalla de Ventas/cobro** (esa depende del motor local) | Ella no vende, pero gestiona todo lo demás |
 | Módulos incluidos | Dashboard, Inventario (alta/edición/baja/ajuste de stock), Proveedores (alta, facturas, pagos), Clientes (alta, cobros), Facturación (emitir/ver/enviar Factura C de ventas ya hechas), Cierre de Caja + Caja Gestión (validar Cierre Z, egresos generales), Configuración (usuarios) | Con creación, edición y eliminación real — mismos permisos que el Admin de la Caja |
-| Arquitectura | Reutiliza los componentes de UI de `packages/shared`, con un **adaptador de datos distinto**: esta PWA habla directo con Supabase, la Caja habla con SQLite/PowerSync | Comparte diseño y lógica de negocio, no duplica código, pero sí es una segunda aplicación real |
+| Arquitectura | Reutiliza los componentes de UI de `packages/shared`, y la misma conexión directa a Supabase que la Caja (sin SQLite/PowerSync, ver "Decisión revisada" arriba) | Comparte diseño y lógica de negocio, no duplica código, pero sí es una segunda aplicación real |
 
 **Nota de alcance/presupuesto:** al ser CRUD completo (no solo lectura), esto es una segunda aplicación — más chica que la Caja, pero no un agregado menor. Cotizar como Fase 2 propia, igual que 5.1 y 7.1, no como parte de la suscripción mensual.
 

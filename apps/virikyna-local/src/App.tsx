@@ -7,6 +7,7 @@ import { VentasPage } from './pages/VentasPage'
 import { FacturacionPage } from './pages/Facturacion/FacturacionPage'
 import { InventarioPage } from './pages/Inventario/InventarioPage'
 import { ProveedoresPage } from './pages/Proveedores/ProveedoresPage'
+import { ProveedorDetallePage } from './pages/Proveedores/ProveedorDetallePage'
 import { DashboardPage } from './pages/DashboardPage'
 import { ClientesPage } from './pages/Clientes/ClientesPage'
 import { ConfiguracionPage } from './pages/ConfiguracionPage'
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="/facturacion" element={<FacturacionPage />} />
           <Route path="/inventario" element={<InventarioPage />} />
           <Route path="/proveedores" element={<ProveedoresPage />} />
+          <Route path="/proveedores/:id" element={<ProveedorDetallePage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/clientes" element={<ClientesPage />} />
           <Route path="/cierre-caja" element={<CierreCajaPage />} />

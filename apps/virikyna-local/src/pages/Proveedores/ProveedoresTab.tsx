@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { Pencil } from 'lucide-react'
 import type { ProveedorSaldo } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
@@ -10,6 +11,7 @@ import { ProveedorFormModal } from './ProveedorFormModal'
 // sale de la vista `proveedores_saldo` (docs/06_estructura_de_datos.md, sección 9), nunca se
 // recalcula acá: saldo inicial + facturado − pagado.
 export function ProveedoresTab() {
+  const navigate = useNavigate()
   const [proveedores, setProveedores] = useState<ProveedorSaldo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -43,7 +45,7 @@ export function ProveedoresTab() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between">
-        <p className="font-sans text-body-md text-ink-soft">Datos de contacto, márgenes por defecto y saldo.</p>
+        <p className="font-sans text-body-md text-ink-soft">Tocá un proveedor para ver su cuenta corriente y registrar pagos.</p>
         <div className="flex items-center gap-3">
           <SearchInput value={busqueda} onChange={setBusqueda} placeholder="Buscar proveedor..." />
           <button
@@ -94,8 +96,21 @@ export function ProveedoresTab() {
               </tr>
             )}
             {proveedoresFiltrados.map((proveedor) => (
-              <tr key={proveedor.id} className="border-b border-table-divider last:border-0 even:bg-table-row-alt">
-                <td className="px-3 py-3 text-ink">{proveedor.razon_social}</td>
+              <tr
+                key={proveedor.id}
+                onClick={() => navigate(`/proveedores/${proveedor.id}`)}
+                className="cursor-pointer border-b border-table-divider last:border-0 even:bg-table-row-alt hover:bg-accent-light/40"
+              >
+                <td className="px-3 py-3 text-ink">
+                  {/* El link es el foco de teclado de la fila (Enter abre); el click en la fila es atajo de mouse. */}
+                  <Link
+                    to={`/proveedores/${proveedor.id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="rounded hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+                  >
+                    {proveedor.razon_social}
+                  </Link>
+                </td>
                 <td className="px-3 py-3 text-ink-soft">{proveedor.cuit ?? '—'}</td>
                 <td className="px-3 py-3 text-ink-soft">{proveedor.telefono ?? '—'}</td>
                 <td
@@ -103,7 +118,7 @@ export function ProveedoresTab() {
                 >
                   {formatCurrency(proveedor.saldo_actual)}
                 </td>
-                <td className="px-3 py-3 text-right">
+                <td className="px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                   <button
                     type="button"
                     onClick={() => setModal(proveedor)}

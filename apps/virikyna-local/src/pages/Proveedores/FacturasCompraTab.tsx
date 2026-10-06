@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Copy, Eye } from 'lucide-react'
 import type { FacturaCompraSaldo, Proveedor } from '@virikyna/shared'
 import {
+  EstadoBadge,
   etiquetaComprobanteCompra,
   formatCurrency,
   formatFechaCorta,
@@ -81,6 +82,7 @@ export function FacturasCompraTab() {
               <th className="whitespace-nowrap px-3 py-2.5">Comprobante</th>
               <th className="whitespace-nowrap px-3 py-2.5 text-right">Total</th>
               <th className="whitespace-nowrap px-3 py-2.5 text-right">Saldo pendiente</th>
+              <th className="whitespace-nowrap px-3 py-2.5"></th>
               <th className="w-[3rem] px-3 py-2.5">
                 <span className="sr-only">Acciones</span>
               </th>
@@ -89,14 +91,14 @@ export function FacturasCompraTab() {
           <tbody>
             {loading && (
               <tr>
-                <td className="px-4 py-4 text-ink-soft" colSpan={6}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={7}>
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && facturas.length === 0 && (
               <tr>
-                <td className="px-4 py-4 text-ink-soft" colSpan={6}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={7}>
                   No hay facturas de compra cargadas todavía.
                 </td>
               </tr>
@@ -105,18 +107,31 @@ export function FacturasCompraTab() {
               <tr
                 key={f.id}
                 onClick={() => setDetalle(f)}
-                className="cursor-pointer border-b border-table-divider last:border-0 even:bg-table-row-alt hover:bg-accent-light/40"
+                className={`cursor-pointer border-b border-table-divider last:border-0 even:bg-table-row-alt hover:bg-accent-light/40 ${
+                  f.anulada ? 'text-ink-soft line-through' : ''
+                }`}
               >
                 <td className="whitespace-nowrap px-3 py-3 text-ink-soft">{formatFechaCorta(f.fecha_comprobante)}</td>
-                <td className="px-3 py-3 text-ink">{f.proveedor?.razon_social ?? '—'}</td>
+                <td className={`px-3 py-3 ${f.anulada ? '' : 'text-ink'}`}>{f.proveedor?.razon_social ?? '—'}</td>
                 <td className="px-3 py-3 text-ink-soft">
                   {TIPO_LABEL[f.tipo_comprobante] ?? f.tipo_comprobante}
                   {f.letra ? ` ${f.letra}` : ''}
                   {f.numero_comprobante ? ` · ${f.numero_comprobante}` : ''}
                 </td>
-                <td className="px-3 py-3 text-right text-ink">{formatCurrency(f.total)}</td>
-                <td className={`px-3 py-3 text-right font-semibold ${f.saldo_pendiente > 0 ? 'text-error' : 'text-success'}`}>
+                <td className={`px-3 py-3 text-right ${f.anulada ? '' : 'text-ink'}`}>{formatCurrency(f.total)}</td>
+                <td
+                  className={`px-3 py-3 text-right font-semibold ${
+                    f.anulada ? '' : f.saldo_pendiente > 0 ? 'text-error' : 'text-success'
+                  }`}
+                >
                   {formatCurrency(f.saldo_pendiente)}
+                </td>
+                <td className="px-3 py-3 text-right">
+                  {f.anulada && (
+                    <span className="no-underline">
+                      <EstadoBadge variant="red">Anulada</EstadoBadge>
+                    </span>
+                  )}
                 </td>
                 <td className="px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                   <RowActionsMenu

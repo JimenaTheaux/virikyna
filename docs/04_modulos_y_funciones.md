@@ -91,6 +91,8 @@ Roles del sistema: **Admin** (Alicia, Ana Julia) y **Cajero** (Jose, Ale, Belu).
 **Reglas (confirmadas):**
 - **Un Comprobante X = una Factura C.** Si se tildan varios comprobantes juntos, el sistema emite una Factura C por cada uno — no se agrupan en un solo comprobante fiscal.
 - Sin impresora fiscal: toda la facturación pasa por ARCA electrónica. Si no hay internet al momento de facturar, la emisión queda pendiente hasta que vuelva la conexión (la venta ya está cobrada y no se ve afectada).
+- **Nota de la venta:** la nota que el cajero cargó al vender se muestra en el detalle del comprobante (Local y Gestión). Es interna: solo se ve en pantalla, no va al PDF, a la imagen ni al mensaje de envío.
+- **En Gestión**, el listado tiene un chip "Con notas (N)" que deja solo las ventas con nota, y un buscador por N° de venta, nota o cliente. Ambos filtros quedan en la URL.
 
 ---
 
@@ -187,7 +189,7 @@ Mismo cuadro de acciones que Inventario de escritorio (excepto ajuste de stock, 
 **Copiar una factura (docs/33 — Local, Gestión e Inventario):**
 - Se puede cargar una factura nueva partiendo de otra ya cargada: de cualquier proveedor (se puede cambiar al copiar) y también de una anulada (el caso típico: anular por un error en ítems o montos y volver a cargarla bien).
 - La factura nueva es una carga normal (suma stock, actualiza costo, suma deuda) y queda registrado de qué factura se copió, también en Historial.
-- Desde dónde: "Copiar" en el menú de cada fila de Facturas de compra (Local y Gestión), en el detalle de la factura y en la cuenta corriente del proveedor (Gestión) — también en facturas anuladas. Dentro del formulario de carga (también en Inventario, desde el celular), "Copiar desde…" elige entre las últimas 20 facturas (buscador por proveedor y número); si ya había algo cargado, pide confirmar antes de reemplazarlo.
+- Desde dónde: "Copiar" en el menú de cada fila de Facturas de compra (Local y Gestión), en el detalle de la factura y en la cuenta corriente del proveedor (Local y Gestión) — también en facturas anuladas. Dentro del formulario de carga (también en Inventario, desde el celular), "Copiar desde…" elige entre las últimas 20 facturas (buscador por proveedor y número); si ya había algo cargado, pide confirmar antes de reemplazarlo.
 - En la copia se completan proveedor, tipo, letra, punto de venta, forma de pago e ítems (con su cantidad, precio, descuento y depósito). **Número y fecha quedan vacíos y son obligatorios**; la fecha fiscal también queda vacía.
 - Si un ítem copiado tiene un producto que hoy está **inactivo**, se avisa en el ítem y no se puede guardar hasta elegir "Usarlo igual" u otro producto.
 - En Historial, la factura nueva muestra "Copia de Factura A 0001-123" con acceso al detalle de la original.
@@ -205,12 +207,12 @@ Mismo cuadro de acciones que Inventario de escritorio (excepto ajuste de stock, 
 
 **Detalle y saldo por factura:** cada factura de compra muestra su propio saldo pendiente y estado, y el historial de pagos que se le aplicaron — no solo el saldo general del proveedor.
 
-**Pantalla de cuenta corriente (Gestión, `/proveedores/:id`):** se abre tocando un proveedor en la lista.
+**Pantalla de cuenta corriente (Local y Gestión, `/proveedores/:id`):** se abre tocando un proveedor en la lista.
 - Cabecera con datos y márgenes, y 4 indicadores: saldo, comprobantes pendientes, crédito de NC disponible, último pago.
 - Pestañas Pendientes / Pagados / Todos / Pagos, con filtros por tipo, fechas y número que quedan en la URL.
 - Se pueden tildar comprobantes y notas de crédito y pagarlos juntos. El modal muestra cómo se reparte el pago antes de confirmar.
-- Todo pago desde Gestión se registra con `origen='general'`: no entra en el Cierre de Caja de Local.
-- Es un componente compartido (`ProveedorCuentaCorriente`): Local lo va a poder usar con `origen='turno'` y sin Editar/Anular.
+- Todo pago desde Gestión se registra con `origen='general'`: no entra en el Cierre de Caja de Local. Desde Local se registra con `origen='turno'`: sale de la caja y entra en su Cierre.
+- Es un componente compartido (`ProveedorCuentaCorriente`): Gestión lo usa con Editar/Anular; Local, sin Editar/Anular (exclusivos de Gestión).
 
 **Dos puntos de entrada, una sola operación real:** el cajero puede registrar un pago a proveedor desde dos lugares distintos en la UI —
 1. Desde el detalle de una factura puntual ("Registrar pago" sobre esa factura), o
