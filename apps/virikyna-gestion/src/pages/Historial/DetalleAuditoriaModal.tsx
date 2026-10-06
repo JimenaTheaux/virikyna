@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { formatFechaHora, friendlyError } from '@virikyna/shared'
 import { Modal } from '../../components/Modal'
 import { Field, ErrorText, inputClass } from '../../components/FormField'
 import {
   ACCION_LABEL,
   accionRevertible,
+  CAMPOS_FACTURA_COMPRA_REF,
+  etiquetasFacturasCompra,
   anularVenta,
   revertirAlta,
   revertirEdicion,
@@ -12,6 +14,7 @@ import {
   tablaLabel,
 } from '../../lib/historial'
 import type { AuditoriaConUsuario } from './types'
+import { FacturaCompraDetallePorId } from '../Proveedores/FacturaCompraDetallePorId'
 
 type Props = {
   auditoria: AuditoriaConUsuario
@@ -43,6 +46,40 @@ export function DetalleAuditoriaModal({ auditoria, ventaEstado, onClose, onRever
   )
 
   const revertible = accionRevertible(auditoria, ventaEstado)
+
+  // Campos que apuntan a otra factura de compra (copiada_de_id, docs/33): se muestran con su
+  // comprobante y abren su detalle, en vez del UUID.
+  const [etiquetasFactura, setEtiquetasFactura] = useState<Map<string, string>>(new Map())
+  const [facturaAbierta, setFacturaAbierta] = useState<string | null>(null)
+  const idsFactura = todasLasClaves
+    .filter((k) => k in CAMPOS_FACTURA_COMPRA_REF)
+    .flatMap((k) => [antes?.[k], despues?.[k]])
+    .filter((v): v is string => typeof v === 'string')
+  const claveIds = idsFactura.join(',')
+  useEffect(() => {
+    let cancelado = false
+    etiquetasFacturasCompra(idsFactura).then((m) => {
+      if (!cancelado) setEtiquetasFactura(m)
+    })
+    return () => {
+      cancelado = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [claveIds])
+
+  function celda(k: string, v: unknown): ReactNode {
+    const texto = CAMPOS_FACTURA_COMPRA_REF[k]
+    if (!texto || typeof v !== 'string') return valorTexto(v)
+    return (
+      <button
+        type="button"
+        onClick={() => setFacturaAbierta(v)}
+        className="rounded text-left text-accent-dark underline hover:text-accent-darker focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+      >
+        {texto(etiquetasFactura.get(v) ?? 'otra factura')}
+      </button>
+    )
+  }
 
   async function ejecutarRevertir() {
     setError(null)
@@ -118,10 +155,10 @@ export function DetalleAuditoriaModal({ auditoria, ventaEstado, onClose, onRever
                     <tr key={k} className="border-b border-line last:border-0">
                       <td className="px-3 py-2 text-ink-soft">{k}</td>
                       <td className={`px-3 py-2 ${cambio ? 'text-error' : 'text-ink'}`}>
-                        {antes ? valorTexto(vAntes) : '—'}
+                        {antes ? celda(k, vAntes) : '—'}
                       </td>
                       <td className={`px-3 py-2 ${cambio ? 'font-bold text-success' : 'text-ink'}`}>
-                        {despues ? valorTexto(vDespues) : '—'}
+                        {despues ? celda(k, vDespues) : '—'}
                       </td>
                     </tr>
                   )
@@ -192,6 +229,8 @@ export function DetalleAuditoriaModal({ auditoria, ventaEstado, onClose, onRever
           </div>
         )}
       </div>
+
+      {facturaAbierta && <FacturaCompraDetallePorId facturaId={facturaAbierta} onClose={() => setFacturaAbierta(null)} />}
     </Modal>
   )
 }

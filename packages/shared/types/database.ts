@@ -248,6 +248,7 @@ export type FacturaCompra = {
   usuario_id: string
   anulada: boolean // exclusivo Gestión: anular_factura_compra revierte stock y marca esto
   created_at: string
+  copiada_de_id: string | null // docs/33: factura de la que se copió esta (cualquier proveedor, también anulada)
 }
 
 export type FacturaCompraItem = {
@@ -311,6 +312,10 @@ export type RegistrarPagoProveedorV2Resultado = {
     nota_credito_id: string | null
   }[]
 }
+
+// Fila de existe_comprobante_compra (docs/33): comprobante ya cargado con el mismo proveedor, tipo,
+// letra, punto de venta y número (sin ceros a la izquierda). Solo para avisar, no bloquea la carga.
+export type ComprobanteCompraExistente = Pick<FacturaCompra, 'id' | 'fecha_comprobante' | 'total' | 'anulada'>
 
 export type PagoCliente = {
   id: string

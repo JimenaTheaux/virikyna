@@ -3,6 +3,7 @@ import type { Proveedor, RolUsuario, UbicacionStock } from '@virikyna/shared'
 import {
   AvisoCambioPrecioFactura,
   AvisoCodigoFactura,
+  AvisoProductoInactivoFactura,
   formatCurrency,
   ScanButton,
   SugerenciasProductoFactura,
@@ -113,6 +114,20 @@ export function ItemFacturaRow({
         )}
 
         <AvisoCodigoFactura busqueda={busqueda} size="touch" />
+
+        {/* Ítem copiado de otra factura cuyo producto hoy está inactivo (docs/33): bloquea el
+            guardado hasta "Usarlo igual" o elegir otro (problemasItemsFacturaCompra). */}
+        {item.productoId && item.productoInactivo && (
+          <AvisoProductoInactivoFactura
+            size="touch"
+            nombre={item.descripcion}
+            onUsar={() => onChange({ productoInactivo: false })}
+            onBuscarOtro={() => {
+              onChange({ productoId: null, productoPrecio: null, productoInactivo: false, descripcion: '', codigoBarras: '', marca: '' })
+              busqueda.buscarPorNombre()
+            }}
+          />
+        )}
 
         <Field
           label="Producto"

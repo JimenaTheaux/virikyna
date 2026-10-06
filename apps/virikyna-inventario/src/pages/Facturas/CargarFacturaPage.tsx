@@ -3,20 +3,29 @@ import { useBlocker } from 'react-router-dom'
 import type {
   FormaPagoCompra,
   LetraComprobanteCompra,
+  OrigenCopiaFactura,
   Proveedor,
   TipoComprobanteCompra,
+  ValoresFacturaCompra,
 } from '@virikyna/shared'
 import {
+  AvisoComprobanteDuplicado,
   cargarFacturaCompra,
   calcularTotalesFacturaCompra,
   cambiosPrecioFactura,
-  fechaHoyISO,
+  errorCabeceraFacturaCompra,
+  EstadoBadge,
   formatCurrency,
   friendlyError,
   integrarMarcaEnItemsLibres,
   itemsValidosFacturaCompra,
   nuevoItemFacturaCompraUI,
   problemasItemsFacturaCompra,
+  TIPO_COMPROBANTE_COMPRA_LABEL,
+  TIPOS_COMPROBANTE_COMPRA,
+  useComprobanteDuplicado,
+  useCopiaFacturaCompra,
+  valoresFacturaCompraVacios,
   type ItemFacturaCompraUI,
 } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
@@ -25,14 +34,15 @@ import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field, inputClass, selectClass } from '../../components/FormField'
 import { IconMas } from '../../components/icons'
 import { ItemFacturaRow } from './ItemFacturaRow'
+import { SelectorFacturaCopiaSheet } from './SelectorFacturaCopiaSheet'
 
-const TIPOS: { value: TipoComprobanteCompra; label: string }[] = [
-  { value: 'factura', label: 'Factura' },
-  { value: 'remito', label: 'Remito' },
-  { value: 'cupon', label: 'Cupón (no facturado)' },
-  { value: 'nota_credito', label: 'Nota de crédito' },
-  { value: 'nota_debito', label: 'Nota de débito' },
-]
+// Mismas etiquetas que el escritorio (TIPO_COMPROBANTE_COMPRA_LABEL compartida, incluye
+// presupuesto, docs/31); acá se aclara cuáles no son fiscales.
+const SIN_RESPALDO_FISCAL: TipoComprobanteCompra[] = ['cupon', 'presupuesto']
+const TIPOS: { value: TipoComprobanteCompra; label: string }[] = TIPOS_COMPROBANTE_COMPRA.map((t) => ({
+  value: t,
+  label: SIN_RESPALDO_FISCAL.includes(t) ? `${TIPO_COMPROBANTE_COMPRA_LABEL[t]} (no facturado)` : TIPO_COMPROBANTE_COMPRA_LABEL[t],
+}))
 
 const LETRAS: LetraComprobanteCompra[] = ['A', 'B', 'R', 'X']
 
@@ -43,29 +53,36 @@ type Aviso = { tipo: 'error' | 'exito'; texto: string }
 // Acceso directo a carga de facturas de proveedor desde el celular (docs/04_modulos_y_funciones.md,
 // módulo 5.1) — usa el mismo RPC atómico `cargar_factura_compra` que actualiza stock por ubicación
 // (docs/06_estructura_de_datos.md), sin reimplementar esa lógica en el cliente: acá solo se arma el
-// payload y se muestra una vista previa de los totales.
+// payload y se muestra una vista previa de los totales. Copiar una factura (docs/33) usa los mismos
+// hooks que el escritorio (lib/useCopiaFacturaCompra.ts); acá solo va el dibujo táctil.
 export function CargarFacturaPage() {
   const { rol } = usePerfil()
+  const vacios = valoresFacturaCompraVacios()
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
-  const [proveedorId, setProveedorId] = useState('')
-  const [tipoComprobante, setTipoComprobante] = useState<TipoComprobanteCompra>('factura')
-  const [letra, setLetra] = useState<LetraComprobanteCompra | ''>('')
-  const [puntoVenta, setPuntoVenta] = useState('')
-  const [numeroComprobante, setNumeroComprobante] = useState('')
-  const [fechaComprobante, setFechaComprobante] = useState(fechaHoyISO())
-  const [fechaFiscal, setFechaFiscal] = useState('')
+  const [proveedorId, setProveedorId] = useState(vacios.proveedorId)
+  const [tipoComprobante, setTipoComprobante] = useState<TipoComprobanteCompra>(vacios.tipoComprobante)
+  const [letra, setLetra] = useState<LetraComprobanteCompra | ''>(vacios.letra)
+  const [puntoVenta, setPuntoVenta] = useState(vacios.puntoVenta)
+  const [numeroComprobante, setNumeroComprobante] = useState(vacios.numeroComprobante)
+  const [fechaComprobante, setFechaComprobante] = useState(vacios.fechaComprobante)
+  const [fechaFiscal, setFechaFiscal] = useState(vacios.fechaFiscal)
   const [mostrarFechaFiscal, setMostrarFechaFiscal] = useState(false)
-  const [formaPago, setFormaPago] = useState<FormaPagoCompra>('contado')
-  const [items, setItems] = useState<ItemFacturaCompraUI[]>([nuevoItemFacturaCompraUI()])
+  const [formaPago, setFormaPago] = useState<FormaPagoCompra>(vacios.formaPago)
+  const [items, setItems] = useState<ItemFacturaCompraUI[]>(vacios.items)
+  const [copiaDe, setCopiaDe] = useState<OrigenCopiaFactura | null>(null)
   const [aviso, setAviso] = useState<Aviso | null>(null)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
+  const [selectorAbierto, setSelectorAbierto] = useState(false)
   // Errores por ítem de la última validación de "Guardar factura" (key → mensaje).
   const [erroresItems, setErroresItems] = useState<Record<string, string>>({})
   // Ítem que tiene que tomar el foco en "Cód. barras"; `n` cambia en cada pedido para que se
   // pueda volver a enfocar el mismo ítem.
   const [foco, setFoco] = useState<{ key: string; n: number } | null>(null)
   const avisoRef = useRef<HTMLParagraphElement>(null)
+  // En una copia lo que falta es lo propio de la factura nueva: el foco va a "Número".
+  const numeroRef = useRef<HTMLInputElement>(null)
+  const [focoNumero, setFocoNumero] = useState(0)
 
   // Cambiar de pestaña (o volver atrás) con lo cargado sin guardar pide confirmación antes de
   // descartarlo. Solo bloquea si de verdad cambia de pantalla.
@@ -100,6 +117,37 @@ export function CargarFacturaPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aviso])
+
+  useEffect(() => {
+    if (!focoNumero) return
+    numeroRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    numeroRef.current?.focus({ preventScroll: true })
+  }, [focoNumero])
+
+  // Carga todo el formulario de una vez: una copia (facturaACopia) o el formulario vacío al
+  // reiniciar después de guardar. Recién aplicado no hay nada tipeado que perder (dirty = false).
+  function aplicarValores(v: ValoresFacturaCompra) {
+    setProveedorId(v.proveedorId)
+    setTipoComprobante(v.tipoComprobante)
+    setLetra(v.letra)
+    setPuntoVenta(v.puntoVenta)
+    setNumeroComprobante(v.numeroComprobante)
+    setFechaComprobante(v.fechaComprobante)
+    setFechaFiscal(v.fechaFiscal)
+    setMostrarFechaFiscal(Boolean(v.fechaFiscal))
+    setFormaPago(v.formaPago)
+    setItems(v.items)
+    setCopiaDe(v.copiaDe)
+    setErroresItems({})
+    setDirty(false)
+    if (v.copiaDe) {
+      setAviso(null)
+      setFocoNumero((n) => n + 1)
+    }
+  }
+
+  const copia = useCopiaFacturaCompra({ supabase, tieneDatos: dirty || copiaDe !== null, onAplicar: aplicarValores })
+  const duplicado = useComprobanteDuplicado(supabase, { proveedorId, tipoComprobante, letra, puntoVenta, numeroComprobante })
 
   function actualizarItem(key: string, cambios: Partial<ItemFacturaCompraUI>) {
     setDirty(true)
@@ -145,16 +193,15 @@ export function CargarFacturaPage() {
     e.preventDefault()
     setAviso(null)
 
-    if (!proveedorId) {
-      setAviso({ tipo: 'error', texto: 'Elegí un proveedor.' })
-      return
-    }
-    if (!fechaComprobante) {
-      setAviso({ tipo: 'error', texto: 'La fecha del comprobante es obligatoria.' })
+    const errorCabecera = errorCabeceraFacturaCompra({ proveedorId, numeroComprobante, fechaComprobante, copiaDe })
+    if (errorCabecera) {
+      setAviso({ tipo: 'error', texto: errorCabecera })
+      if (copiaDe && !numeroComprobante.trim()) setFocoNumero((n) => n + 1)
       return
     }
     // Un ítem empezado pero incompleto (ej. código escaneado sin producto) se descartaba en
     // silencio al guardar: ahora bloquea y se marca en la tarjeta, que se trae a la vista sola.
+    // Incluye un producto inactivo copiado sin confirmar (docs/33).
     const problemas = problemasItemsFacturaCompra(items)
     setErroresItems(Object.fromEntries(problemas.map((p) => [p.key, p.mensaje])))
     if (problemas.length > 0) {
@@ -186,6 +233,7 @@ export function CargarFacturaPage() {
       fechaFiscal: fechaFiscal || null,
       formaPago,
       items: integrarMarcaEnItemsLibres(items),
+      copiadaDeId: copiaDe?.id ?? null,
     })
     setSaving(false)
 
@@ -194,31 +242,56 @@ export function CargarFacturaPage() {
       return
     }
 
-    setAviso({ tipo: 'exito', texto: 'Factura cargada y stock actualizado correctamente.' })
-    setDirty(false)
-    setProveedorId('')
-    setTipoComprobante('factura')
-    setLetra('')
-    setPuntoVenta('')
-    setNumeroComprobante('')
-    setFechaComprobante(fechaHoyISO())
-    setFechaFiscal('')
-    setMostrarFechaFiscal(false)
-    setFormaPago('contado')
-    setItems([nuevoItemFacturaCompraUI()])
-    setErroresItems({})
+    // Formulario vacío para la próxima, sin copia.
+    aplicarValores(valoresFacturaCompraVacios())
+    setAviso({
+      tipo: 'exito',
+      texto: copiaDe ? 'Copia cargada y stock actualizado correctamente.' : 'Factura cargada y stock actualizado correctamente.',
+    })
   }
 
   if (!rol) return null
 
+  const ocupado = saving || copia.cargando
+
   return (
     <div className="flex flex-col gap-stack-md pb-stack-lg">
       <div>
-        <h1 className="font-display text-headline-lg text-accent-darker">Carga de factura</h1>
+        <h1 className="font-display text-headline-lg text-accent-darker">{copiaDe ? 'Copiar factura' : 'Carga de factura'}</h1>
         <p className="mt-1 font-sans text-body-md text-ink-soft">
           Registrá una factura de proveedor — actualiza el stock automáticamente por ítem.
         </p>
       </div>
+
+      <button
+        type="button"
+        onClick={() => setSelectorAbierto(true)}
+        disabled={ocupado}
+        className="flex min-h-12 items-center justify-center rounded border border-accent font-sans text-label-bold text-accent-darker active:bg-accent-light disabled:opacity-60"
+      >
+        Copiar desde…
+      </button>
+
+      {copia.cargando && (
+        <p role="status" className="font-sans text-body-md text-ink-soft">
+          Cargando la factura a copiar…
+        </p>
+      )}
+      {copia.error && (
+        <p role="alert" className="rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">
+          {copia.error}
+        </p>
+      )}
+
+      {copiaDe && (
+        <div className="flex flex-wrap items-center gap-2 rounded border border-accent/50 bg-accent-light/50 px-4 py-3 font-sans text-body-md text-ink">
+          <span>
+            Copia de <strong>{copiaDe.etiqueta}</strong>
+          </span>
+          {copiaDe.anulada && <EstadoBadge variant="red">Anulada</EstadoBadge>}
+          <span className="w-full text-label-md text-ink-soft">Completá el número y la fecha de la factura nueva.</span>
+        </div>
+      )}
 
       {aviso && (
         <p
@@ -291,12 +364,18 @@ export function CargarFacturaPage() {
           </Field>
           <Field label="Número">
             <input
+              ref={numeroRef}
               value={numeroComprobante}
               onChange={(e) => setNumeroComprobante(e.target.value)}
-              className={inputClass}
+              onBlur={() => void duplicado.verificar()}
+              aria-required={Boolean(copiaDe)}
+              placeholder={copiaDe ? 'Obligatorio' : undefined}
+              className={`scroll-mt-4 ${inputClass}`}
             />
           </Field>
         </div>
+
+        <AvisoComprobanteDuplicado coincidencias={duplicado.coincidencias} size="touch" />
 
         <div className="grid grid-cols-2 gap-stack-sm">
           <Field label="Fecha comprobante">
@@ -304,6 +383,7 @@ export function CargarFacturaPage() {
               type="date"
               value={fechaComprobante}
               onChange={(e) => setFechaComprobante(e.target.value)}
+              aria-required
               className={inputClass}
             />
           </Field>
@@ -393,12 +473,35 @@ export function CargarFacturaPage() {
 
         <button
           type="submit"
-          disabled={saving}
+          disabled={ocupado}
           className="rounded bg-accent px-4 py-4 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-60"
         >
           {saving ? 'Guardando...' : 'Guardar factura'}
         </button>
       </form>
+
+      {selectorAbierto && (
+        <SelectorFacturaCopiaSheet
+          proveedores={proveedores}
+          proveedorInicial={proveedorId}
+          onClose={() => setSelectorAbierto(false)}
+          onElegir={(id) => {
+            setSelectorAbierto(false)
+            copia.limpiarError()
+            copia.pedirCopia(id)
+          }}
+        />
+      )}
+
+      {copia.pendiente && (
+        <ConfirmDialog
+          title="¿Reemplazar lo cargado?"
+          mensaje="Se reemplaza todo lo que hay en el formulario (cabecera e ítems) por los datos de la factura elegida."
+          confirmLabel="Reemplazar"
+          onCancel={copia.cancelarReemplazo}
+          onConfirm={copia.confirmarReemplazo}
+        />
+      )}
 
       {blocker.state === 'blocked' && (
         <ConfirmDialog

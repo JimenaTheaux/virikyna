@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react'
+import { Copy, Eye } from 'lucide-react'
 import type { FacturaCompraSaldo, Proveedor } from '@virikyna/shared'
-import { formatCurrency, formatFechaCorta, friendlyError } from '@virikyna/shared'
+import {
+  etiquetaComprobanteCompra,
+  formatCurrency,
+  formatFechaCorta,
+  friendlyError,
+  RowActionsMenu,
+  TIPO_COMPROBANTE_COMPRA_LABEL as TIPO_LABEL,
+} from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { CargarFacturaCompraModal } from './CargarFacturaCompraModal'
 import { FacturaCompraDetalleModal } from './FacturaCompraDetalleModal'
 import type { FacturaCompraConProveedor } from './types'
-
-const TIPO_LABEL: Record<string, string> = {
-  factura: 'Factura',
-  remito: 'Remito',
-  cupon: 'Cupón',
-  nota_credito: 'Nota de crédito',
-  nota_debito: 'Nota de débito',
-}
 
 export function FacturasCompraTab() {
   const [facturas, setFacturas] = useState<FacturaCompraConProveedor[]>([])
@@ -20,6 +20,8 @@ export function FacturasCompraTab() {
   const [error, setError] = useState<string | null>(null)
   const [modalNueva, setModalNueva] = useState(false)
   const [detalle, setDetalle] = useState<FacturaCompraConProveedor | null>(null)
+  // Factura de la que se abre una copia (docs/33).
+  const [copiarId, setCopiarId] = useState<string | null>(null)
 
   async function cargar() {
     setLoading(true)
@@ -79,19 +81,22 @@ export function FacturasCompraTab() {
               <th className="whitespace-nowrap px-3 py-2.5">Comprobante</th>
               <th className="whitespace-nowrap px-3 py-2.5 text-right">Total</th>
               <th className="whitespace-nowrap px-3 py-2.5 text-right">Saldo pendiente</th>
+              <th className="w-[3rem] px-3 py-2.5">
+                <span className="sr-only">Acciones</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td className="px-4 py-4 text-ink-soft" colSpan={5}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={6}>
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && facturas.length === 0 && (
               <tr>
-                <td className="px-4 py-4 text-ink-soft" colSpan={5}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={6}>
                   No hay facturas de compra cargadas todavía.
                 </td>
               </tr>
@@ -112,6 +117,15 @@ export function FacturasCompraTab() {
                 <td className="px-3 py-3 text-right text-ink">{formatCurrency(f.total)}</td>
                 <td className={`px-3 py-3 text-right font-semibold ${f.saldo_pendiente > 0 ? 'text-error' : 'text-success'}`}>
                   {formatCurrency(f.saldo_pendiente)}
+                </td>
+                <td className="px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                  <RowActionsMenu
+                    ariaLabel={`Acciones para ${etiquetaComprobanteCompra(f)}`}
+                    items={[
+                      { label: 'Ver detalle', icon: Eye, onClick: () => setDetalle(f) },
+                      { label: 'Copiar', icon: Copy, onClick: () => setCopiarId(f.id) },
+                    ]}
+                  />
                 </td>
               </tr>
             ))}
@@ -135,6 +149,21 @@ export function FacturasCompraTab() {
           proveedorNombre={detalle.proveedor?.razon_social ?? '—'}
           onClose={() => setDetalle(null)}
           onPagoRegistrado={cargar}
+          onCopiar={() => {
+            setDetalle(null)
+            setCopiarId(detalle.id)
+          }}
+        />
+      )}
+
+      {copiarId && (
+        <CargarFacturaCompraModal
+          copiadaDeId={copiarId}
+          onClose={() => setCopiarId(null)}
+          onSaved={() => {
+            setCopiarId(null)
+            cargar()
+          }}
         />
       )}
     </div>

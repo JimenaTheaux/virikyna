@@ -6,6 +6,7 @@ import { totalItemFacturaCompra, type ItemFacturaCompraUI } from '../../lib/fact
 import type { CambioPrecioFactura } from '../../lib/precios'
 import { selectClass } from './FormField'
 import { AvisoCambioPrecioFactura } from './AvisoCambioPrecioFactura'
+import { AvisoProductoInactivoFactura } from './AvisosCopiaFactura'
 import { AvisoCodigoFactura, SugerenciasProductoFactura, useItemFacturaBusqueda } from './ItemFacturaBusqueda'
 
 // Lo que necesita la planilla de un producto recién creado para dejar el ítem vinculado.
@@ -76,8 +77,10 @@ export function ItemFacturaRow({
   const busqueda = useItemFacturaBusqueda({ supabase, item, onChange, onAvanzar, focoCodigo, contenedorRef: filaRef })
   const { codigoRef, productoRef } = busqueda
   const hayAvisoCodigo = busqueda.buscandoCodigo || busqueda.avisoCodigo !== null
-  // Segunda fila debajo del ítem: aviso de código no encontrado y/o cambio de precio de venta.
-  const hayAviso = hayAvisoCodigo || cambioPrecio !== undefined
+  const inactivo = Boolean(item.productoId && item.productoInactivo)
+  // Segunda fila debajo del ítem: producto inactivo (copia, docs/33), código no encontrado y/o
+  // cambio de precio de venta.
+  const hayAviso = inactivo || hayAvisoCodigo || cambioPrecio !== undefined
   const fondoError = conError ? 'bg-error/10' : ''
 
   return (
@@ -205,6 +208,16 @@ export function ItemFacturaRow({
       {hayAviso && (
         <tr className={`border-b border-line last:border-b-0 ${fondoError}`}>
           <td colSpan={9} className="px-2 pb-2">
+            {inactivo && (
+              <AvisoProductoInactivoFactura
+                nombre={item.descripcion}
+                onUsar={() => onChange({ productoInactivo: false })}
+                onBuscarOtro={() => {
+                  onChange({ productoId: null, productoPrecio: null, productoInactivo: false, descripcion: '', codigoBarras: '', marca: '' })
+                  busqueda.buscarPorNombre()
+                }}
+              />
+            )}
             {hayAvisoCodigo && <AvisoCodigoFactura busqueda={busqueda} />}
             <AvisoCambioPrecioFactura cambio={cambioPrecio} className="px-2" />
           </td>

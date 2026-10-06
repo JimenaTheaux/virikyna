@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react'
 import type { FacturaCompraItem, FacturaCompraSaldo, PagoProveedor } from '@virikyna/shared'
-import { formatCurrency, formatFechaCorta, formatFechaHora, friendlyError, nombresPorId } from '@virikyna/shared'
+import {
+  etiquetaComprobanteCompra,
+  formatCurrency,
+  formatFechaCorta,
+  formatFechaHora,
+  friendlyError,
+  nombresPorId,
+} from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { FORMA_PAGO_EGRESO_LABEL } from '../../lib/caja'
 import { Modal } from '../../components/Modal'
@@ -14,19 +21,14 @@ type Props = {
   proveedorNombre: string
   onClose: () => void
   onPagoRegistrado: () => void // avisa al listado para refrescar saldos
-}
-
-const TIPO_LABEL: Record<string, string> = {
-  factura: 'Factura',
-  remito: 'Remito',
-  cupon: 'Cupón',
-  nota_credito: 'Nota de crédito',
-  nota_debito: 'Nota de débito',
+  // Botón "Copiar" (docs/33). Sin esta prop no aparece — así el detalle abierto desde una copia no
+  // ofrece copiar otra vez.
+  onCopiar?: () => void
 }
 
 // Detalle de una factura de compra puntual — saldo pendiente e historial de pagos vienen de la
 // vista `facturas_compra_saldo` (docs/06_estructura_de_datos.md, sección 9), no se recalculan acá.
-export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, onPagoRegistrado }: Props) {
+export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, onPagoRegistrado, onCopiar }: Props) {
   const [facturaActual, setFacturaActual] = useState(factura)
   const [items, setItems] = useState<FacturaCompraItem[]>([])
   const [pagos, setPagos] = useState<PagoConUsuario[]>([])
@@ -74,16 +76,8 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [factura.id])
 
-  const encabezado = [
-    TIPO_LABEL[facturaActual.tipo_comprobante] ?? facturaActual.tipo_comprobante,
-    facturaActual.letra,
-    [facturaActual.punto_venta, facturaActual.numero_comprobante].filter(Boolean).join('-') || null,
-  ]
-    .filter(Boolean)
-    .join(' ')
-
   return (
-    <Modal title={encabezado || 'Factura de compra'} onClose={onClose} widthClassName="max-w-[680px]">
+    <Modal title={etiquetaComprobanteCompra(facturaActual)} onClose={onClose} widthClassName="max-w-[680px]">
       <div className="flex flex-col gap-stack-md">
         <div className="grid grid-cols-2 gap-stack-sm rounded-lg border border-line bg-bg p-4 font-sans text-body-md">
           <p className="text-ink-soft">
@@ -197,6 +191,18 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
             </table>
           </div>
         </div>
+
+        {onCopiar && (
+          <div className="flex justify-end border-t border-line pt-stack-md">
+            <button
+              type="button"
+              onClick={onCopiar}
+              className="rounded border border-accent px-4 py-3 font-sans text-label-bold text-accent-darker transition hover:bg-accent-light"
+            >
+              Copiar
+            </button>
+          </div>
+        )}
       </div>
 
       {modalPago && (

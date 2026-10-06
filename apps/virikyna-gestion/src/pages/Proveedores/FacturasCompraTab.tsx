@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
+import { Copy, Eye } from 'lucide-react'
 import type { FacturaCompraSaldo, Proveedor } from '@virikyna/shared'
 import {
+  etiquetaComprobanteCompra,
   formatCurrency,
+  RowActionsMenu,
   formatFechaCorta,
   friendlyError,
   EstadoBadge,
@@ -23,6 +26,8 @@ export function FacturasCompraTab() {
   const [error, setError] = useState<string | null>(null)
   const [detalle, setDetalle] = useState<FacturaCompraConProveedor | null>(null)
   const [nuevaFactura, setNuevaFactura] = useState(false)
+  // Factura de la que se abre una copia (docs/33), también anuladas.
+  const [copiarId, setCopiarId] = useState<string | null>(null)
 
   async function cargar() {
     setLoading(true)
@@ -83,19 +88,22 @@ export function FacturasCompraTab() {
               <th className="whitespace-nowrap px-3 py-2.5 text-right">Total</th>
               <th className="whitespace-nowrap px-3 py-2.5 text-right">Saldo pendiente</th>
               <th className="whitespace-nowrap px-3 py-2.5"></th>
+              <th className="w-[3rem] px-3 py-2.5">
+                <span className="sr-only">Acciones</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td className="px-4 py-4 text-ink-soft" colSpan={6}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={7}>
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && facturas.length === 0 && (
               <tr>
-                <td className="px-4 py-4 text-ink-soft" colSpan={6}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={7}>
                   No hay facturas de compra cargadas todavía.
                 </td>
               </tr>
@@ -130,6 +138,15 @@ export function FacturasCompraTab() {
                     </span>
                   )}
                 </td>
+                <td className="px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                  <RowActionsMenu
+                    ariaLabel={`Acciones para ${etiquetaComprobanteCompra(f)}`}
+                    items={[
+                      { label: 'Ver detalle', icon: Eye, onClick: () => setDetalle(f) },
+                      { label: 'Copiar', icon: Copy, onClick: () => setCopiarId(f.id) },
+                    ]}
+                  />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -142,6 +159,21 @@ export function FacturasCompraTab() {
           proveedorNombre={detalle.proveedor?.razon_social ?? '—'}
           onClose={() => setDetalle(null)}
           onChanged={cargar}
+          onCopiar={() => {
+            setDetalle(null)
+            setCopiarId(detalle.id)
+          }}
+        />
+      )}
+
+      {copiarId && (
+        <CargarFacturaCompraModal
+          copiadaDeId={copiarId}
+          onClose={() => setCopiarId(null)}
+          onSaved={() => {
+            setCopiarId(null)
+            cargar()
+          }}
         />
       )}
 

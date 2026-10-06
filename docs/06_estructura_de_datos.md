@@ -318,7 +318,8 @@ CREATE TABLE facturas_compra (
   total NUMERIC(12,2) NOT NULL,
   usuario_id UUID NOT NULL REFERENCES perfiles(id),
   anulada BOOLEAN NOT NULL DEFAULT false,  -- exclusivo Gestión: anular_factura_compra revierte stock y marca esto
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  copiada_de_id UUID REFERENCES facturas_compra(id)  -- docs/33 (sección 23): factura de la que se copió esta
 );
 
 CREATE TABLE facturas_compra_items (
@@ -741,6 +742,8 @@ $$;
 
 -- ============================================================
 -- 2. cargar_factura_compra
+-- ⚠ No es la versión vigente: ver sección 20 (docs/29, costo desde la factura) y sección 23
+-- (docs/33, + p_copiada_de_id).
 -- ============================================================
 CREATE OR REPLACE FUNCTION cargar_factura_compra(
   p_proveedor_id UUID,
@@ -2134,7 +2137,7 @@ precio_venta NUMERIC(12,2) GENERATED ALWAYS AS (   -- vía ALTER COLUMN … SET 
 - `precio_venta` es lo que se cobra. **⚠ El redondeo a la centena de esta sección fue reemplazado por el redondeo escalonado de la sección 21 (docs/30).**
 - Las dos son de solo lectura. `revertir_edicion` (docs/10) excluye ahora `precio_calculado` además de `precio_venta` de lo que restaura: si no, revertir una edición de producto falla con "column can only be updated to DEFAULT".
 
-**Costo desde la factura de compra.** Versión vigente de `cargar_factura_compra` (reemplaza la de la sección 13). Por cada producto vinculado en la factura:
+**Costo desde la factura de compra.** Reemplaza la versión de `cargar_factura_compra` de la sección 13. ⚠ La vigente es la de la sección 23 (docs/33): este mismo cuerpo + `p_copiada_de_id`. Por cada producto vinculado en la factura:
 
 - `productos.costo` = `precio_unitario_sin_iva` del ítem: precio de lista, antes del `descuento_porcentaje` de la línea (es el mismo valor con el que la pantalla precarga el ítem la próxima vez). `precio_venta` y `precio_calculado` se recalculan solos.
 - Aplica a todo tipo de comprobante **salvo `nota_credito` y `nota_debito`**. `presupuesto` se agregó al enum vivo en docs/31 (sección 22) y actualiza costo como cualquier otro tipo.
@@ -2270,3 +2273,32 @@ Identidad (test 7 de docs/31): `saldo_actual = saldo_inicial + Σ saldo_pendient
 **Pagos a cuenta anteriores a docs/31** (sin factura): siguen restando del saldo del proveedor, pero no quedan aplicados a ningún comprobante. La verificación V6 de docs/31 los lista.
 
 **Orden de despliegue:** parte A sola, después la parte B, después los tests (parte C, con ROLLBACK). Local y Gestión siguen funcionando sin cambios de código. **Pendiente de frontend:** Gestión todavía llama sin `origen`, así que sus pagos siguen entrando como `turno` (y en el cierre de Local) hasta que pase `origen: 'general'`.
+
+## 23. Copiar factura de compra: referencia al origen y aviso de comprobante repetido
+
+SQL completo, verificaciones y tests en `docs/33_copiar_factura_compra.sql`. Antes de escribirlo se comparó `cargar_factura_compra` en la base real (`pg_get_functiondef`) contra docs/29: una sola firma, cuerpo idéntico.
+
+**Para qué:** cargar una factura nueva partiendo de otra ya cargada (mismo proveedor o no). Sirve, por ejemplo, para el flujo de corrección "anular y volver a cargar" (sección 8, `editar_factura_compra` no toca ítems ni montos). La base guarda de qué factura salió la copia.
+
+**Tabla `facturas_compra`** + `copiada_de_id UUID` (null, FK a `facturas_compra(id)`, sin `ON DELETE`: las facturas de compra se anulan, no se borran). Índice parcial `idx_facturas_compra_copiada_de` (`WHERE copiada_de_id IS NOT NULL`). Las facturas cargadas a mano quedan en null.
+
+**RPC `cargar_factura_compra`** — versión vigente. Mismo cuerpo que la sección 20 más un último parámetro `p_copiada_de_id UUID DEFAULT NULL`:
+
+- Si viene, valida que la factura exista (`'La factura que se quiso copiar no existe'`). **No** exige mismo proveedor (al copiar se puede cambiar) y **acepta anuladas**.
+- Lo guarda en la fila nueva. Totales, ítems, stock, costo y márgenes, igual que la sección 20.
+- Se reemplazó con `DROP` + `CREATE`, no como sobrecarga: con las firmas de 9 y de 10 parámetros vivas a la vez, una llamada de PostgREST con 9 argumentos encaja en las dos y falla con PGRST203. Con una sola firma y default, las llamadas actuales de las tres apps siguen andando sin cambios.
+
+**Vista `facturas_compra_saldo`** + `copiada_de_id` al final (mismo cuerpo que la sección 22).
+
+**`existe_comprobante_compra(p_proveedor_id, p_tipo, p_letra, p_punto_venta, p_numero) → SETOF (id, fecha_comprobante, total, anulada)`** — `LANGUAGE sql STABLE SECURITY INVOKER`. Sirve para que la UI avise "este comprobante ya está cargado"; **no bloquea** (sigue sin haber UNIQUE sobre el comprobante).
+
+- Sin número (null o en blanco): no devuelve nada.
+- Mismo proveedor y tipo. Letra exacta, también con null (sin letra ≠ letra A).
+- Punto de venta y número sin espacios ni ceros a la izquierda: `0001-00012345` = `1-12345`. Punto de venta vacío = null.
+- Incluye anuladas (con `anulada = true`), ordenadas de la más reciente a la más vieja.
+
+**Auditoría:** sin cambios. `trg_auditoria_facturas_compra` guarda `to_jsonb(NEW)`, así que la fila `'alta'` de cada factura ya trae `copiada_de_id` (null si no es copia). Los ítems siguen sin auditoría propia.
+
+**Tipos** (`packages/shared/types/database.ts`): `FacturaCompra.copiada_de_id` (y por herencia `FacturaCompraSaldo`), `ComprobanteCompraExistente`.
+
+**Frontend** (`packages/shared`): `cargarFacturaCompra` manda `p_copiada_de_id` solo cuando hay copia (una carga normal sigue con los 9 parámetros). `obtenerFacturaParaCopiar` + `facturaACopia` arman la precarga, `errorCabeceraFacturaCompra` exige número y fecha en una copia, y `problemasItemsFacturaCompra` bloquea un ítem copiado con producto inactivo sin confirmar. Hooks sin dibujo en `lib/useCopiaFacturaCompra.ts`: `useComprobanteDuplicado` (llama a `existe_comprobante_compra` al salir de Número), `useCopiaFacturaCompra` (carga + confirmación de reemplazo) y `useSelectorFacturaCopia` (`useFacturasRecientes`, sin react-query para que sirva en Inventario). Los usan Local y Gestión (modal + `SelectorFacturaCopiaModal`) e Inventario (`CargarFacturaPage` + `SelectorFacturaCopiaSheet` en un `BottomSheet`); cada app solo pone el dibujo.

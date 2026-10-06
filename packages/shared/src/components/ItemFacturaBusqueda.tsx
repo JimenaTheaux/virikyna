@@ -83,6 +83,8 @@ export function useItemFacturaBusqueda({ supabase, item, onChange, onAvanzar, fo
       marca: p.marca ?? '',
       codigoBarras: p.codigo_barras ?? item.codigoBarras,
       precioUnitarioSinIva: String(p.costo),
+      // Elegir un producto (también "Usarlo igual" de un código inactivo) es la confirmación.
+      productoInactivo: false,
       productoPrecio: {
         costo: Number(p.costo),
         margen_1: Number(p.margen_1),
@@ -99,14 +101,14 @@ export function useItemFacturaBusqueda({ supabase, item, onChange, onAvanzar, fo
   }
 
   function buscarPorCodigo(texto: string) {
-    onChange({ codigoBarras: texto, productoId: null, productoPrecio: null })
+    onChange({ codigoBarras: texto, productoId: null, productoPrecio: null, productoInactivo: false })
     setQuery(texto)
     setCampoActivo('codigo')
     setAvisoCodigo(null)
   }
 
   function buscarPorProducto(texto: string) {
-    onChange({ descripcion: texto, productoId: null, productoPrecio: null })
+    onChange({ descripcion: texto, productoId: null, productoPrecio: null, productoInactivo: false })
     setQuery(texto)
     setCampoActivo('producto')
     setAvisoCodigo(null)
@@ -154,7 +156,7 @@ export function useItemFacturaBusqueda({ supabase, item, onChange, onAvanzar, fo
     setResultados([])
     setQuery('')
     setCampoActivo(null)
-    onChange({ codigoBarras: c, productoId: null, productoPrecio: null })
+    onChange({ codigoBarras: c, productoId: null, productoPrecio: null, productoInactivo: false })
     setBuscandoCodigo(true)
     const r = await resolverCodigoBarras(supabase, c)
     setBuscandoCodigo(false)

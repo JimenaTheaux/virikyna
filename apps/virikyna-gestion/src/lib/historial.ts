@@ -1,7 +1,7 @@
 // Historial y Auditoría (docs/04_modulos_y_funciones.md, módulo 10) — labels, la regla de qué
 // es reversible y desde dónde, y los wrappers de las RPCs reales de
 // docs/10_historial_auditoria_reversiones.sql (reemplazan el pseudo-código de docs/06 sección 7).
-import type { Auditoria, TipoAccionAuditoria } from '@virikyna/shared'
+import { etiquetaComprobanteCompra, type Auditoria, type FacturaCompra, type TipoAccionAuditoria } from '@virikyna/shared'
 import { supabase } from './supabaseClient'
 
 export const ACCION_LABEL: Record<TipoAccionAuditoria, string> = {
@@ -34,6 +34,25 @@ export const TABLA_LABEL: Record<string, string> = {
 
 export function tablaLabel(tabla: string): string {
   return TABLA_LABEL[tabla] ?? tabla
+}
+
+// Campos que guardan el id de otra factura de compra y se muestran como su comprobante, no como
+// UUID: copiada_de_id (docs/33) → "Copia de Factura A 0001-123".
+export const CAMPOS_FACTURA_COMPRA_REF: Record<string, (etiqueta: string) => string> = {
+  copiada_de_id: (etiqueta) => `Copia de ${etiqueta}`,
+}
+
+// id → "Factura A 0001-123" para las facturas referenciadas en una fila de auditoría. Un id que ya
+// no se puede leer queda afuera del mapa (la pantalla muestra un texto genérico).
+export async function etiquetasFacturasCompra(ids: string[]): Promise<Map<string, string>> {
+  const unicos = [...new Set(ids)]
+  if (unicos.length === 0) return new Map()
+  const { data } = await supabase
+    .from('facturas_compra')
+    .select('id, tipo_comprobante, letra, punto_venta, numero_comprobante')
+    .in('id', unicos)
+  const filas = (data ?? []) as Pick<FacturaCompra, 'id' | 'tipo_comprobante' | 'letra' | 'punto_venta' | 'numero_comprobante'>[]
+  return new Map(filas.map((f) => [f.id, etiquetaComprobanteCompra(f)]))
 }
 
 export type AccionRevertible = { tipo: 'edicion' | 'alta' | 'movimiento' | 'venta' } | null

@@ -184,6 +184,15 @@ Mismo cuadro de acciones que Inventario de escritorio (excepto ajuste de stock, 
 - **Presupuesto** se comporta igual que remito: suma deuda, actualiza costo y se paga.
 - **Nota de crédito resta** deuda: baja el saldo del proveedor y nunca aparece como algo a pagar. Su crédito se aplica a facturas (ver abajo). El stock que suma al cargarla no cambia por ahora.
 
+**Copiar una factura (docs/33 — Local, Gestión e Inventario):**
+- Se puede cargar una factura nueva partiendo de otra ya cargada: de cualquier proveedor (se puede cambiar al copiar) y también de una anulada (el caso típico: anular por un error en ítems o montos y volver a cargarla bien).
+- La factura nueva es una carga normal (suma stock, actualiza costo, suma deuda) y queda registrado de qué factura se copió, también en Historial.
+- Desde dónde: "Copiar" en el menú de cada fila de Facturas de compra (Local y Gestión), en el detalle de la factura y en la cuenta corriente del proveedor (Gestión) — también en facturas anuladas. Dentro del formulario de carga (también en Inventario, desde el celular), "Copiar desde…" elige entre las últimas 20 facturas (buscador por proveedor y número); si ya había algo cargado, pide confirmar antes de reemplazarlo.
+- En la copia se completan proveedor, tipo, letra, punto de venta, forma de pago e ítems (con su cantidad, precio, descuento y depósito). **Número y fecha quedan vacíos y son obligatorios**; la fecha fiscal también queda vacía.
+- Si un ítem copiado tiene un producto que hoy está **inactivo**, se avisa en el ítem y no se puede guardar hasta elegir "Usarlo igual" u otro producto.
+- En Historial, la factura nueva muestra "Copia de Factura A 0001-123" con acceso al detalle de la original.
+- **Aviso de comprobante repetido:** al cargar, el sistema puede avisar si ya existe un comprobante del mismo proveedor con el mismo tipo, letra, punto de venta y número (sin importar ceros a la izquierda: 0001-00012345 = 1-12345), incluidas las anuladas. Es solo un aviso: no impide guardar. Sin número no hay aviso.
+
 **Cuenta corriente del proveedor (docs/31):**
 - Saldo del proveedor = saldo inicial + comprobantes − notas de crédito − pagos.
 - Cada comprobante tiene **estado** calculado: pendiente / parcial / pagada / anulada, y su saldo pendiente = total − lo aplicado (pagos + notas de crédito). Una nota de crédito muestra su **crédito disponible**.

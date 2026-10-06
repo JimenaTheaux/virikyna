@@ -4,10 +4,12 @@
 // Cada app solo arma la UI y llama a estas funciones con su propio cliente de Supabase —
 // el cálculo de totales y el mapeo de payload viven acá una sola vez.
 
+import { useEffect, useState } from 'react'
 import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js'
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import type {
   CategoriaEgreso,
+  FacturaCompraItem,
   FacturaCompraSaldo,
   FormaPagoCompra,
   FormaPagoEgreso,
@@ -15,6 +17,7 @@ import type {
   OrigenEgreso,
   PagoProveedor,
   PagoProveedorAplicacion,
+  Producto,
   ProveedorSaldo,
   RegistrarPagoProveedorV2Resultado,
   TipoComprobanteCompra,
@@ -133,10 +136,13 @@ export function calcularTotalesFacturaCompra(items: ItemFacturaCompra[]): {
 // - productoPrecio: costo, márgenes, IVA, proveedor y precio de venta del producto vinculado, tal
 //   como estaban al elegirlo — para avisar cómo cambia el precio de venta al guardar
 //   (cambiosPrecioFactura, lib/precios.ts). null en ítems libres.
+// - productoInactivo (docs/33): ítem copiado de otra factura cuyo producto hoy está inactivo.
+//   Bloquea el guardado (problemasItemsFacturaCompra) hasta "Usarlo igual" o elegir otro producto.
 export type ItemFacturaCompraUI = ItemFacturaCompra & {
   marca: string
   codigoBarras: string
   productoPrecio: ProductoPrecioActual | null
+  productoInactivo?: boolean
 }
 
 export function nuevoItemFacturaCompraUI(): ItemFacturaCompraUI {
@@ -163,6 +169,12 @@ export function problemasItemsFacturaCompra(items: ItemFacturaCompraUI[]): Probl
     if (!empezado) return
     if (!tieneProducto) {
       problemas.push({ key: it.key, numero, mensaje: `El ítem ${numero} no tiene producto seleccionado.` })
+    } else if (it.productoId && it.productoInactivo) {
+      problemas.push({
+        key: it.key,
+        numero,
+        mensaje: `El ítem ${numero} usa un producto inactivo — tocá "Usarlo igual" o elegí otro.`,
+      })
     } else if (!(Number(it.cantidad) > 0)) {
       problemas.push({ key: it.key, numero, mensaje: `El ítem ${numero} tiene cantidad 0 — completala o quitá el ítem.` })
     }
@@ -189,12 +201,16 @@ export type CargarFacturaCompraInput = {
   fechaFiscal: string | null
   formaPago: FormaPagoCompra
   items: ItemFacturaCompra[]
+  copiadaDeId?: string | null // docs/33: factura de la que se copió esta
 }
 
 // Único punto de llamada al RPC `cargar_factura_compra` — arma el payload de ítems, el
 // cálculo de totales y la actualización de stock quedan del lado de la función SQL.
+// p_copiada_de_id solo viaja cuando hay copia: una carga normal manda los mismos 9 parámetros de
+// siempre (el RPC le pone default NULL al décimo, docs/33).
 export function cargarFacturaCompra(supabase: SupabaseClient, input: CargarFacturaCompraInput) {
   return supabase.rpc('cargar_factura_compra', {
+    ...(input.copiadaDeId ? { p_copiada_de_id: input.copiadaDeId } : {}),
     p_proveedor_id: input.proveedorId,
     p_tipo_comprobante: input.tipoComprobante,
     p_letra: input.letra,
@@ -212,6 +228,257 @@ export function cargarFacturaCompra(supabase: SupabaseClient, input: CargarFactu
       ubicacion: it.ubicacion,
     })),
   })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Copiar una factura (docs/33): precarga del formulario desde una factura ya cargada
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+// Factura de origen de una copia, para el "Copia de Factura A 0001-123" del formulario.
+export type OrigenCopiaFactura = { id: string; etiqueta: string; anulada: boolean }
+
+// Estado completo del formulario de carga (escritorio y celular). `copiaDe` null = carga nueva.
+export type ValoresFacturaCompra = {
+  proveedorId: string
+  tipoComprobante: TipoComprobanteCompra
+  letra: LetraComprobanteCompra | ''
+  puntoVenta: string
+  numeroComprobante: string
+  fechaComprobante: string
+  fechaFiscal: string
+  formaPago: FormaPagoCompra
+  items: ItemFacturaCompraUI[]
+  copiaDe: OrigenCopiaFactura | null
+}
+
+export function valoresFacturaCompraVacios(): ValoresFacturaCompra {
+  return {
+    proveedorId: '',
+    tipoComprobante: 'factura',
+    letra: '',
+    puntoVenta: '',
+    numeroComprobante: '',
+    fechaComprobante: fechaHoyISO(),
+    fechaFiscal: '',
+    formaPago: 'contado',
+    items: [nuevoItemFacturaCompraUI()],
+    copiaDe: null,
+  }
+}
+
+type ProductoDeItemCopia = Pick<
+  Producto,
+  | 'id'
+  | 'nombre'
+  | 'marca'
+  | 'codigo_barras'
+  | 'estado'
+  | 'costo'
+  | 'margen_1'
+  | 'margen_2'
+  | 'iva_porcentaje'
+  | 'proveedor_id'
+  | 'precio_venta'
+>
+
+export type FacturaParaCopiar = FacturaCompraSaldo & {
+  items: (FacturaCompraItem & { producto: ProductoDeItemCopia | null })[]
+}
+
+// Cabecera (vista con saldo, así se sabe si está anulada) + ítems con el producto ACTUAL de cada
+// uno: nombre, marca, código, estado y lo necesario para anticipar el precio de venta.
+// Sin ORDER BY en los ítems a propósito: no tienen columna de orden y su id es un UUID al azar —
+// ordenar por id los mezclaría; el orden físico es, en la práctica, el de carga.
+export async function obtenerFacturaParaCopiar(supabase: SupabaseClient, id: string): Promise<FacturaParaCopiar> {
+  const [facturaRes, itemsRes] = await Promise.all([
+    supabase.from('facturas_compra_saldo').select('*').eq('id', id).maybeSingle(),
+    supabase
+      .from('facturas_compra_items')
+      .select(
+        '*, producto:productos(id, nombre, marca, codigo_barras, estado, costo, margen_1, margen_2, iva_porcentaje, proveedor_id, precio_venta)',
+      )
+      .eq('factura_compra_id', id),
+  ])
+  if (facturaRes.error) throw facturaRes.error
+  if (itemsRes.error) throw itemsRes.error
+  if (!facturaRes.data) throw new Error('No se encontró la factura que querías copiar.')
+  return { ...(facturaRes.data as FacturaCompraSaldo), items: (itemsRes.data ?? []) as FacturaParaCopiar['items'] }
+}
+
+// Valores iniciales de una copia: se copian proveedor, tipo, letra, punto de venta, forma de pago e
+// ítems; número, fecha del comprobante y fecha fiscal quedan vacíos (son de la factura nueva).
+// Cada ítem conserva cantidad, precio, descuento y depósito de la factura original. Un ítem
+// vinculado toma nombre/marca/código actuales del producto; un ítem libre conserva su descripción
+// tal cual (la marca ya viene pegada ahí, ver integrarMarcaEnItemsLibres).
+export function facturaACopia(factura: FacturaParaCopiar): ValoresFacturaCompra {
+  const items = factura.items.map((it): ItemFacturaCompraUI => {
+    const p = it.producto
+    return {
+      key: crypto.randomUUID(),
+      productoId: p ? p.id : null,
+      descripcion: p ? p.nombre : it.descripcion,
+      marca: p?.marca ?? '',
+      codigoBarras: p?.codigo_barras ?? '',
+      cantidad: String(it.cantidad),
+      precioUnitarioSinIva: String(it.precio_unitario_sin_iva),
+      descuentoPorcentaje: String(it.descuento_porcentaje),
+      ubicacion: it.ubicacion,
+      productoPrecio: p
+        ? {
+            costo: Number(p.costo),
+            margen_1: Number(p.margen_1),
+            margen_2: Number(p.margen_2),
+            iva_porcentaje: Number(p.iva_porcentaje),
+            proveedor_id: p.proveedor_id,
+            precio_venta: Number(p.precio_venta),
+          }
+        : null,
+      productoInactivo: p?.estado === 'inactivo',
+    }
+  })
+  return {
+    proveedorId: factura.proveedor_id,
+    tipoComprobante: factura.tipo_comprobante,
+    letra: factura.letra ?? '',
+    puntoVenta: factura.punto_venta ?? '',
+    numeroComprobante: '',
+    fechaComprobante: '',
+    fechaFiscal: '',
+    formaPago: factura.forma_pago,
+    items: items.length > 0 ? items : [nuevoItemFacturaCompraUI()],
+    copiaDe: { id: factura.id, etiqueta: etiquetaComprobanteCompra(factura), anulada: factura.anulada },
+  }
+}
+
+// En una copia, número y fecha son obligatorios (en una carga nueva el número sigue opcional).
+// Devuelve el primer error de cabecera, o null. Lo usan escritorio y celular antes de guardar.
+export function errorCabeceraFacturaCompra(v: Pick<ValoresFacturaCompra, 'proveedorId' | 'numeroComprobante' | 'fechaComprobante' | 'copiaDe'>): string | null {
+  if (!v.proveedorId) return 'Elegí un proveedor.'
+  if (v.copiaDe && !v.numeroComprobante.trim()) return 'Completá el número del comprobante: en una copia es obligatorio.'
+  if (!v.fechaComprobante) return 'La fecha del comprobante es obligatoria.'
+  return null
+}
+
+export type FacturaReciente = Pick<
+  FacturaCompraSaldo,
+  | 'id'
+  | 'proveedor_id'
+  | 'tipo_comprobante'
+  | 'letra'
+  | 'punto_venta'
+  | 'numero_comprobante'
+  | 'fecha_comprobante'
+  | 'total'
+  | 'anulada'
+>
+
+const LIMITE_FACTURAS_RECIENTES = 20
+
+// Sin %, coma ni paréntesis: rompen el filtro de PostgREST (mismo criterio que armarFiltroBusquedaProducto).
+const limpiarBusqueda = (s: string) => s.trim().replace(/[%,()*\\]/g, '')
+
+// Últimas 20 facturas cargadas (por fecha de carga), anuladas incluidas, para el selector de
+// "Copiar desde…". Filtro por proveedor exacto y por número (ver el armado del filtro abajo:
+// "0001-123" encuentra PV 0001 + número 123, y "QA-1" un número con guion). Sin react-query a propósito:
+// Virikyna Inventario no tiene QueryClientProvider y usa este mismo hook.
+export function useFacturasRecientes(supabase: SupabaseClient, proveedorId?: string, q?: string) {
+  const [facturas, setFacturas] = useState<FacturaReciente[]>([])
+  const [cargando, setCargando] = useState(true)
+  const [error, setError] = useState<PostgrestError | null>(null)
+
+  useEffect(() => {
+    let cancelado = false
+    let consulta = supabase
+      .from('facturas_compra_saldo')
+      .select('id, proveedor_id, tipo_comprobante, letra, punto_venta, numero_comprobante, fecha_comprobante, total, anulada')
+      .order('created_at', { ascending: false })
+      .limit(LIMITE_FACTURAS_RECIENTES)
+    if (proveedorId) consulta = consulta.eq('proveedor_id', proveedorId)
+
+    // El texto entero en el número o en el punto de venta; y si tiene guion, además "PV-número"
+    // partido en el primer guion. Las dos cosas a la vez: hay números con guion propio
+    // ("QA-00001"), que con solo el corte en el guion no se encontraban.
+    const t = limpiarBusqueda(q ?? '')
+    if (t) {
+      const filtros = [`numero_comprobante.ilike.%${t}%`, `punto_venta.ilike.%${t}%`]
+      const guion = t.indexOf('-')
+      if (guion >= 0) {
+        const pv = t.slice(0, guion).trim()
+        const numero = t.slice(guion + 1).trim()
+        const partes = [pv && `punto_venta.ilike.%${pv}%`, numero && `numero_comprobante.ilike.%${numero}%`].filter(Boolean)
+        if (partes.length > 0) filtros.push(`and(${partes.join(',')})`)
+      }
+      consulta = consulta.or(filtros.join(','))
+    }
+
+    setCargando(true)
+    consulta.then(({ data, error: dbError }) => {
+      if (cancelado) return
+      setError(dbError)
+      setFacturas(dbError ? [] : ((data ?? []) as FacturaReciente[]))
+      setCargando(false)
+    })
+    return () => {
+      cancelado = true
+    }
+  }, [supabase, proveedorId, q])
+
+  return { facturas, cargando, error }
+}
+
+// Único punto de llamada a `existe_comprobante_compra` (docs/33). Ver useComprobanteDuplicado.
+export function existeComprobanteCompra(
+  supabase: SupabaseClient,
+  c: {
+    proveedorId: string
+    tipo: TipoComprobanteCompra
+    letra: LetraComprobanteCompra | null
+    puntoVenta: string | null
+    numero: string
+  },
+) {
+  return supabase.rpc('existe_comprobante_compra', {
+    p_proveedor_id: c.proveedorId,
+    p_tipo: c.tipo,
+    p_letra: c.letra,
+    p_punto_venta: c.puntoVenta,
+    p_numero: c.numero,
+  })
+}
+
+// Una factura puntual por id, con el nombre del proveedor — para abrir su detalle desde un link
+// ("Copia de …" en el formulario o en el Historial), donde solo se tiene el id.
+export function useFacturaCompraPorId(supabase: SupabaseClient, id: string) {
+  const [estado, setEstado] = useState<{
+    factura: FacturaCompraSaldo | null
+    proveedorNombre: string
+    cargando: boolean
+    error: PostgrestError | null
+  }>({ factura: null, proveedorNombre: '', cargando: true, error: null })
+
+  useEffect(() => {
+    let cancelado = false
+    setEstado((e) => ({ ...e, cargando: true, error: null }))
+    supabase
+      .from('facturas_compra_saldo')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle()
+      .then(async ({ data, error }) => {
+        const factura = (data ?? null) as FacturaCompraSaldo | null
+        let proveedorNombre = ''
+        if (factura) {
+          const { data: p } = await supabase.from('proveedores').select('razon_social').eq('id', factura.proveedor_id).maybeSingle()
+          proveedorNombre = (p as { razon_social: string } | null)?.razon_social ?? ''
+        }
+        if (!cancelado) setEstado({ factura, proveedorNombre, cargando: false, error })
+      })
+    return () => {
+      cancelado = true
+    }
+  }, [supabase, id])
+
+  return estado
 }
 
 export type EditarFacturaCompraInput = {

@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { Ban, Eye, Pencil, Wallet } from 'lucide-react'
+import { Ban, Copy, Eye, Pencil, Wallet } from 'lucide-react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { EstadoFacturaCompra, FacturaCompraSaldo, OrigenEgreso, TipoComprobanteCompra } from '../../types/database'
 import {
@@ -38,6 +38,9 @@ type Props = {
   // 'general' en Gestión (el pago no sale de la caja de Local), 'turno' en Local. Obligatorio.
   origen: OrigenEgreso
   permitirEditarAnular?: boolean // Gestión sí; Local no
+  // "Copiar" en el menú de cada comprobante, también en anulados (docs/33). Cada app abre su
+  // formulario de carga con copiadaDeId; sin esta prop la acción no aparece.
+  onCopiar?: (comprobante: FacturaCompraSaldo) => void
   onVolver: () => void
   // Detalle de un comprobante: cada app enchufa el suyo (el de Gestión trae Editar/Anular y el
   // historial de aplicaciones). Así este componente no depende de modales propios de una app.
@@ -78,6 +81,7 @@ export function ProveedorCuentaCorriente({
   proveedorId,
   origen,
   permitirEditarAnular = false,
+  onCopiar,
   onVolver,
   renderDetalle,
 }: Props) {
@@ -515,6 +519,7 @@ export function ProveedorCuentaCorriente({
                   ...(seleccionable && !nc
                     ? [{ label: 'Pagar este comprobante', icon: Wallet, onClick: () => setPago({ facturaIds: [c.id], notaCreditoIds: [] }) }]
                     : []),
+                  ...(onCopiar ? [{ label: 'Copiar', icon: Copy, onClick: () => onCopiar(c) }] : []),
                   ...(permitirEditarAnular && !c.anulada
                     ? [
                         { label: 'Editar', icon: Pencil, onClick: () => setEditarId(c.id) },

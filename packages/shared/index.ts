@@ -9,6 +9,7 @@ export * from './lib/useFocoAtrapado'
 export * from './lib/supabaseErrors'
 export * from './lib/inventario'
 export * from './lib/facturasCompra'
+export * from './lib/useCopiaFacturaCompra'
 export * from './lib/repartoPagoProveedor'
 export * from './lib/devoluciones'
 export * from './lib/arcaFacturacion'
@@ -43,6 +44,9 @@ export { ActualizarPreciosModal, MODOS_ACTUALIZAR_PRECIOS } from './src/componen
 export * from './src/components/NotaRedondeoPrecio'
 export * from './src/components/ControlSegmentado'
 export * from './src/components/AvisoCambioPrecioFactura'
+// Copiar factura de compra (docs/33): avisos compartidos (escritorio y celular) y selector de escritorio.
+export * from './src/components/AvisosCopiaFactura'
+export * from './src/components/SelectorFacturaCopiaModal'
 // Cuenta corriente de proveedores (docs/31): pantalla compartida + modales que usa.
 export * from './src/components/ProveedorCuentaCorriente'
 export * from './src/components/PagarProveedorModal'

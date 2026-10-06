@@ -39,6 +39,9 @@ type Props = {
   proveedorNombre: string
   onClose: () => void
   onChanged: () => void // avisa al listado para refrescar tras editar, anular o pagar
+  // Botón "Copiar" (docs/33), también en anuladas. Sin esta prop no aparece — así el detalle
+  // abierto desde una copia (o desde el Historial) no ofrece copiar otra vez.
+  onCopiar?: () => void
 }
 
 const ESTADO: Record<FacturaCompraSaldo['estado'], { label: string; variant: 'amber' | 'green' | 'red' }> = {
@@ -53,7 +56,7 @@ const ESTADO: Record<FacturaCompraSaldo['estado'], { label: string; variant: 'am
 // pago puede cubrir varios comprobantes y una NC cancelar parte de uno. Editar y Anular son
 // exclusivos de esta app (componentes compartidos, habilitados solo acá). El pago se oculta en
 // anuladas y en notas de crédito — una NC no se paga, se aplica.
-export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, onChanged }: Props) {
+export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, onChanged, onCopiar }: Props) {
   const [facturaActual, setFacturaActual] = useState(factura)
   const [items, setItems] = useState<FacturaCompraItem[]>([])
   const [aplicaciones, setAplicaciones] = useState<AplicacionDetalle[]>([])
@@ -260,22 +263,35 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
           </div>
         </div>
 
-        {!facturaActual.anulada && (
+        {(onCopiar || !facturaActual.anulada) && (
           <div className="flex justify-end gap-3 border-t border-line pt-stack-md">
-            <button
-              type="button"
-              onClick={() => setModalAnular(true)}
-              className="rounded border border-error px-4 py-3 font-sans text-label-bold text-error transition hover:bg-error/10"
-            >
-              Anular
-            </button>
-            <button
-              type="button"
-              onClick={() => setModalEditar(true)}
-              className="rounded border border-accent px-4 py-3 font-sans text-label-bold text-accent-darker transition hover:bg-accent-light"
-            >
-              Editar
-            </button>
+            {!facturaActual.anulada && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setModalAnular(true)}
+                  className="rounded border border-error px-4 py-3 font-sans text-label-bold text-error transition hover:bg-error/10"
+                >
+                  Anular
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalEditar(true)}
+                  className="rounded border border-accent px-4 py-3 font-sans text-label-bold text-accent-darker transition hover:bg-accent-light"
+                >
+                  Editar
+                </button>
+              </>
+            )}
+            {onCopiar && (
+              <button
+                type="button"
+                onClick={onCopiar}
+                className="rounded border border-accent px-4 py-3 font-sans text-label-bold text-accent-darker transition hover:bg-accent-light"
+              >
+                Copiar
+              </button>
+            )}
           </div>
         )}
       </div>
