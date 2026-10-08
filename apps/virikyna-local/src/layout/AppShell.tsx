@@ -1,10 +1,12 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { usePerfil, useAuth } from '../auth/AuthContext'
 import { ConnectionStatus } from '../components/ConnectionStatus'
-import { Footer } from '@virikyna/shared'
+import { Footer, useConfiguracion } from '@virikyna/shared'
 import virikynaWordmark from '@virikyna/shared/src/assets/virikyna-wordmark.png'
+import { supabase } from '../lib/supabaseClient'
 import {
   IconCambiarUsuario,
+  IconCargaInicial,
   IconCierreCaja,
   IconClientes,
   IconConfiguracion,
@@ -17,7 +19,8 @@ import {
 } from '../components/icons'
 import type { RolUsuario } from '@virikyna/shared'
 
-type NavItem = { to: string; label: string; Icon: typeof IconVentas; roles: RolUsuario[] }
+// soloCargaAbierta: el ítem aparece solo mientras la carga inicial está abierta (docs/04 módulo 5.2).
+type NavItem = { to: string; label: string; Icon: typeof IconVentas; roles: RolUsuario[]; soloCargaAbierta?: boolean }
 
 // Dashboard va suelto arriba de todo, sin sección, antes de los grupos.
 // Caja Gestión NO vive acá — es exclusiva de Virikyna Gestión (docs/02_roles_y_permisos.md).
@@ -39,6 +42,13 @@ const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
     title: 'Gestión',
     items: [
       { to: '/inventario', label: 'Inventario', Icon: IconInventario, roles: ['admin', 'cajero'] },
+      {
+        to: '/carga-inicial',
+        label: 'Carga inicial',
+        Icon: IconCargaInicial,
+        roles: ['admin', 'cajero'],
+        soloCargaAbierta: true,
+      },
       { to: '/proveedores', label: 'Proveedores', Icon: IconProveedores, roles: ['admin', 'cajero'] },
       { to: '/clientes', label: 'Cuentas corrientes', Icon: IconClientes, roles: ['admin', 'cajero'] },
       { to: '/cierre-caja', label: 'Cierre de Caja', Icon: IconCierreCaja, roles: ['admin', 'cajero'] },
@@ -82,10 +92,15 @@ export function AppShell() {
   const { perfil } = usePerfil()
   const { signOut } = useAuth()
 
-  const topItems = TOP_ITEMS.filter((item) => perfil && item.roles.includes(perfil.rol))
+  const configuracion = useConfiguracion(supabase)
+  const cargaAbierta = configuracion.data?.carga_inicial_abierta ?? false
+  const visible = (item: NavItem) =>
+    !!perfil && item.roles.includes(perfil.rol) && (!item.soloCargaAbierta || cargaAbierta)
+
+  const topItems = TOP_ITEMS.filter(visible)
   const sections = NAV_SECTIONS.map((section) => ({
     title: section.title,
-    items: section.items.filter((item) => perfil && item.roles.includes(perfil.rol)),
+    items: section.items.filter(visible),
   })).filter((section) => section.items.length > 0)
 
   return (

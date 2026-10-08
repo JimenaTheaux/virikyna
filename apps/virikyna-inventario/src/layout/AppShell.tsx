@@ -1,7 +1,8 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { usePerfil, useAuth } from '../auth/AuthContext'
-import { Footer } from '@virikyna/shared'
-import { IconFacturas, IconInventario, IconSalir } from '../components/icons'
+import { Footer, useConfiguracion } from '@virikyna/shared'
+import { supabase } from '../lib/supabaseClient'
+import { IconCargaInicial, IconFacturas, IconInventario, IconSalir } from '../components/icons'
 
 const TAB_CLASS =
   'flex flex-1 flex-col items-center justify-center gap-1 py-2 font-sans text-label-md'
@@ -9,6 +10,9 @@ const TAB_CLASS =
 export function AppShell() {
   const { perfil } = usePerfil()
   const { signOut } = useAuth()
+  // La pestaña "Carga" aparece solo con la carga inicial abierta (docs/04 módulo 5.2).
+  const configuracion = useConfiguracion(supabase)
+  const cargaAbierta = configuracion.data?.carga_inicial_abierta ?? false
 
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden bg-bg text-ink">
@@ -45,6 +49,17 @@ export function AppShell() {
           <IconFacturas className="h-6 w-6" />
           Facturas
         </NavLink>
+        {cargaAbierta && (
+          <NavLink
+            to="/carga-inicial"
+            className={({ isActive }) =>
+              [TAB_CLASS, isActive ? 'text-accent-dark' : 'text-ink-soft'].join(' ')
+            }
+          >
+            <IconCargaInicial className="h-6 w-6" />
+            Carga
+          </NavLink>
+        )}
         <button type="button" onClick={() => signOut()} className={[TAB_CLASS, 'text-ink-soft'].join(' ')}>
           <IconSalir className="h-6 w-6" />
           Salir

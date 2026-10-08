@@ -13,6 +13,7 @@ import { EgresosPage } from './pages/EgresosPage'
 import { ConfiguracionPage } from './pages/ConfiguracionPage'
 import { HistorialPage } from './pages/HistorialPage'
 import { NotasPage } from './pages/Notas/NotasPage'
+import { CargaInicialPage } from './pages/CargaInicialPage'
 
 // Sin ruta /ventas — Virikyna Gestión es todo el CRUD de Admin salvo Ventas/cobro
 // (docs/05_stack_tecnico.md, sección 3). El rol se valida en AuthContext, no acá: un cajero
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="/caja-gestion" element={<CajaGestionPage />} />
           <Route path="/egresos" element={<EgresosPage />} />
           <Route path="/notas" element={<NotasPage />} />
+          <Route path="/carga-inicial" element={<CargaInicialPage />} />
           <Route path="/historial" element={<HistorialPage />} />
           <Route path="/configuracion" element={<ConfiguracionPage />} />
         </Route>

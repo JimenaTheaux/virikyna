@@ -7,6 +7,7 @@ import virikynaWordmark from '@virikyna/shared/src/assets/virikyna-wordmark.png'
 import {
   IconCajaGestion,
   IconCambiarUsuario,
+  IconCargaInicial,
   IconClientes,
   IconConfiguracion,
   IconDashboard,
@@ -34,6 +35,8 @@ const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
     title: 'Gestión',
     items: [
       { to: '/inventario', label: 'Inventario', Icon: IconInventario },
+      // Siempre visible: en Gestión (solo admin) se abre y se cierra la carga, y sigue usándose después.
+      { to: '/carga-inicial', label: 'Carga inicial', Icon: IconCargaInicial },
       { to: '/proveedores', label: 'Proveedores', Icon: IconProveedores },
       { to: '/clientes', label: 'Cuentas corrientes', Icon: IconClientes },
       { to: '/facturacion', label: 'Facturación', Icon: IconFacturacion },

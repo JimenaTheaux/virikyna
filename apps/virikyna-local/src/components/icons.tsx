@@ -153,3 +153,14 @@ export function IconConfiguracion({ className, filled }: IconProps) {
     </svg>
   )
 }
+
+// Carga inicial de inventario: caja con flecha de ingreso.
+export function IconCargaInicial({ className, filled }: IconProps) {
+  return (
+    <svg {...iconAttrs(filled)} className={className}>
+      <path d="M4 10v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9Z" />
+      <path d="M2 10h20" />
+      <path d="M12 3v7M9 7l3 3 3-3" fill="none" />
+    </svg>
+  )
+}

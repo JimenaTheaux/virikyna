@@ -13,6 +13,7 @@ import { ClientesPage } from './pages/Clientes/ClientesPage'
 import { ConfiguracionPage } from './pages/ConfiguracionPage'
 import { CierreCajaPage } from './pages/CierreCaja/CierreCajaPage'
 import { NotasPage } from './pages/Notas/NotasPage'
+import { CargaInicialPage } from './pages/CargaInicialPage'
 
 export default function App() {
   return (
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/clientes" element={<ClientesPage />} />
           <Route path="/cierre-caja" element={<CierreCajaPage />} />
           <Route path="/notas" element={<NotasPage />} />
+          <Route path="/carga-inicial" element={<CargaInicialPage />} />
 
           <Route element={<RequireRole role="admin" />}>
             <Route path="/configuracion" element={<ConfiguracionPage />} />

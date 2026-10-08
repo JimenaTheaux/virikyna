@@ -83,6 +83,17 @@ export function IconPapelera({ className }: IconProps) {
   )
 }
 
+// Carga inicial: caja con flecha de ingreso.
+export function IconCargaInicial({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <path d="M4 10v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9" />
+      <path d="M2 10h20" />
+      <path d="M12 3v10M8.5 9.5 12 13l3.5-3.5" />
+    </svg>
+  )
+}
+
 export function IconPorcentaje({ className }: IconProps) {
   return (
     <svg {...base} className={className}>
