@@ -1,26 +1,29 @@
 // Paridad de precios cliente ↔ base: `npm run paridad-precios` desde la raíz.
 // Requiere la CLI de Supabase linkeada al proyecto (supabase/.temp) — consulta la base real.
 //
-// 1. Trae todos los productos y compara calcularPrecio() contra precio_calculado y precio_venta.
+// 1. Trae todos los productos y compara calcularPrecio() contra precio_calculado y precio_venta
+//    (incluidos los de precio manual y costo null — docs/34).
 // 2. Corre actualizar_precios_masivo con varios porcentajes sobre TODOS los productos dentro de un
 //    bloque que termina en error a propósito (rollback: no queda nada escrito) y compara el costo y
-//    el precio resultantes con lo que muestra la vista previa (costoConPorcentaje + calcularPrecio).
+//    el precio resultantes con lo que muestra la vista previa (costoConPorcentaje + calcularPrecio, o
+//    precioManualConPorcentaje para los de precio manual).
 //
 // Sale con código 1 si hay alguna diferencia.
 import { execSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { calcularPrecio, costoConPorcentaje } from '../lib/precios.ts'
+import { calcularPrecio, costoConPorcentaje, precioManualConPorcentaje } from '../lib/precios.ts'
 
 type FilaProducto = {
   id: string
   nombre: string
-  costo: number
+  costo: number | null
   margen_1: number
   margen_2: number
   iva_porcentaje: number
-  precio_calculado: number
+  precio_manual: number | null
+  precio_calculado: number | null
   precio_venta: number
 }
 
@@ -49,34 +52,45 @@ function jsonDeSalida(salida: string): unknown {
 }
 
 const n = (v: unknown) => Number(v)
+const nn = (v: unknown) => (v === null || v === undefined ? null : Number(v))
 
 // ── 1. Columnas generadas ──────────────────────────────────────
 const { rows } = jsonDeSalida(
   correrSql(
-    'select id, nombre, costo, margen_1, margen_2, iva_porcentaje, precio_calculado, precio_venta from productos order by nombre;',
+    'select id, nombre, costo, margen_1, margen_2, iva_porcentaje, precio_manual, precio_calculado, precio_venta from productos order by nombre;',
   ),
 ) as { rows: Record<string, unknown>[] }
 const productos: FilaProducto[] = rows.map((r) => ({
   id: String(r.id),
   nombre: String(r.nombre),
-  costo: n(r.costo),
+  costo: nn(r.costo),
   margen_1: n(r.margen_1),
   margen_2: n(r.margen_2),
   iva_porcentaje: n(r.iva_porcentaje),
-  precio_calculado: n(r.precio_calculado),
+  precio_manual: nn(r.precio_manual),
+  precio_calculado: nn(r.precio_calculado),
   precio_venta: n(r.precio_venta),
 }))
 
 const difColumnas: string[] = []
 for (const p of productos) {
-  const c = calcularPrecio({ costo: p.costo, margen1: p.margen_1, margen2: p.margen_2, iva: p.iva_porcentaje })
+  const c = calcularPrecio({
+    costo: p.costo,
+    margen1: p.margen_1,
+    margen2: p.margen_2,
+    iva: p.iva_porcentaje,
+    precioManual: p.precio_manual,
+  })
   if (c.calculado !== p.precio_calculado || c.venta !== p.precio_venta) {
     difColumnas.push(
       `  ${p.nombre}: base calc=${p.precio_calculado} venta=${p.precio_venta} · cliente calc=${c.calculado} venta=${c.venta}`,
     )
   }
 }
-console.log(`1. Columnas generadas: ${productos.length} productos, ${difColumnas.length} diferencias`)
+const manuales = productos.filter((p) => p.precio_manual !== null).length
+console.log(
+  `1. Columnas generadas: ${productos.length} productos (${manuales} con precio manual), ${difColumnas.length} diferencias`,
+)
 difColumnas.forEach((d) => console.log(d))
 
 // ── 2. Actualización masiva (rollback) ─────────────────────────
@@ -94,7 +108,7 @@ BEGIN
   FOREACH v_p IN ARRAY ARRAY[${PORCENTAJES.join(',')}]::NUMERIC[] LOOP
     BEGIN
       PERFORM actualizar_precios_masivo(v_p, NULL, v_ids);
-      SELECT jsonb_object_agg(id, jsonb_build_array(costo, precio_venta)) INTO v_uno FROM productos;
+      SELECT jsonb_object_agg(id, jsonb_build_array(costo, precio_venta, precio_manual)) INTO v_uno FROM productos;
       v_res := v_res || jsonb_build_object(v_p::text, v_uno);
       RAISE EXCEPTION 'deshacer' USING ERRCODE = 'P0002';
     EXCEPTION WHEN SQLSTATE 'P0002' THEN NULL;
@@ -118,7 +132,7 @@ if (!m) {
 }
 // Según cómo la CLI arme el error, el JSON llega con las comillas escapadas.
 const crudo = m[1].includes('\\"') ? m[1].replace(/\\"/g, '"') : m[1]
-const resultado = JSON.parse(crudo) as Record<string, Record<string, [number, number]>>
+const resultado = JSON.parse(crudo) as Record<string, Record<string, [number | null, number, number | null]>>
 
 const difMasiva: string[] = []
 for (const pct of PORCENTAJES) {
@@ -128,12 +142,20 @@ for (const pct of PORCENTAJES) {
     continue
   }
   for (const p of productos) {
-    const costoPrev = costoConPorcentaje(p.costo, pct)
-    const ventaPrev = calcularPrecio({ costo: costoPrev, margen1: p.margen_1, margen2: p.margen_2, iva: p.iva_porcentaje }).venta
-    const [costoReal, ventaReal] = (real[p.id] ?? []).map(Number)
-    if (costoPrev !== costoReal || ventaPrev !== ventaReal) {
+    // Precio manual: el % va sobre el precio y el costo no cambia. Si no, sobre el costo (como antes).
+    const manualPrev = p.precio_manual === null ? null : precioManualConPorcentaje(p.precio_manual, pct)
+    const costoPrev = p.precio_manual !== null || p.costo === null ? p.costo : costoConPorcentaje(p.costo, pct)
+    const ventaPrev = calcularPrecio({
+      costo: costoPrev,
+      margen1: p.margen_1,
+      margen2: p.margen_2,
+      iva: p.iva_porcentaje,
+      precioManual: manualPrev,
+    }).venta
+    const [costoReal, ventaReal, manualReal] = (real[p.id] ?? []).map(nn) as [number | null, number, number | null]
+    if (costoPrev !== costoReal || ventaPrev !== ventaReal || manualPrev !== manualReal) {
       difMasiva.push(
-        `  ${pct}% ${p.nombre}: base costo=${costoReal} venta=${ventaReal} · vista previa costo=${costoPrev} venta=${ventaPrev}`,
+        `  ${pct}% ${p.nombre}: base costo=${costoReal} venta=${ventaReal} manual=${manualReal} · vista previa costo=${costoPrev} venta=${ventaPrev} manual=${manualPrev}`,
       )
     }
   }

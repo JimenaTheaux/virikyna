@@ -1,5 +1,5 @@
 import type { CambioMargenProducto } from '@virikyna/shared'
-import { formatCurrency, formatFechaHora } from '@virikyna/shared'
+import { formatCurrency, formatCurrencyOpcional, formatFechaHora } from '@virikyna/shared'
 
 type Props = {
   cambios: CambioMargenProducto[]
@@ -19,7 +19,7 @@ export function HistorialPrecioTab({ cambios, usuarios, loading }: Props) {
   if (cambios.length === 0) {
     return (
       <p className="py-6 font-sans text-body-md text-ink-soft">
-        Todavía no hay cambios de costo o margen registrados para este producto.
+        Todavía no hay cambios de costo, margen o precio manual registrados para este producto.
       </p>
     )
   }
@@ -43,7 +43,7 @@ export function HistorialPrecioTab({ cambios, usuarios, loading }: Props) {
               <td className="whitespace-nowrap px-3 py-2 text-ink-soft">{formatFechaHora(c.createdAt)}</td>
               <td className="px-3 py-2 text-ink-soft">{usuarios.get(c.usuarioId) ?? '—'}</td>
               <td className="px-3 py-2 text-ink">
-                {formatCurrency(c.costoAnterior)} → {formatCurrency(c.costoNuevo)}
+                {formatCurrencyOpcional(c.costoAnterior)} → {formatCurrencyOpcional(c.costoNuevo)}
               </td>
               <td className="px-3 py-2 text-ink">
                 {c.margen1Anterior}% → {c.margen1Nuevo}%
@@ -52,7 +52,9 @@ export function HistorialPrecioTab({ cambios, usuarios, loading }: Props) {
                 {c.margen2Anterior}% → {c.margen2Nuevo}%
               </td>
               <td className="px-3 py-2 font-sans text-label-bold text-accent-darker">
-                {formatCurrency(c.precioVentaAnterior)} → {formatCurrency(c.precioVentaNuevo)}
+                {formatCurrency(c.precioVentaAnterior)}
+                {c.precioManualAnterior !== null && ' (manual)'} → {formatCurrency(c.precioVentaNuevo)}
+                {c.precioManualNuevo !== null && ' (manual)'}
               </td>
             </tr>
           ))}

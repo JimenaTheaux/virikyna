@@ -279,6 +279,7 @@ type ProductoDeItemCopia = Pick<
   | 'iva_porcentaje'
   | 'proveedor_id'
   | 'precio_venta'
+  | 'precio_manual'
 >
 
 export type FacturaParaCopiar = FacturaCompraSaldo & {
@@ -295,7 +296,7 @@ export async function obtenerFacturaParaCopiar(supabase: SupabaseClient, id: str
     supabase
       .from('facturas_compra_items')
       .select(
-        '*, producto:productos(id, nombre, marca, codigo_barras, estado, costo, margen_1, margen_2, iva_porcentaje, proveedor_id, precio_venta)',
+        '*, producto:productos(id, nombre, marca, codigo_barras, estado, costo, margen_1, margen_2, iva_porcentaje, proveedor_id, precio_venta, precio_manual)',
       )
       .eq('factura_compra_id', id),
   ])
@@ -325,12 +326,13 @@ export function facturaACopia(factura: FacturaParaCopiar): ValoresFacturaCompra 
       ubicacion: it.ubicacion,
       productoPrecio: p
         ? {
-            costo: Number(p.costo),
+            costo: p.costo === null ? null : Number(p.costo),
             margen_1: Number(p.margen_1),
             margen_2: Number(p.margen_2),
             iva_porcentaje: Number(p.iva_porcentaje),
             proveedor_id: p.proveedor_id,
             precio_venta: Number(p.precio_venta),
+            precio_manual: p.precio_manual === null ? null : Number(p.precio_manual),
           }
         : null,
       productoInactivo: p?.estado === 'inactivo',

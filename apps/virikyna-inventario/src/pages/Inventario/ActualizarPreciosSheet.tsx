@@ -101,7 +101,7 @@ export function ActualizarPreciosSheet({ productos, proveedores, onClose, onSave
       <form id={formId} onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
         <div className="flex flex-col gap-2">
           <label htmlFor={`${id}-pct`} className="font-sans text-label-md text-ink">
-            Porcentaje sobre el costo (%)
+            Porcentaje (%) — sobre el costo, o sobre el precio si es manual
           </label>
           <input
             id={`${id}-pct`}
@@ -253,7 +253,9 @@ export function ActualizarPreciosSheet({ productos, proveedores, onClose, onSave
                         </span>
                       </p>
                       <p className="mt-1 text-label-md text-ink-soft tabular-nums">
-                        Costo {formatCurrency(f.costoActual)} → {formatCurrency(f.costoNuevo)}
+                        {f.manual || f.costoActual === null || f.costoNuevo === null
+                          ? 'Precio manual'
+                          : `Costo ${formatCurrency(f.costoActual)} → ${formatCurrency(f.costoNuevo)}`}
                       </p>
                     </li>
                   )

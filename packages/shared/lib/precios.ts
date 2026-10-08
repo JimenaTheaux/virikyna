@@ -2,7 +2,9 @@
 // (docs/06_estructura_de_datos.md, secciones 20 y 21; docs/29 y docs/30_redondeo_escalonado.sql):
 //
 //   precio_calculado = ROUND(costo × (1 + margen_1/100) × (1 + margen_2/100) × (1 + iva/100), 2)
-//   precio_venta     = redondear_precio_venta(precio_calculado)   ← lo que se cobra (regla escalonada)
+//                      (null si costo es null — docs/34)
+//   precio_venta     = COALESCE(precio_manual, redondear_precio_venta(precio_calculado))
+//                      ← lo que se cobra: el precio manual exacto, o la fórmula con la regla escalonada
 //
 // El valor real siempre lo calcula la base; esto es para las vistas previas (formularios de
 // producto, ítem de factura de compra, actualización masiva). Se calcula con enteros (BigInt) y
@@ -68,29 +70,47 @@ export function redondearPrecioVenta(precio: number | string): number {
 }
 
 export type DatosPrecio = {
-  costo: number | string
+  // null = sin costo (producto de la carga inicial): no hay fórmula. Un texto vacío de formulario
+  // sigue valiendo 0, como siempre.
+  costo: number | string | null
   margen1: number | string
   margen2: number | string
   iva: number | string
+  // productos.precio_manual: si viene (no null ni vacío) es el precio de venta, exacto.
+  precioManual?: number | string | null
 }
 
 export type PrecioProducto = {
-  calculado: number // precio_calculado: exacto, 2 decimales
-  venta: number // precio_venta: redondeo escalonado (redondearPrecioVenta)
-  ajuste: number // venta − calculado (negativo si redondeó para abajo)
+  calculado: number | null // precio_calculado: exacto, 2 decimales; null sin costo
+  venta: number // precio_venta: el manual, o la fórmula con redondeo escalonado (0 si no hay ninguno)
+  ajuste: number // venta − calculado (negativo si redondeó para abajo); 0 con precio manual
+  manual: boolean // el precio de venta es el precio manual
 }
 
-export function calcularPrecio({ costo, margen1, margen2, iva }: DatosPrecio): PrecioProducto {
-  // costo en centavos × las tres razones con 4 decimales → centavos × 10^12
-  const crudo =
-    aEscalado(costo, 2) *
-    (DIEZ_MIL + aEscalado(margen1, 2)) *
-    (DIEZ_MIL + aEscalado(margen2, 2)) *
-    (DIEZ_MIL + aEscalado(iva, 2))
-  const calculado = dividirRedondeando(crudo, UN_BILLON)
+function hayValor(v: number | string | null | undefined): v is number | string {
+  return v !== null && v !== undefined && !(typeof v === 'string' && v.trim() === '')
+}
+
+export function calcularPrecio({ costo, margen1, margen2, iva, precioManual }: DatosPrecio): PrecioProducto {
+  let calculado: bigint | null = null
+  if (costo !== null) {
+    // costo en centavos × las tres razones con 4 decimales → centavos × 10^12
+    const crudo =
+      aEscalado(costo, 2) *
+      (DIEZ_MIL + aEscalado(margen1, 2)) *
+      (DIEZ_MIL + aEscalado(margen2, 2)) *
+      (DIEZ_MIL + aEscalado(iva, 2))
+    calculado = dividirRedondeando(crudo, UN_BILLON)
+  }
+  const calculadoPesos = calculado === null ? null : aPesos(calculado)
+  if (hayValor(precioManual)) {
+    // NUMERIC(12,2): el manual se guarda redondeado a centavos, sin regla escalonada.
+    return { calculado: calculadoPesos, venta: redondearPesos(precioManual), ajuste: 0, manual: true }
+  }
+  if (calculado === null) return { calculado: null, venta: 0, ajuste: 0, manual: false }
   // La base del redondeo es precio_calculado (la función SQL hace ROUND(…, 2) primero).
   const venta = redondearPrecioVenta(aPesos(calculado))
-  return { calculado: aPesos(calculado), venta, ajuste: aPesos(aEscalado(venta, 2) - calculado) }
+  return { calculado: calculadoPesos, venta, ajuste: aPesos(aEscalado(venta, 2) - calculado), manual: false }
 }
 
 // Costo tras la actualización masiva: ROUND(costo × (1 + porcentaje/100), 2), igual que el RPC
@@ -101,6 +121,14 @@ export function costoConPorcentaje(costo: number | string, porcentaje: number | 
   const escala = 10n ** BigInt(decimales)
   const p = aEscalado(texto, decimales)
   return aPesos(dividirRedondeando(aEscalado(costo, 2) * (100n * escala + p), 100n * escala))
+}
+
+// Precio manual tras la actualización masiva (docs/34): redondear_precio_venta(precio × (1 + p/100)),
+// igual que el RPC. Si el redondeo da 0 (precio nuevo menor a $50), queda el valor exacto a centavos.
+export function precioManualConPorcentaje(precio: number | string, porcentaje: number | string): number {
+  const exacto = costoConPorcentaje(precio, porcentaje) // = ROUND(precio × (1 + p/100), 2)
+  const redondeado = redondearPrecioVenta(exacto)
+  return redondeado > 0 ? redondeado : exacto
 }
 
 // Redondeo a 2 decimales con la misma regla que Postgres (para comparar costos).
@@ -114,18 +142,28 @@ export function redondearPesos(valor: number | string): number {
 
 // Lo que el ítem necesita saber del producto vinculado (se completa al elegirlo en la búsqueda).
 export type ProductoPrecioActual = {
-  costo: number
+  costo: number | null // null = sin costo (carga inicial, docs/34)
   margen_1: number
   margen_2: number
   iva_porcentaje: number
   proveedor_id: string | null
   precio_venta: number
+  precio_manual: number | null
 }
 
 export type CambioPrecioFactura =
   | { tipo: 'actualiza'; antes: number; despues: number }
   | { tipo: 'sin_cambio_precio'; precio: number }
+  // docs/34: la factura le pone costo a un producto con precio manual → el manual se borra y el
+  // precio pasa a la fórmula (puede dar el mismo número).
+  | { tipo: 'reemplaza_manual'; manual: number; despues: number }
   | { tipo: 'repetido' }
+
+// Igualdad de costos tolerando null (sin costo ≠ cualquier costo).
+function mismoCosto(a: number | null, b: number | null): boolean {
+  if (a === null || b === null) return a === b
+  return redondearPesos(a) === redondearPesos(b)
+}
 
 type ItemParaPrecio = {
   key: string
@@ -136,10 +174,10 @@ type ItemParaPrecio = {
 
 type ProveedorMargenes = { id: string; margen_1_default: number; margen_2_default: number }
 
-// Espejo de cargar_factura_compra (docs/29): por producto, la ÚLTIMA línea pisa el costo con su
-// precio unitario sin IVA (salvo nota de crédito/débito o precio 0); si el proveedor de la factura
-// es otro, los márgenes pasan a los default de ese proveedor. Devuelve, por key de ítem, qué
-// mostrar; sin entrada = no cambia nada.
+// Espejo de cargar_factura_compra (docs/29, docs/34): por producto, la ÚLTIMA línea pisa el costo
+// con su precio unitario sin IVA (salvo nota de crédito/débito o precio 0) y, si le pone costo,
+// borra el precio manual; si el proveedor de la factura es otro (o no tenía), los márgenes pasan a
+// los default de ese proveedor. Devuelve, por key de ítem, qué mostrar; sin entrada = no cambia nada.
 export function cambiosPrecioFactura(
   items: ItemParaPrecio[],
   tipoComprobante: string,
@@ -159,18 +197,21 @@ export function cambiosPrecioFactura(
     const esUltima = ultimaPorProducto.get(it.productoId) === it.key
 
     const precioItem = redondearPesos(it.precioUnitarioSinIva)
-    const costoNuevo = actualizaCosto && precioItem > 0 ? precioItem : redondearPesos(actual.costo)
-    const cambiaCosto = costoNuevo !== redondearPesos(actual.costo)
+    const poneCosto = actualizaCosto && precioItem > 0
+    const costoNuevo = poneCosto ? precioItem : actual.costo
+    const cambiaCosto = !mismoCosto(costoNuevo, actual.costo)
     const cambiaProveedor = !!proveedor && proveedor.id !== actual.proveedor_id
+    const manualActual = actual.precio_manual ?? null
+    const borraManual = poneCosto && manualActual !== null
 
     if (!esUltima) {
       // Una línea anterior del mismo producto no define nada: avisarlo solo si su precio difiere.
-      if (actualizaCosto && precioItem > 0 && precioItem !== redondearPesos(actual.costo)) {
+      if (poneCosto && !mismoCosto(precioItem, actual.costo)) {
         resultado.set(it.key, { tipo: 'repetido' })
       }
       continue
     }
-    if (!cambiaCosto && !cambiaProveedor) continue
+    if (!cambiaCosto && !cambiaProveedor && !borraManual) continue
 
     const margenes = cambiaProveedor && proveedor ? proveedor : null
     const despues = calcularPrecio({
@@ -178,12 +219,15 @@ export function cambiosPrecioFactura(
       margen1: margenes ? margenes.margen_1_default : actual.margen_1,
       margen2: margenes ? margenes.margen_2_default : actual.margen_2,
       iva: actual.iva_porcentaje,
+      precioManual: borraManual ? null : manualActual,
     }).venta
     resultado.set(
       it.key,
-      despues === actual.precio_venta
-        ? { tipo: 'sin_cambio_precio', precio: despues }
-        : { tipo: 'actualiza', antes: actual.precio_venta, despues },
+      borraManual
+        ? { tipo: 'reemplaza_manual', manual: manualActual as number, despues }
+        : despues === actual.precio_venta
+          ? { tipo: 'sin_cambio_precio', precio: despues }
+          : { tipo: 'actualiza', antes: actual.precio_venta, despues },
     )
   }
   return resultado

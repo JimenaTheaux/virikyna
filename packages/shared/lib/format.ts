@@ -2,6 +2,11 @@ export function formatCurrency(value: number): string {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
 }
 
+// Para montos que pueden faltar (ej. productos.costo de la carga inicial, docs/34): null → "—".
+export function formatCurrencyOpcional(value: number | null | undefined): string {
+  return value === null || value === undefined ? '—' : formatCurrency(value)
+}
+
 // Versión compacta ("$12,3 mil") para espacios chicos como etiquetas de barras de un gráfico.
 export function formatCurrencyCompact(value: number): string {
   return new Intl.NumberFormat('es-AR', {

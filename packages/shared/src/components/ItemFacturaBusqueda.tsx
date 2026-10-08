@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Producto } from '../../types/database'
-import { formatCurrency } from '../../lib/format'
+import { formatCurrencyOpcional } from '../../lib/format'
 import type { ItemFacturaCompraUI } from '../../lib/facturasCompra'
 import { armarFiltroBusquedaProducto, codigoBarrasCoincide, resolverCodigoBarras } from '../../lib/productoBusqueda'
 import { useDebouncedValue } from '../../lib/useDebouncedValue'
@@ -33,9 +33,11 @@ export type ProductoBusquedaItem = Pick<
   | 'iva_porcentaje'
   | 'proveedor_id'
   | 'precio_venta'
+  | 'precio_manual'
 >
 
-const SELECT_PRODUCTO_ITEM = 'id, nombre, marca, costo, codigo_barras, margen_1, margen_2, iva_porcentaje, proveedor_id, precio_venta'
+const SELECT_PRODUCTO_ITEM =
+  'id, nombre, marca, costo, codigo_barras, margen_1, margen_2, iva_porcentaje, proveedor_id, precio_venta, precio_manual'
 
 export type AvisoCodigo =
   | { tipo: 'no_encontrado'; codigo: string }
@@ -82,16 +84,18 @@ export function useItemFacturaBusqueda({ supabase, item, onChange, onAvanzar, fo
       descripcion: p.nombre,
       marca: p.marca ?? '',
       codigoBarras: p.codigo_barras ?? item.codigoBarras,
-      precioUnitarioSinIva: String(p.costo),
+      // Sin costo (producto de la carga inicial, docs/34): precio unitario vacío para cargarlo.
+      precioUnitarioSinIva: p.costo === null ? '' : String(p.costo),
       // Elegir un producto (también "Usarlo igual" de un código inactivo) es la confirmación.
       productoInactivo: false,
       productoPrecio: {
-        costo: Number(p.costo),
+        costo: p.costo === null ? null : Number(p.costo),
         margen_1: Number(p.margen_1),
         margen_2: Number(p.margen_2),
         iva_porcentaje: Number(p.iva_porcentaje),
         proveedor_id: p.proveedor_id,
         precio_venta: Number(p.precio_venta),
+        precio_manual: p.precio_manual === null ? null : Number(p.precio_manual),
       },
     })
     setResultados([])
@@ -300,7 +304,7 @@ export function SugerenciasProductoFactura({
         >
           <span className="text-body-md text-ink">{p.nombre}</span>
           <span className="font-sans text-label-md text-ink-soft">
-            {p.marca ? `${p.marca} · ` : ''}Costo actual: {formatCurrency(p.costo)}
+            {p.marca ? `${p.marca} · ` : ''}Costo actual: {formatCurrencyOpcional(p.costo)}
           </span>
         </button>
       ))}

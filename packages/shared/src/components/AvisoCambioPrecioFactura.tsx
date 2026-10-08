@@ -9,8 +9,11 @@ export function AvisoCambioPrecioFactura({ cambio, className = '' }: { cambio?: 
   const texto =
     cambio.tipo === 'actualiza'
       ? `Actualiza precio de venta: ${formatCurrency(cambio.antes)} → ${formatCurrency(cambio.despues)}`
-      : cambio.tipo === 'sin_cambio_precio'
-        ? `Actualiza el costo; el precio de venta sigue en ${formatCurrency(cambio.precio)}`
-        : 'Este producto se repite más abajo: el costo lo define la última línea.'
+      : cambio.tipo === 'reemplaza_manual'
+        ? // docs/34: la factura le pone costo y el precio deja de ser manual.
+          `Precio manual ${formatCurrency(cambio.manual)} → calculado ${formatCurrency(cambio.despues)}`
+        : cambio.tipo === 'sin_cambio_precio'
+          ? `Actualiza el costo; el precio de venta sigue en ${formatCurrency(cambio.precio)}`
+          : 'Este producto se repite más abajo: el costo lo define la última línea.'
   return <p className={`font-sans text-label-md text-ink-soft ${className}`}>{texto}</p>
 }

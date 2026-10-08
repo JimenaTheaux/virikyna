@@ -26,7 +26,8 @@ export type FormaPagoEgreso = 'efectivo' | 'transferencia' | 'cheque' | 'echeq'
 export type TipoCierre = 'x' | 'z'
 export type EstadoCierreZ = 'pendiente_validacion' | 'validado'
 export type OrigenEgreso = 'turno' | 'general'
-export type TipoMovimientoStock = 'venta' | 'compra' | 'ajuste'
+// 'inicial' (docs/34): stock cargado en la carga inicial de inventario.
+export type TipoMovimientoStock = 'venta' | 'compra' | 'ajuste' | 'inicial'
 export type MotivoDevolucion = 'regalo' | 'defectuoso' | 'arrepentimiento' | 'otro'
 export type EstadoDevolucion = 'activa' | 'anulada'
 export type TipoItemDevolucion = 'devuelto' | 'nuevo'
@@ -151,12 +152,13 @@ export type Producto = {
   codigo_interno: string | null
   proveedor_id: string | null
   marca: string | null
-  costo: number
+  costo: number | null // null = sin costo (carga inicial, docs/34): el precio sale de precio_manual
   margen_1: number
   margen_2: number
   iva_porcentaje: number
-  precio_calculado: number // columna generada — precio exacto de la fórmula, 2 decimales. Nunca escribir
-  precio_venta: number // columna generada — precio_calculado redondeado a la centena. Nunca escribir
+  precio_manual: number | null // precio cargado a mano, exacto. Gana sobre la fórmula; una factura con costo lo borra
+  precio_calculado: number | null // columna generada — precio exacto de la fórmula, 2 decimales; null sin costo. Nunca escribir
+  precio_venta: number // columna generada — precio_manual, o la fórmula con redondeo escalonado. Nunca escribir
   stock_minimo: number
   estado: EstadoProducto
   created_at: string
@@ -496,4 +498,135 @@ export type DevolucionPago = {
   devolucion_id: string
   forma_pago: FormaPagoVenta // nunca 'cuenta_corriente' ni 'combinado' acá
   monto: number // siempre positivo — el sentido lo da el signo de Devolucion.diferencia_monto
+}
+
+// ─────────────────────────────────────────────────────────────
+// 5. Carga inicial de inventario (docs/34_carga_inicial.sql, docs/06 sección 24)
+// ─────────────────────────────────────────────────────────────
+
+// Fila única. Se lee directo; se cambia solo con abrir_carga_inicial / cerrar_carga_inicial (admin).
+export type Configuracion = {
+  id: string
+  fila_unica: boolean // siempre true — garantiza una sola fila
+  carga_inicial_abierta: boolean
+  abierta_at: string | null
+  abierta_por: string | null
+  cerrada_at: string | null
+  cerrada_por: string | null
+  updated_at: string
+  // docs/34b: último vaciado de datos (lo pone el script de reset). Lo guardado en el navegador
+  // con una marca anterior se descarta.
+  datos_reset_at: string | null
+}
+
+export type AccionCargaInicial = 'nuevo' | 'sumar' | 'reemplazar'
+
+// Borrador de un usuario (RLS: cada uno ve solo los suyos). También es el retorno de
+// carga_inicial_guardar_item — salvo el reintento (mismo p_client_id, docs/34c) de una operación
+// cuya fila ya se finalizó o eliminó: ahí vuelve solo `id` y el resto en null.
+export type CargaInicialItem = {
+  id: string
+  usuario_id: string
+  codigo_barras: string | null // null = se genera un EAN-13 interno al finalizar
+  nombre: string
+  marca: string | null
+  descripcion: string | null
+  precio: number // > 0
+  cantidad: number // > 0, siempre a la ubicación 'local'
+  accion: AccionCargaInicial
+  producto_id: string | null // el producto existente, si el código ya estaba (sumar/reemplazar)
+  created_at: string
+  updated_at: string
+}
+
+// docs/34c: un client_id (generado por el cliente) = una sola aplicación de
+// carga_inicial_guardar_item / carga_inicial_editar_producto. RLS: cada usuario lee las suyas; se
+// escribe solo desde esas RPCs.
+export type CargaInicialOperacion = {
+  client_id: string
+  usuario_id: string
+  operacion: 'guardar_item' | 'editar_producto'
+  item_id: string | null // borrador (guardar_item) o producto (editar_producto)
+  resultado: CargaInicialEditarResultado | null // editar_producto: lo que devolvió la primera vez
+  created_at: string
+}
+
+// Retorno de carga_inicial_buscar_codigo.
+export type CargaInicialBusqueda = {
+  codigo: string // normalizado (sin espacios)
+  producto: {
+    id: string
+    nombre: string
+    marca: string | null
+    descripcion: string | null
+    codigo_barras: string | null
+    estado: EstadoProducto
+    precio_venta: number
+    precio_manual: number | null
+    tiene_costo: boolean // true = el precio sale del costo y no se puede cambiar en la carga inicial
+    stock_local: number
+  } | null
+  mi_borrador: CargaInicialItem | null
+  borradores_otros: {
+    id: string
+    usuario_id: string
+    usuario_nombre: string
+    nombre: string
+    marca: string | null
+    precio: number
+    cantidad: number
+    accion: AccionCargaInicial
+    updated_at: string
+  }[]
+}
+
+// Retorno de carga_inicial_finalizar.
+export type CargaInicialFinalizarResultado = {
+  items: number
+  productos_creados: number
+  productos_reemplazados: number
+  stock_sumado: number
+  fusionados: number // 'nuevo' cuyo código apareció en el medio (otro usuario): se sumó el stock
+  precios_no_aplicados: number // 'reemplazar' sobre un producto con costo: el precio no se tocó
+  unidades: number
+  codigos_generados: { producto_id: string; nombre: string; codigo: string }[]
+}
+
+// Retorno de carga_inicial_editar_producto.
+export type CargaInicialEditarResultado = {
+  producto_id: string
+  precio_venta: number
+  cantidad_anterior: number | null // null si no se mandó cantidad
+  cantidad_nueva: number | null
+  delta: number // movimiento 'inicial' registrado (0 = sin cambio)
+}
+
+// Retorno de carga_inicial_resumen.
+export type CargaInicialResumen = {
+  abierta: boolean
+  abierta_at: string | null
+  abierta_por_nombre: string | null // docs/34b
+  cerrada_at: string | null
+  cerrada_por_nombre: string | null // docs/34b
+  productos: number // productos con algún movimiento 'inicial'
+  unidades: number // suma neta de movimientos 'inicial'
+  valor: number // docs/34b: unidades × precio_venta actual
+  borradores: number // pendientes de todos los usuarios
+  unidades_borradores: number
+  por_usuario: {
+    usuario_id: string
+    nombre: string
+    productos: number
+    unidades: number
+    valor: number // docs/34b
+    borradores: number
+    unidades_borradores: number
+  }[]
+}
+
+// Retorno de cerrar_carga_inicial.
+export type CerrarCargaInicialResultado = {
+  configuracion: Configuracion
+  borradores_pendientes: number
+  usuarios_con_borradores: number
 }

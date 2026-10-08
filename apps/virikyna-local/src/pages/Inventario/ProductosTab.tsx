@@ -3,7 +3,7 @@ import { Pencil } from 'lucide-react'
 import type { Proveedor } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { friendlyError } from '@virikyna/shared'
-import { formatCurrency } from '@virikyna/shared'
+import { formatCurrency, formatCurrencyOpcional } from '@virikyna/shared'
 import { coincideBusquedaProducto } from '@virikyna/shared'
 import { usePerfil } from '../../auth/AuthContext'
 import { ProductoBuscador, EstadoBadge } from '@virikyna/shared'
@@ -169,9 +169,12 @@ export function ProductosTab() {
                   <td className="px-3 py-3 text-ink-soft [overflow-wrap:anywhere]">
                     {producto.proveedor?.razon_social ?? '—'}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-3 text-ink">{formatCurrency(producto.costo)}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-ink">{formatCurrencyOpcional(producto.costo)}</td>
                   <td className="whitespace-nowrap px-3 py-3 font-sans font-semibold text-accent-darker">
                     {formatCurrency(producto.precio_venta)}
+                    {producto.precio_manual !== null && (
+                      <span className="block font-normal text-ink-soft">manual</span>
+                    )}
                   </td>
                   <td className="px-3 py-3 text-ink-soft">
                     {stockLocal} / {stockDeposito}

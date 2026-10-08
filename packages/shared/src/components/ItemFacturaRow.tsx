@@ -13,7 +13,7 @@ import { AvisoCodigoFactura, SugerenciasProductoFactura, useItemFacturaBusqueda 
 export type ProductoCreadoFactura = {
   id: string
   nombre: string
-  costo: number
+  costo: number | null
   marca: string | null
   codigo_barras: string | null
 }

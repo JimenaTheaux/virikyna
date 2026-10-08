@@ -119,7 +119,7 @@ export function ActualizarPreciosModal({ supabase, productos, proveedores, selec
       >
         <div className="flex flex-col gap-2">
           <label htmlFor={`${id}-pct`} className="font-sans text-label-md text-ink">
-            Porcentaje sobre el costo (%)
+            Porcentaje (%) — sobre el costo, o sobre el precio si es manual
           </label>
           <input
             id={`${id}-pct`}
@@ -280,7 +280,9 @@ export function ActualizarPreciosModal({ supabase, productos, proveedores, selec
                           <th scope="row" className="px-3 py-3 font-normal [overflow-wrap:anywhere]">
                             <span className="text-ink">{f.nombre}</span>
                             <span className="block text-ink-soft">
-                              Costo {formatCurrency(f.costoActual)} → {formatCurrency(f.costoNuevo)}
+                              {f.manual || f.costoActual === null || f.costoNuevo === null
+                                ? 'Precio manual'
+                                : `Costo ${formatCurrency(f.costoActual)} → ${formatCurrency(f.costoNuevo)}`}
                             </span>
                           </th>
                           <td className="px-3 py-3 text-right text-ink">{formatCurrency(f.precioActual)}</td>

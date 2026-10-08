@@ -18,7 +18,7 @@ import { Field, ErrorText, inputClass, selectClass } from '../../components/Form
 import { AjustarStockSheet } from './AjustarStockSheet'
 import type { ProductoConRelaciones } from './types'
 
-type ProductoCreado = { id: string; nombre: string; costo: number; marca: string | null; codigo_barras: string | null }
+type ProductoCreado = { id: string; nombre: string; costo: number | null; marca: string | null; codigo_barras: string | null }
 
 type Props = {
   producto?: ProductoConRelaciones
@@ -58,7 +58,13 @@ export function ProductoFormSheet({
   const [codigoBarras, setCodigoBarras] = useState(producto?.codigo_barras ?? codigoBarrasInicial ?? '')
   const [proveedorId, setProveedorId] = useState(producto?.proveedor_id ?? '')
   const [marca, setMarca] = useState(producto?.marca ?? '')
-  const [costo, setCosto] = useState(String(producto?.costo ?? ''))
+  // docs/34: producto con precio manual (carga inicial, sin costo). Un costo 0 junto a un precio
+  // manual es el resto de un guardado viejo: se muestra vacío, igual que null.
+  const manualOriginal = producto?.precio_manual ?? null
+  const costoInicial =
+    producto && manualOriginal !== null && Number(producto.costo ?? 0) === 0 ? '' : String(producto?.costo ?? '')
+  const [costo, setCosto] = useState(costoInicial)
+  const [precioManual, setPrecioManual] = useState(manualOriginal === null ? '' : String(manualOriginal))
   const [margen1, setMargen1] = useState(String(producto?.margen_1 ?? 0))
   const [margen2, setMargen2] = useState(String(producto?.margen_2 ?? 0))
   const [margenesAuto, setMargenesAuto] = useState(!producto)
@@ -97,7 +103,18 @@ export function ProductoFormSheet({
   const margen2Num = Number(margen2) || 0
   // IVA del producto (el formulario no lo edita); un producto nuevo toma el default de la columna.
   const ivaPorcentaje = producto?.iva_porcentaje ?? IVA_DEFAULT
-  const precio = calcularPrecio({ costo, margen1, margen2, iva: ivaPorcentaje })
+  // Precio manual: sigue mientras no se cargue un costo. Cargar uno lo reemplaza por la fórmula.
+  const conPrecioManual = manualOriginal !== null
+  const costoTocado = costo.trim() !== costoInicial
+  const reemplazaManual = conPrecioManual && costoTocado && costo.trim() !== ''
+  const sigueManual = conPrecioManual && !reemplazaManual
+  const precio = calcularPrecio({
+    costo: sigueManual ? null : costo,
+    margen1,
+    margen2,
+    iva: ivaPorcentaje,
+    precioManual: sigueManual ? precioManual : null,
+  })
   const precioVenta = precio.venta
 
   async function recargarStock() {
@@ -126,6 +143,10 @@ export function ProductoFormSheet({
       setError('El costo no puede ser negativo.')
       return
     }
+    if (sigueManual && !(Number(precioManual) > 0)) {
+      setError('El precio de venta tiene que ser mayor a 0.')
+      return
+    }
 
     const codigoBarrasLimpio = codigoBarras.trim() || null
 
@@ -135,11 +156,15 @@ export function ProductoFormSheet({
       codigo_barras: codigoBarrasLimpio,
       proveedor_id: proveedorId || null,
       marca: marca.trim() || null,
-      costo: costoNum,
+      // Con precio manual no se guarda un costo 0 inventado: queda null (o el que ya tenía).
+      costo: sigueManual ? (costoTocado || !producto?.costo ? null : producto.costo) : costoNum,
       margen_1: margen1Num,
       margen_2: margen2Num,
       stock_minimo: Number(stockMinimo) || 0,
       estado,
+      // Alta: la columna no se toca (sin cambios). Edición de un producto manual: el precio editado,
+      // o null si se cargó un costo (el precio pasa a la fórmula, igual que con una factura).
+      ...(conPrecioManual ? { precio_manual: sigueManual ? Number(precioManual) : null } : {}),
     }
 
     setSaving(true)
@@ -278,6 +303,7 @@ export function ProductoFormSheet({
                 step="0.01"
                 value={costo}
                 onChange={(e) => setCosto(e.target.value)}
+                placeholder={conPrecioManual ? 'Sin costo' : undefined}
                 className={inputClass}
               />
             </Field>
@@ -317,11 +343,34 @@ export function ProductoFormSheet({
               El margen lo define un administrador. Como cajero, solo cargás el costo.
             </p>
           )}
+          {sigueManual && (
+            <div className="mt-3">
+              <Field label="Precio de venta (manual)" hint="Se calcula automáticamente con la primera factura de compra.">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  value={precioManual}
+                  onChange={(e) => setPrecioManual(e.target.value)}
+                  className={inputClass}
+                />
+              </Field>
+            </div>
+          )}
+          {reemplazaManual && manualOriginal !== null && (
+            <p role="status" className="mt-3 rounded bg-badge-amber-bg px-3 py-2 font-sans text-label-md text-badge-amber-text">
+              Al cargar un costo se reemplaza el precio manual ({formatCurrency(manualOriginal)}): el precio de venta pasa
+              a calcularse con la fórmula.
+            </p>
+          )}
           <p className="mt-3 font-display text-headline-md text-accent-darker">
-            Precio de venta: {formatCurrency(precioVenta)}
+            Precio de venta{sigueManual ? ' (manual)' : ''}: {formatCurrency(precioVenta)}
           </p>
           <NotaRedondeoPrecio precio={precio} />
-          <p className="font-sans text-label-md text-ink-soft">Costo × margen 1 × margen 2 × IVA {ivaPorcentaje}%</p>
+          {!sigueManual && (
+            <p className="font-sans text-label-md text-ink-soft">Costo × margen 1 × margen 2 × IVA {ivaPorcentaje}%</p>
+          )}
         </div>
 
         <Field label="Stock mínimo" hint="Dispara la alerta de stock bajo.">

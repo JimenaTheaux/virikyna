@@ -5,6 +5,7 @@ import {
   calcularPrecio,
   cambiosPrecioFactura,
   costoConPorcentaje,
+  precioManualConPorcentaje,
   redondearPrecioVenta,
   type ProductoPrecioActual,
 } from '../lib/precios.ts'
@@ -47,18 +48,21 @@ test('calculado, venta y ajuste con márgenes e IVA', () => {
     calculado: 1597.2,
     venta: 1500,
     ajuste: -97.2,
+    manual: false,
   })
   // 1500 × 1,155 × 1,21 = 2096,325 → calculado 2096,33 (la mitad redondea hacia afuera) → 2000
   assert.deepEqual(calcularPrecio({ costo: 1500, margen1: 15.5, margen2: 0, iva: 21 }), {
     calculado: 2096.33,
     venta: 2000,
     ajuste: -96.33,
+    manual: false,
   })
   // 9000 × 1,21 = 10890 → múltiplo de 1000 → 11000
   assert.deepEqual(calcularPrecio({ costo: 9000, margen1: 0, margen2: 0, iva: 21 }), {
     calculado: 10890,
     venta: 11000,
     ajuste: 110,
+    manual: false,
   })
 })
 
@@ -87,6 +91,7 @@ const producto = (extra: Partial<ProductoPrecioActual> = {}): ProductoPrecioActu
   iva_porcentaje: 21,
   proveedor_id: 'prov-a',
   precio_venta: 1500, // 1210 → resto 210 → 1500
+  precio_manual: null,
   ...extra,
 })
 const item = (key: string, precio: string, productoId = 'p1', productoPrecio = producto()) => ({
@@ -133,4 +138,58 @@ test('proveedor distinto: márgenes default del proveedor nuevo (también en not
   // NC: costo queda 1000, márgenes 100/20 → 2904 → resto 404 → 3000
   const nc = cambiosPrecioFactura([item('a', '3000')], 'nota_credito', 'prov-b', proveedores)
   assert.deepEqual(nc.get('a'), { tipo: 'actualiza', antes: 1500, despues: 3000 })
+})
+
+// ── docs/34: costo null y precio manual ──────────────────────────
+
+test('precio manual: exacto, sin redondeo, gana sobre la fórmula', () => {
+  assert.deepEqual(calcularPrecio({ costo: null, margen1: 0, margen2: 0, iva: 21, precioManual: 6300 }), {
+    calculado: null,
+    venta: 6300,
+    ajuste: 0,
+    manual: true,
+  })
+  assert.equal(calcularPrecio({ costo: null, margen1: 0, margen2: 0, iva: 21, precioManual: '6321.55' }).venta, 6321.55)
+  // Con costo y manual (estado heredado): manda el manual; el calculado se informa igual.
+  const ambos = calcularPrecio({ costo: 1000, margen1: 0, margen2: 0, iva: 21, precioManual: 999 })
+  assert.equal(ambos.venta, 999)
+  assert.equal(ambos.calculado, 1210)
+  // Manual vacío (formulario) = sin manual: fórmula.
+  assert.equal(calcularPrecio({ costo: 1000, margen1: 0, margen2: 0, iva: 21, precioManual: '' }).venta, 1500)
+})
+
+test('costo null sin precio manual: sin precio calculado', () => {
+  assert.deepEqual(calcularPrecio({ costo: null, margen1: 10, margen2: 0, iva: 21 }), {
+    calculado: null,
+    venta: 0,
+    ajuste: 0,
+    manual: false,
+  })
+})
+
+test('precioManualConPorcentaje = redondear_precio_venta(precio × (1 + p/100))', () => {
+  assert.equal(precioManualConPorcentaje(6300, 2), 6500) // 6426 → resto 426 → 6500
+  assert.equal(precioManualConPorcentaje(6300, '-10'), 5500) // 5670 → resto 170 → 5500
+  assert.equal(precioManualConPorcentaje(12000, '7.5'), 13000) // 12900 → 13000
+  assert.equal(precioManualConPorcentaje(40, 2), 40.8) // redondeo daría 0 → queda exacto
+})
+
+test('factura sobre producto con precio manual: lo reemplaza por el calculado', () => {
+  const manual = producto({ costo: null, proveedor_id: null, precio_venta: 6300, precio_manual: 6300 })
+  // Proveedor nuevo (no tenía): márgenes 100/20 → 3000 × 2 × 1,2 × 1,21 = 8712 → 9000
+  const r = cambiosPrecioFactura([item('a', '3000', 'p1', manual)], 'factura', 'prov-b', proveedores)
+  assert.deepEqual(r.get('a'), { tipo: 'reemplaza_manual', manual: 6300, despues: 9000 })
+  // Mismo proveedor, mismo costo que ya tenía: igual borra el manual (docs/34).
+  const conCosto = producto({ costo: 1000, precio_venta: 999, precio_manual: 999 })
+  const r2 = cambiosPrecioFactura([item('a', '1000', 'p1', conCosto)], 'factura', 'prov-a', proveedores)
+  assert.deepEqual(r2.get('a'), { tipo: 'reemplaza_manual', manual: 999, despues: 1500 })
+})
+
+test('nota de crédito o precio 0 sobre producto manual: el manual sigue', () => {
+  const manual = producto({ costo: null, precio_venta: 6300, precio_manual: 6300 })
+  assert.equal(cambiosPrecioFactura([item('a', '3000', 'p1', manual)], 'nota_credito', 'prov-a', proveedores).size, 0)
+  assert.equal(cambiosPrecioFactura([item('a', '0', 'p1', manual)], 'factura', 'prov-a', proveedores).size, 0)
+  // NC de otro proveedor: cambian proveedor y márgenes, pero el precio sigue siendo el manual.
+  const nc = cambiosPrecioFactura([item('a', '3000', 'p1', manual)], 'nota_credito', 'prov-b', proveedores)
+  assert.deepEqual(nc.get('a'), { tipo: 'sin_cambio_precio', precio: 6300 })
 })

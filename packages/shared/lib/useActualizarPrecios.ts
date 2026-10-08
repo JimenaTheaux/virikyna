@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { friendlyError } from './supabaseErrors'
 import { coincideBusquedaProducto } from './productoBusqueda'
 import { fijadosPrimero } from './listaSeleccion'
-import { calcularPrecio, costoConPorcentaje } from './precios'
+import { calcularPrecio, costoConPorcentaje, precioManualConPorcentaje } from './precios'
 import { PAGINA_LISTA as PAGINA_LISTA_PRECIOS } from '../src/components/MostrarMas'
 
 // Actualización masiva de precios — toda la lógica en un solo lugar para las dos presentaciones:
@@ -14,6 +14,8 @@ import { PAGINA_LISTA as PAGINA_LISTA_PRECIOS } from '../src/components/MostrarM
 // recalcula precio_venta con el margen vigente de cada producto. Antes de aplicar se muestra una
 // vista previa por producto calculada con la misma fórmula que la base (lib/precios.ts; paridad
 // verificada con `npm run paridad-precios`). Proveedor y selección puntual son excluyentes.
+// docs/34: a los productos con precio manual el % se les aplica sobre ese precio (con el redondeo
+// escalonado) y el costo no se toca; la vista previa los marca como "manual".
 
 export type ModoActualizarPrecios = 'proveedor' | 'seleccion'
 
@@ -26,22 +28,24 @@ export type ProductoParaPrecios = {
   codigo_interno: string | null
   proveedor_id: string | null
   proveedor: { razon_social: string } | null
-  costo: number
+  costo: number | null
   margen_1: number
   margen_2: number
   iva_porcentaje: number
   precio_venta: number
+  precio_manual: number | null
 }
 
 export type FilaVistaPreviaPrecio = {
   id: string
   nombre: string
-  costoActual: number
-  costoNuevo: number
+  manual: boolean // precio manual: el % va sobre el precio y el costo no cambia
+  costoActual: number | null // null con precio manual
+  costoNuevo: number | null
   precioActual: number
   precioNuevo: number
-  ajuste: number // redondeo del precio nuevo: venta − calculado
-  sinCambio: boolean // el precio de venta no cambia (el redondeo absorbe la variación de costo)
+  ajuste: number // redondeo del precio nuevo: venta − calculado (con manual: nuevo − exacto)
+  sinCambio: boolean // el precio de venta no cambia (el redondeo absorbe la variación)
 }
 
 export type VistaPreviaPrecios = { porcentaje: number; filas: FilaVistaPreviaPrecio[]; sinCambio: number }
@@ -122,12 +126,29 @@ export function useActualizarPrecios({ supabase, productos, seleccionInicial = [
     }
 
     const filas = afectados.map((p): FilaVistaPreviaPrecio => {
-      const costoNuevo = costoConPorcentaje(p.costo, porcentaje)
+      if (p.precio_manual !== null) {
+        const exacto = costoConPorcentaje(p.precio_manual, porcentaje)
+        const precioNuevo = precioManualConPorcentaje(p.precio_manual, porcentaje)
+        return {
+          id: p.id,
+          nombre: p.nombre,
+          manual: true,
+          costoActual: null,
+          costoNuevo: null,
+          precioActual: Number(p.precio_venta),
+          precioNuevo,
+          ajuste: Math.round((precioNuevo - exacto) * 100) / 100,
+          sinCambio: precioNuevo === Number(p.precio_venta),
+        }
+      }
+      // Sin precio manual el producto siempre tiene costo (CHECK de docs/34).
+      const costoNuevo = costoConPorcentaje(p.costo ?? 0, porcentaje)
       const nuevo = calcularPrecio({ costo: costoNuevo, margen1: p.margen_1, margen2: p.margen_2, iva: p.iva_porcentaje })
       return {
         id: p.id,
         nombre: p.nombre,
-        costoActual: Number(p.costo),
+        manual: false,
+        costoActual: p.costo,
         costoNuevo,
         precioActual: Number(p.precio_venta),
         precioNuevo: nuevo.venta,

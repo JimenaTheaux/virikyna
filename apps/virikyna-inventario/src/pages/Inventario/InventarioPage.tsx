@@ -191,9 +191,14 @@ export function InventarioPage() {
                     {stockLocal} / {stockDeposito}
                   </p>
                 </div>
-                <p className="font-display text-headline-md text-accent-darker">
-                  {formatCurrency(producto.precio_venta)}
-                </p>
+                <div className="text-right">
+                  <p className="font-display text-headline-md text-accent-darker">
+                    {formatCurrency(producto.precio_venta)}
+                  </p>
+                  {producto.precio_manual !== null && (
+                    <p className="font-sans text-label-md text-ink-soft">Precio manual</p>
+                  )}
+                </div>
               </div>
             </button>
           )
