@@ -46,7 +46,7 @@ CREATE TYPE estado_cierre_z AS ENUM ('pendiente_validacion', 'validado');
 
 CREATE TYPE origen_egreso AS ENUM ('turno', 'general');
 
-CREATE TYPE tipo_movimiento_stock AS ENUM ('venta', 'compra', 'ajuste');
+CREATE TYPE tipo_movimiento_stock AS ENUM ('venta', 'compra', 'ajuste');  -- + 'inicial' (docs/34, sección 24)
 
 CREATE TYPE tipo_accion_auditoria AS ENUM ('alta', 'edicion', 'eliminacion', 'anulacion', 'reversion', 'nota_correccion');
 
@@ -182,7 +182,7 @@ CREATE TABLE productos (
   codigo_interno TEXT UNIQUE,  -- generado por el sistema si no hay codigo_barras
   proveedor_id UUID REFERENCES proveedores(id),
   marca TEXT,
-  costo NUMERIC(12,2) NOT NULL DEFAULT 0,
+  costo NUMERIC(12,2) NOT NULL DEFAULT 0,  -- ⚠ docs/34 (sección 24): nullable, sin default, + precio_manual
   margen_1 NUMERIC(6,2) NOT NULL DEFAULT 0,
   margen_2 NUMERIC(6,2) NOT NULL DEFAULT 0,
   iva_porcentaje NUMERIC(5,2) NOT NULL DEFAULT 21,
@@ -1657,7 +1657,7 @@ CREATE TRIGGER trg_proteger_eliminacion_cliente BEFORE DELETE ON clientes
   FOR EACH ROW EXECUTE FUNCTION fn_proteger_eliminacion_cliente();
 ```
 
-**RPC de actualización masiva de precios** (estaba pedida desde el doc 04 original, nunca se había construido):
+**RPC de actualización masiva de precios** (estaba pedida desde el doc 04 original, nunca se había construido). ⚠ La versión vigente es la de la sección 24 (docs/34): también actualiza `precio_manual`.
 
 ```sql
 CREATE OR REPLACE FUNCTION actualizar_precios_masivo(
@@ -2198,6 +2198,8 @@ ALTER TABLE productos ALTER COLUMN precio_venta SET EXPRESSION AS (
 );
 ```
 
+⚠ La expresión vigente de `precio_venta` es la de la sección 24 (docs/34): `COALESCE(precio_manual, <esta>)`. Si se cambia `redondear_precio_venta`, el `SET EXPRESSION` a re-correr es ese.
+
 - **La base es `precio_calculado`**: la función hace `ROUND(x, 2)` antes de aplicar la regla. Con eso desaparece el caso raro de la sección 20 (`precio_calculado` 2150,00 con `precio_venta` 2100).
 - **`IMMUTABLE`** es obligatorio para usarla en una columna generada.
 - **⚠ Si se cambia la función** (`CREATE OR REPLACE`), las filas guardadas **no** se recalculan solas: `precio_venta` es `STORED` y solo se recalcula al escribir la fila. Hay que volver a correr el `ALTER TABLE … SET EXPRESSION` de arriba, que reescribe la tabla y recalcula todo.
@@ -2282,7 +2284,7 @@ SQL completo, verificaciones y tests en `docs/33_copiar_factura_compra.sql`. Ant
 
 **Tabla `facturas_compra`** + `copiada_de_id UUID` (null, FK a `facturas_compra(id)`, sin `ON DELETE`: las facturas de compra se anulan, no se borran). Índice parcial `idx_facturas_compra_copiada_de` (`WHERE copiada_de_id IS NOT NULL`). Las facturas cargadas a mano quedan en null.
 
-**RPC `cargar_factura_compra`** — versión vigente. Mismo cuerpo que la sección 20 más un último parámetro `p_copiada_de_id UUID DEFAULT NULL`:
+**RPC `cargar_factura_compra`** — ⚠ la vigente es la de la sección 24 (docs/34): este cuerpo + borrar `precio_manual`. Mismo cuerpo que la sección 20 más un último parámetro `p_copiada_de_id UUID DEFAULT NULL`:
 
 - Si viene, valida que la factura exista (`'La factura que se quiso copiar no existe'`). **No** exige mismo proveedor (al copiar se puede cambiar) y **acepta anuladas**.
 - Lo guarda en la fila nueva. Totales, ítems, stock, costo y márgenes, igual que la sección 20.
@@ -2302,3 +2304,129 @@ SQL completo, verificaciones y tests en `docs/33_copiar_factura_compra.sql`. Ant
 **Tipos** (`packages/shared/types/database.ts`): `FacturaCompra.copiada_de_id` (y por herencia `FacturaCompraSaldo`), `ComprobanteCompraExistente`.
 
 **Frontend** (`packages/shared`): `cargarFacturaCompra` manda `p_copiada_de_id` solo cuando hay copia (una carga normal sigue con los 9 parámetros). `obtenerFacturaParaCopiar` + `facturaACopia` arman la precarga, `errorCabeceraFacturaCompra` exige número y fecha en una copia, y `problemasItemsFacturaCompra` bloquea un ítem copiado con producto inactivo sin confirmar. Hooks sin dibujo en `lib/useCopiaFacturaCompra.ts`: `useComprobanteDuplicado` (llama a `existe_comprobante_compra` al salir de Número), `useCopiaFacturaCompra` (carga + confirmación de reemplazo) y `useSelectorFacturaCopia` (`useFacturasRecientes`, sin react-query para que sirva en Inventario). Los usan Local y Gestión (modal + `SelectorFacturaCopiaModal`) e Inventario (`CargarFacturaPage` + `SelectorFacturaCopiaSheet` en un `BottomSheet`); cada app solo pone el dibujo.
+
+## 24. Carga inicial de inventario: precio manual, modo carga inicial y borradores
+
+SQL completo, verificaciones y tests en `docs/34_carga_inicial.sql`. Las definiciones que reemplaza (`cargar_factura_compra`, `actualizar_precios_masivo`, expresiones de `precio_venta` y `precio_calculado`) se tomaron de la base real (`pg_get_functiondef`, `pg_attribute`) el 2026-10-08. **Orden:** la PARTE 0 (enum) sola y antes que la A: un valor de enum nuevo no se puede usar en la misma transacción que lo crea.
+
+**Para qué:** cargar el inventario del local de una vez, desde varios dispositivos a la vez (Local, Inventario y Gestión): código, nombre, marca, descripción, precio de venta y cantidad, **sin proveedor ni costo**, siempre en la ubicación `local`. Al cerrar la etapa, solo un admin puede seguir usándola (la pantalla queda en Gestión).
+
+**Enum:** `tipo_movimiento_stock` + `'inicial'`.
+
+**`productos`:**
+
+- `costo` pasa a **nullable, sin default**. null = sin costo.
+- `precio_manual NUMERIC(12,2)` (null; CHECK `> 0`): precio cargado a mano. **Exacto, sin redondeo.**
+- CHECK `productos_costo_o_precio_manual`: `costo IS NOT NULL OR precio_manual IS NOT NULL`. Así `precio_venta` nunca queda null.
+- `precio_venta` (generada) = `COALESCE(precio_manual, redondear_precio_venta(costo × (1+m1/100) × (1+m2/100) × (1+iva/100)))`. El precio manual gana sobre la fórmula.
+- `precio_calculado` no cambia: con costo null ya da null sola.
+- `revertir_edicion` no cambia: restaura todas las columnas no generadas, incluidos `precio_manual` y un costo null.
+
+```sql
+ALTER TABLE productos ALTER COLUMN precio_venta SET EXPRESSION AS (
+  COALESCE(
+    precio_manual,
+    redondear_precio_venta(costo * (1 + margen_1/100.0) * (1 + margen_2/100.0) * (1 + iva_porcentaje/100.0))
+  )
+);
+```
+
+**`configuracion`** — fila única (`fila_unica BOOLEAN UNIQUE CHECK (fila_unica)`; `id` UUID porque `auditoria.registro_id` es UUID): `carga_inicial_abierta` (default false), `abierta_at`, `abierta_por`, `cerrada_at`, `cerrada_por`, `updated_at`. RLS: SELECT para perfiles activos, **sin policies de escritura**: se cambia solo con `abrir_carga_inicial()` / `cerrar_carga_inicial()` (admin). Es la primera tabla de configuración global; lo que se agregue después va como columnas acá.
+
+**Código interno EAN-13:** `codigo_interno_seq` (1 … 9.999.999.999) + `generar_codigo_interno()` → `'20'` + 10 dígitos de la secuencia + dígito verificador (`ean13_digito_verificador`). El prefijo 20 es de uso interno en GS1: no choca con códigos de fábrica. Salta cualquier valor que ya use un producto (`codigo_barras` o `codigo_interno`) o un borrador. El código generado se guarda en **`codigo_barras`** (se escanea y se imprime como cualquier otro). `codigo_barras_variantes(text)` es el espejo SQL de `variantesCodigoBarras` (12 dígitos ↔ 0 + 12).
+
+**`carga_inicial_items`** — borradores de cada usuario:
+
+| Columna | |
+|---|---|
+| `usuario_id` | default `auth.uid()`, FK a `perfiles` |
+| `codigo_barras` | null = se genera al finalizar. Único por usuario (índice parcial): volver a cargar el mismo código suma la cantidad |
+| `nombre` (no vacío), `marca`, `descripcion` | |
+| `precio` | `> 0` |
+| `cantidad` | `NUMERIC(10,2) > 0` |
+| `accion` | `'nuevo' \| 'sumar' \| 'reemplazar'` (CHECK, texto: un enum nuevo pediría otro bloque fuera de transacción) |
+| `producto_id` | el producto existente si el código ya estaba (`ON DELETE SET NULL`) |
+
+RLS: cada usuario ve y edita solo sus filas. Escribir directo no saltea el control del modo: los borradores solo se aplican con `carga_inicial_finalizar`. Índices por usuario y por código.
+
+**RPCs** (todas `SECURITY DEFINER`). `carga_inicial_verificar_acceso()`: perfil activo y, salvo admin, carga abierta. Si no: `'La carga inicial está cerrada. Solo un administrador puede usarla.'`
+
+| RPC | Qué hace |
+|---|---|
+| `carga_inicial_buscar_codigo(p_codigo) → JSONB` | `{codigo, producto, mi_borrador, borradores_otros[]}`. `producto`: nombre, marca, descripción, `precio_venta`, `precio_manual`, `tiene_costo`, `stock_local`. `borradores_otros`: usuario, nombre, precio, cantidad, acción. Busca con variantes del código y también por `codigo_interno` |
+| `carga_inicial_guardar_item(p_codigo_barras, p_nombre, p_marca, p_descripcion, p_precio, p_cantidad, p_accion = 'nuevo', p_id = null) → carga_inicial_items` | Sin `p_id`: alta, o suma la cantidad si el código ya está en mis borradores (el resto se pisa con lo nuevo). Con `p_id`: edita ese borrador. Valida: `nuevo` con código existente → error ("elegí sumar o reemplazar"); `sumar`/`reemplazar` sin producto → error; `reemplazar` con otro precio sobre un producto **con costo** → `'Precio calculado por costo…'` |
+| `carga_inicial_eliminar_item(p_id)` | Borra un borrador propio |
+| `carga_inicial_finalizar() → JSONB` | Aplica **todos mis borradores en una transacción** (abajo) y los borra |
+| `carga_inicial_editar_producto(p_producto_id, p_nombre, p_marca, p_descripcion, p_precio, p_cantidad_local) → JSONB` | Vista de inventario total. `p_precio` va a `precio_manual` solo si el producto no tiene costo; con costo, un precio distinto del actual → `'Precio calculado por costo…'` (mandar el mismo precio no es error). `p_cantidad_local` es el **valor absoluto** del stock local: registra un movimiento `'inicial'` por la diferencia (5 → 3 = −2). null en precio o cantidad = no tocar. Sin cambios en los datos, no hay `UPDATE` (ni fila de auditoría) |
+| `carga_inicial_resumen() → JSONB` | `{abierta, abierta_at, cerrada_at, productos, unidades, borradores, unidades_borradores, por_usuario[]}`. Lo aplicado sale de `movimientos_stock` tipo `'inicial'` (suma neta); lo pendiente, de los borradores de todos |
+| `abrir_carga_inicial() → configuracion` | Solo admin. Error si ya está abierta |
+| `cerrar_carga_inicial() → JSONB` | Solo admin. Error si ya está cerrada. **No borra borradores**: devuelve `borradores_pendientes` y `usuarios_con_borradores` para avisar (los de cajeros no se pueden aplicar hasta reabrir) |
+
+**`carga_inicial_finalizar`**, por cada borrador (en orden de carga):
+
+1. Producto: el `producto_id` del borrador si sigue existiendo, si no el que tenga ese código ahora.
+2. **Sin producto → alta:** `estado 'activo'`, `costo` null, `precio_manual` = precio, sin proveedor, márgenes 0, IVA 21. Código generado si el borrador no tenía. `INSERT … ON CONFLICT (codigo_barras) DO NOTHING`: si otro usuario dio de alta el mismo código en el medio (el `ON CONFLICT` espera a que su transacción confirme), se toma ese producto y **se suma** (`fusionados`).
+3. **`reemplazar`:** pisa nombre, marca, descripción y `precio_manual` (este último solo si no tiene costo; si no, cuenta en `precios_no_aplicados`).
+4. **`sumar`**, o `nuevo` cuyo código apareció después: solo stock.
+5. Stock: movimiento `'inicial'` (motivo `'Carga inicial'`, `referencia_id` = id del borrador) + `stock_ubicaciones` en `'local'` con `ON CONFLICT … cantidad + x`. Dos usuarios sumando el mismo producto a la vez no se pisan.
+
+Devuelve `{items, productos_creados, productos_reemplazados, stock_sumado, fusionados, precios_no_aplicados, unidades, codigos_generados[{producto_id, nombre, codigo}]}` (para imprimir etiquetas).
+
+**`cargar_factura_compra`** (versión vigente; misma firma que la sección 23): si la factura **le pone costo** a un producto (no NC/ND, precio > 0), además de costo/proveedor/márgenes pone **`precio_manual = null`**: desde ahí el precio sale de la fórmula. Eso pasa aunque el costo sea el mismo que ya tenía. Un producto sin proveedor recibe el de la factura y sus márgenes default (`null IS DISTINCT FROM proveedor` → hereda, como en la sección 13; test T3). Una NC/ND no toca `precio_manual`.
+
+**`actualizar_precios_masivo`** (versión vigente; misma firma):
+
+- Con `precio_manual`: `precio_manual = redondear_precio_venta(precio_manual × (1 + p/100))` — redondeo escalonado (6300 + 2% = 6426 → 6500). Si el redondeo da 0 (precio nuevo menor a $50) queda el valor exacto, para no violar el CHECK.
+- Sin `precio_manual`: `costo × (1 + p/100)`, igual que antes.
+- `p_porcentaje ≤ −100` → error.
+
+**Auditoría:** `trg_auditoria_configuracion` (INSERT/UPDATE) y `trg_auditoria_carga_inicial_items` (INSERT/UPDATE/DELETE) con `fn_auditoria_generica`. Cada guardado de borrador deja una fila; al finalizar, una `eliminacion` por borrador.
+
+**Tests** (PARTE C, `BEGIN … ROLLBACK`, como el primer admin y el primer cajero activos): precio manual 6300 exacto; +2% → 6500; factura con costo borra el manual, aplica la fórmula y hereda proveedor/márgenes (una NC no); cajero con la carga cerrada → error y admin → ok; dos usuarios suman el mismo código; doble alta del mismo código → se fusiona; `reemplazar`; EAN-13 generado válido; editar cantidad 5 → 3 = movimiento −2; resumen, eliminar, cerrar y auditoría. Se corrió todo en seco contra la base real antes de aplicar (con `'ajuste'` en lugar de `'inicial'`, que todavía no existía).
+
+**Tipos** (`packages/shared/types/database.ts`): `Producto.costo: number | null`, `Producto.precio_manual`, `Producto.precio_calculado: number | null`, `TipoMovimientoStock` + `'inicial'`, `Configuracion`, `AccionCargaInicial`, `CargaInicialItem`, `CargaInicialBusqueda`, `CargaInicialFinalizarResultado`, `CargaInicialEditarResultado`, `CargaInicialResumen`, `CerrarCargaInicialResultado`.
+
+### 34b — "Usar mis datos" sobre borradores de otros, resumen con valor, `datos_reset_at`
+
+SQL, verificaciones y tests en `docs/34b_carga_inicial_reemplazar_y_resumen.sql` (después de 34).
+
+- **`configuracion.datos_reset_at TIMESTAMPTZ`** (null): marca del último vaciado de la base. **Lo pone el script de vaciado** (`UPDATE configuracion SET datos_reset_at = now()`); ninguna RPC lo toca. La pantalla de carga inicial guarda en el navegador las filas que todavía no llegaron al servidor junto con el `datos_reset_at` que vio; si después el de la base es posterior, las descarta.
+- **`carga_inicial_guardar_item`**: `'reemplazar'` ya no exige producto, solo código. Es el "Usar mis datos" cuando el código está únicamente en borradores de otros usuarios (`producto_id` null). `'sumar'` sin producto → `'No hay ningún producto con ese código para sumar'`; `'reemplazar'` sin código → `'Para reemplazar datos hace falta el código'`.
+- **`carga_inicial_finalizar`**: primero resuelve o crea el producto; si no lo acaba de crear, decide por la acción. `'reemplazar'` sin `producto_id`: si el código existe al finalizar (otro usuario finalizó antes, o un alta simultánea ganó el `ON CONFLICT`), reemplaza datos y suma stock; si no existe, lo crea con mis datos. `'nuevo'` en la misma situación sigue sumando solo stock.
+- **`carga_inicial_resumen`** + `valor` (unidades netas de movimientos `'inicial'` × `precio_venta` actual), también por usuario, + `abierta_por_nombre` / `cerrada_por_nombre`.
+
+**Frontend** (`packages/shared/lib/cargaInicial.ts` + `src/components/cargaInicial/`): pantalla `CargaInicial` en `/carga-inicial` de las tres apps (Local y Gestión tabla estilo G, Inventario tarjetas). Detalle funcional en docs/04 módulo 5.2.
+
+- Keys de TanStack Query: `['configuracion']` (refresco 15 s), `['carga-inicial','mios',usuarioId]`, `['carga-inicial','total',busqueda]` (infinita de a 50, búsqueda `ilike` en el servidor, refresco 15 s solo con la pestaña activa y la ventana visible), `['carga-inicial','resumen']`. Inventario ahora tiene `QueryClientProvider` (mismos defaults que Local).
+- Filas no guardadas: `localStorage` `virikyna:carga-inicial:pendientes:<usuarioId>:v1` = `{marca: datos_reset_at, filas}`.
+- Un error `'La carga inicial está cerrada…'` de cualquier RPC relee la configuración y bloquea la pantalla.
+
+### 34c — Guardado idempotente
+
+SQL, verificaciones y tests en `docs/34c_carga_inicial_idempotencia.sql` (después de 34b).
+
+**Problema:** si se perdía la respuesta de un guardado que sí había llegado, el reintento del cliente volvía a sumar la cantidad (alta con un código que ya está en mis borradores).
+
+- **`carga_inicial_operaciones`** (`client_id` UUID PK, `usuario_id`, `operacion` `'guardar_item' | 'editar_producto'`, `item_id` sin FK, `resultado` JSONB, `created_at`). RLS: SELECT propio; se escribe solo desde las RPCs. `carga_inicial_reclamar_operacion(p_client_id, p_operacion)` (sin `EXECUTE` para `anon`/`authenticated`) la reclama con `INSERT … ON CONFLICT DO NOTHING` al principio de la RPC: dos llamadas simultáneas con el mismo id se ordenan por la PK. Si la operación falla, el registro se deshace con ella y el mismo id se puede reintentar.
+- **`carga_inicial_guardar_item(p_client_id, …)`** y **`carga_inicial_editar_producto(p_client_id, …)`**: `p_client_id` obligatorio, primer parámetro (`DROP` + `CREATE`: cambió la firma). Operación ya aplicada → no hace nada y devuelve la fila como está ahora (o solo su `id` si ya se finalizó/eliminó) / el resultado guardado de la primera vez. `client_id` de otro usuario o de otra operación → `'Identificador de operación inválido'`.
+- **Sin cambios, verificado por test:** editar un borrador (`p_id`) fija los valores, no suma; `carga_inicial_finalizar` dos veces no aplica dos veces (bloquea y borra los borradores en la misma transacción; la segunda devuelve `items = 0`).
+- ⚠ Los tests de docs/34 y docs/34b usan las firmas viejas.
+
+**Cliente:** cada fila nueva genera su `clientId` (`crypto.randomUUID`) y lo guarda en `localStorage` con la fila; Reintentar reusa el mismo. Editar un borrador guardado genera uno nuevo; corregir un **alta** que todavía no se confirmó mantiene el suyo (pudo haber llegado). En Inventario total el `clientId` va con la edición: cambia con cada campo y se reusa si se vuelve a guardar sin cambios. Finalizar con `items = 0` muestra "tu carga ya estaba aplicada".
+
+### 34d — Abrir/cerrar con WHERE (pg_safeupdate)
+
+SQL y test en `docs/34d_carga_inicial_safeupdate.sql` (después de 34c). Las conexiones de la API cargan la extensión `safeupdate` (rol `authenticator`: `session_preload_libraries = supautils, safeupdate`), que rechaza todo `UPDATE`/`DELETE` sin `WHERE` aunque la tabla tenga una sola fila. `abrir_carga_inicial` y `cerrar_carga_inicial` hacían `UPDATE configuracion SET …` sin `WHERE`: desde Gestión respondían 400 "UPDATE requires a WHERE clause". Ahora llevan `WHERE fila_unica`. Los tests por SQL Editor no lo detectan (ahí safeupdate no se carga y `LOAD 'safeupdate'` no está permitido). **Regla:** toda escritura en `configuracion` va con `WHERE fila_unica`.
+
+**Cliente:** las mutaciones de la carga inicial usan `networkMode: 'always'`. Con el default (`'online'`), TanStack las pausaba sin conexión y la fila quedaba en "Guardando…" hasta que volviera internet; ahora fallan enseguida y quedan "No guardada" con Reintentar.
+
+### Frontend de costo vacío y precio manual (resuelve los pendientes de 34)
+
+- **`lib/precios.ts`**: `calcularPrecio({ costo, …, precioManual })` replica `COALESCE(precio_manual, fórmula)`: con precio manual devuelve `venta` = el manual exacto, `ajuste` 0 y `manual: true`; con `costo: null` y sin manual, `calculado: null` (un texto vacío de formulario sigue valiendo 0). `precioManualConPorcentaje` es el espejo de la rama manual de `actualizar_precios_masivo`. `cambiosPrecioFactura` sigue la regla de 34: si la factura le pone costo a un producto con precio manual devuelve `{ tipo: 'reemplaza_manual', manual, despues }` → aviso "Precio manual $6.300 → calculado $7.000"; una NC/ND o un precio 0 no lo tocan.
+- **Formularios de producto** (Local, Gestión, Inventario): el alta no cambia. Al editar un producto con precio manual se muestra "Precio de venta (manual)" editable ("Se calcula automáticamente con la primera factura de compra") y el costo vacío ("Sin costo"). Guardar sin tocar el costo deja `costo` en null (un costo 0 heredado junto al manual también pasa a null). Cargar un costo muestra el aviso de reemplazo y guarda `precio_manual = null`.
+- **Listados**: costo null → "—" (`formatCurrencyOpcional`), y "manual" debajo del precio (ProductosTab de Local y Gestión, tarjetas de Inventario).
+- **Factura de compra**: un producto sin costo deja el precio unitario vacío y muestra "Costo actual: —". La copia de factura trae `precio_manual`.
+- **Actualizar precios**: la vista previa marca "Precio manual" en esos productos (el % va sobre el precio, sin tocar el costo).
+- **Historial de precio**: cuenta también los cambios de `precio_manual`; costo null se muestra "—" (antes `Number(null)` daba $0).
+- **Paridad** (`npm run paridad-precios`): incluye `precio_manual` en las columnas y en la actualización masiva. 2026-10-08: 79 productos (3 manuales), 0 diferencias; 395 comparaciones de actualización masiva, 0 diferencias.
+- Pendiente: Historial muestra `configuracion` y `carga_inicial_items` con el nombre de tabla crudo.

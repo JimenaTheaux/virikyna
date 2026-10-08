@@ -119,11 +119,12 @@ Roles del sistema: **Admin** (Alicia, Ana Julia) y **Cajero** (Jose, Ale, Belu).
 - Se descuenta automático al confirmar una venta (de la ubicación correspondiente).
 - Se suma automático al cargar una factura de compra de proveedor, en la ubicación indicada por ítem.
 - El ajuste manual requiere motivo obligatorio (rotura, pérdida, corrección, otro) + fecha + usuario — solo lo hace el admin.
+- La carga inicial de inventario suma stock en Local con su propio tipo de movimiento ("inicial") — ver 5.2.
 
 **Ficha de producto — campos:**
 - Nombre, descripción, proveedor, marca
-- Código de barras (si tiene) o código interno generado
-- Costo (precio de compra, lo carga el cajero/vendedor)
+- Código de barras (si tiene) o código interno generado (en la carga inicial: EAN-13 con prefijo 20, imprimible)
+- Costo (precio de compra, lo carga el cajero/vendedor). Puede faltar en productos de la carga inicial, que tienen precio manual
 - **Margen en dos casilleros** (ej. 100 + 20) — ver regla de precios abajo
 - Stock mínimo (define cuándo se dispara la alerta de stock bajo)
 - Stock por ubicación (Local / Depósito)
@@ -136,12 +137,39 @@ Roles del sistema: **Admin** (Alicia, Ana Julia) y **Cajero** (Jose, Ale, Belu).
   - **$10.000 o más:** a múltiplo de $1.000 más cercano; $500 sube ($11.200 → $11.000, $11.500 → $12.000, $11.680 → $12.000).
   - $0 queda en $0.
 - El costo se actualiza solo al cargar una factura de compra (ver módulo 6), además de la edición manual y la actualización masiva.
+- **Precio manual (carga inicial):** un producto cargado sin costo tiene un precio de venta fijo, exacto, sin redondeo. La primera factura de compra que le pone costo lo reemplaza por la fórmula de arriba (y le asigna proveedor y márgenes del proveedor). La actualización masiva aplica el % sobre el precio manual con el mismo redondeo escalonado ($6.300 + 2% → $6.500).
 - El margen tiene un **valor por defecto a nivel proveedor** — los productos nuevos de ese proveedor lo heredan automáticamente.
 - Se puede hacer **override individual** del margen en un producto puntual, sin afectar el default del proveedor.
 
 ### 5.1 — Inventario y Stock desde celular
 
 Mismo cuadro de acciones que Inventario de escritorio (excepto ajuste de stock, exclusivo admin, se mantiene igual). Login compartido con el sistema principal; acceso directo post-login a "Inventario". Lectura de código de barras con la cámara del celular (Android e iOS). Acceso directo a carga de facturas de proveedores desde el mismo lugar.
+
+### 5.2 — Carga inicial de inventario
+
+Etapa única para cargar el inventario existente del local antes de operar (docs/34, docs/34b, docs/06 sección 24). Pantalla "Carga inicial" en las tres apps: en Local (menú Gestión) y en Inventario (pestaña "Carga") aparece solo con la etapa abierta; en Gestión está siempre.
+
+| Acción | Admin | Cajero |
+|---|---|---|
+| Abrir / cerrar la etapa | ✅ | ❌ |
+| Cargar productos con la etapa abierta (Local, Inventario, Gestión) | ✅ | ✅ |
+| Cargar productos con la etapa cerrada (solo Gestión) | ✅ | ❌ |
+| Editar nombre, marca, descripción, precio y cantidad desde el inventario total | ✅ | ✅ (con la etapa abierta) |
+| Ver el avance (productos, unidades, por usuario) | ✅ | ✅ (con la etapa abierta) |
+
+**Cómo funciona:**
+- Por producto: código (escaneado o tipeado; si no tiene, el sistema genera uno), nombre, marca, descripción, **precio de venta** y **cantidad**. Sin proveedor ni costo. El stock va siempre a **Local**.
+- Varias personas a la vez. Cada una arma su lista de **borradores** (solo ve los suyos) y la confirma con "Finalizar": se aplica toda junta.
+- Dos pestañas: **Mi carga** (fila de entrada arriba: Código · Nombre · Marca · Descripción · Precio · Cantidad; Enter guarda y el foco vuelve a Código) e **Inventario total** (todos los productos activos con su stock en Local, buscador, edición en la fila).
+- Al salir del Código se ve si el producto ya existe (nombre, precio, stock) y si otra persona lo tiene en sus borradores (quién, cuánto). Opciones: **Usar sus datos y sumar** (solo se carga la cantidad), **Usar mis datos** (mis datos reemplazan a los suyos y se suma la cantidad) o **Cancelar**.
+- Escanear dos veces el mismo código en la propia lista suma la cantidad.
+- Sin conexión, la fila queda "No guardada" con Reintentar, y lo tipeado se guarda en el dispositivo (se borra si después se vacía la base).
+- Si dos personas cargan el mismo producto nuevo, queda un solo producto con la suma de las dos cantidades.
+- Un producto que ya tiene costo (vino de una factura) no cambia de precio desde la carga inicial: su precio sale de la fórmula.
+- Corregir una cantidad desde el inventario total (ej. 5 → 3) registra la diferencia como movimiento de stock.
+- Todo queda en Historial: borradores, aperturas y cierres de la etapa, altas y cambios de productos, movimientos de stock.
+- Gestión (admin): estado ("Abierta desde 08/10 por Ana" / "Cerrada"), botones Abrir / Cerrar, total cargado (productos, unidades, valor a precio de venta) y avance por usuario (desplegable, con borradores sin finalizar).
+- Al cerrar, el sistema lista los borradores sin finalizar por usuario ("Cerrar igual": quedan sin aplicar) y pide escribir **CERRAR**. Si alguien tiene la pantalla abierta en Local o Inventario, se bloquea con un aviso. Después del cierre la pantalla sigue solo en Gestión, para el admin.
 
 ---
 
@@ -411,3 +439,28 @@ Ver `docs/06_estructura_de_datos (1).md` (tabla `notas_internas`, vista `notas_i
 - Reportes para el área contable
 - Resúmenes y dashboard de balance de negocio para administración
 - Futuras actualizaciones y nuevas funciones (a demanda)
+
+---
+
+## Puesta en marcha
+
+Paso de los datos de prueba al uso real. El script es `docs/36_limpieza_arranque.sql` y se corre a mano en el SQL Editor de Supabase, **un bloque por vez**. Se conservan usuarios (`perfiles` / `auth.users`), cuentas, `cuenta_forma_pago`, tokens de ARCA y `configuracion`; se borra todo lo demás (productos, proveedores, clientes, ventas, caja, facturas de compra, auditoría, borradores de carga inicial y la Factura C de producción).
+
+**Orden:**
+
+1. **Antes de empezar:** avisar al equipo y **cerrar las tres apps en todos los dispositivos**. En cada caja de Virikyna Local, cerrar o vaciar los tickets abiertos: se guardan en la computadora y apuntan a productos que se van a borrar (no se limpian solos).
+2. **Backup** de la base (Supabase → Database → Backups, o `pg_dump`). No seguir sin backup.
+3. **Bloque 1** — exportación previa, solo lectura. 1A: copiar el JSON de la Factura C de producción (punto de venta 0002) y guardarlo fuera del sistema. 1B: conteo de filas por tabla (para comparar).
+4. **Bloque 2** — simulación. Tiene que terminar con el mensaje *"SIMULACION OK — se deshizo todo…"* (aparece como error a propósito, porque el SQL Editor solo muestra la última sentencia). Cualquier otro error: frenar y revisar.
+5. **Bloque 3** — limpieza real. Una sola transacción: si algo falla no se aplica nada. Frena solo si la lista de tablas cambió desde que se revisó o si `cuentas` / `cuenta_forma_pago` se modificaron.
+6. **Bloque 4** — verificación: todas las filas con `ok = true` (tablas en 0 salvo las conservadas, próximo número de venta = 1, saldos de cuentas en 0, carga inicial cerrada, usuarios activos listados).
+7. **Volver a abrir las apps** (recargar en cada dispositivo). Lo que hubiera quedado sin guardar de la carga inicial en algún navegador se descarta solo (`datos_reset_at`).
+8. **Abrir la carga inicial desde Gestión** → Carga inicial → "Abrir carga inicial".
+
+**Después de la limpieza, a tener en cuenta:**
+
+- **Primer turno de caja:** no necesita un Cierre Z anterior. La primera apertura toma como esperado $0, así que el efectivo con el que se arranca queda como diferencia y aparece en el Dashboard de Gestión como alerta "⚠ Apertura de caja con diferencia de $… (sobró)": un admin la marca como revisada.
+- **Saldos iniciales:** las cuentas quedan en $0. Si hay saldos de arranque, se cargan en Gestión → Caja Gestión → Carga inicial (los de proveedores y clientes, cuando se den de alta).
+- **Numeración:** las ventas y las devoluciones arrancan en 1. La Factura C la numera ARCA: la próxima del punto de venta 0002 es la 00000002 (la 00000001 fue la prueba de producción).
+- **Códigos internos:** la generación vuelve a empezar en 2000000000015. Descartar las etiquetas impresas durante las pruebas.
+- **Usuarios de prueba** (ej. "Admin de prueba", "Cajero de prueba"): se conservan. Desactivarlos desde Configuración si no se van a usar.
