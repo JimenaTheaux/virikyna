@@ -1,5 +1,10 @@
 # Novedades de Virikyna Local
 
+## 0.4.1 — octubre 2026
+
+### Carga inicial de inventario
+- **Buscar con el lector en "Inventario total":** se escanea el código con el lector (o con el botón de escaneo) y el producto aparece al instante. La próxima lectura reemplaza a la anterior, y el código se encuentra aunque el lector lo mande con o sin el 0 adelante.
+
 ## 0.4.0 — octubre 2026
 
 ### Carga inicial de inventario
