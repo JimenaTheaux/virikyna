@@ -1,5 +1,21 @@
 # Novedades de Virikyna Local
 
+## 0.4.0 — octubre 2026
+
+### Carga inicial de inventario
+- **Nueva pantalla "Carga inicial"** (menú Gestión), visible solo mientras un administrador tiene abierta la etapa desde Virikyna Gestión. Sirve para cargar el inventario existente del local: código, nombre, marca, descripción, precio de venta y cantidad, sin proveedor ni costo.
+- **Varias personas a la vez:** cada una arma su lista y la confirma con "Finalizar mi carga". Al escanear o tipear un código se avisa si el producto ya existe o si otra persona ya lo cargó ("Ya cargado por…"), con las opciones "Usar sus datos y sumar" o "Usar mis datos".
+- Funciona con el lector de códigos: Enter pasa al siguiente campo y guarda la fila. Si un producto no tiene código, el sistema genera uno para etiquetar.
+- **Sin conexión no se pierde nada:** la fila queda "No guardada" con un botón Reintentar, y reintentar nunca suma la cantidad dos veces.
+- **Inventario total:** lista de todos los productos con su stock en el local, con buscador y edición de nombre, marca, descripción, precio y cantidad.
+- Cuando el administrador cierra la etapa, la pantalla desaparece del menú.
+
+### Precios e Inventario
+- **Productos con precio manual:** los productos cargados en la carga inicial no tienen costo y tienen un precio de venta fijo. En el formulario de producto se ve como "Precio de venta (manual)" y se puede editar. La primera factura de compra le pone costo y el precio pasa a calcularse solo.
+- En las listas, un costo vacío se muestra como "—" y los precios manuales tienen la marca "manual".
+- **Factura de compra:** al cargar un producto con precio manual se avisa "Precio manual $X → calculado $Y".
+- **Actualizar precios:** a los productos con precio manual el porcentaje se les aplica sobre el precio, con el mismo redondeo.
+
 ## 0.3.0 — octubre 2026
 
 ### Proveedores
