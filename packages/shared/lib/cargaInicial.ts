@@ -23,7 +23,7 @@ import type {
   Configuracion,
 } from '../types/database'
 import { friendlyError, isNetworkError } from './supabaseErrors'
-import { armarFiltroBusquedaProducto } from './productoBusqueda'
+import { armarFiltroBusquedaProducto, variantesCodigoBarras } from './productoBusqueda'
 
 export const KEY_CONFIGURACION = ['configuracion'] as const
 export const KEY_CARGA_INICIAL = ['carga-inicial'] as const
@@ -144,7 +144,13 @@ export function useInventarioTotal(supabase: SupabaseClient, busqueda: string, a
         .order('nombre')
         .order('id')
         .range(pageParam, pageParam + PAGINA_INVENTARIO_TOTAL - 1)
-      if (q) consulta = consulta.or(armarFiltroBusquedaProducto(q))
+      if (q) {
+        // Un código escaneado puede venir con o sin el 0 inicial (UPC-A ↔ EAN-13): además del
+        // "contiene", se buscan sus variantes exactas.
+        const variantes = variantesCodigoBarras(q)
+        const exactos = variantes.length > 1 ? `,codigo_barras.in.(${variantes.join(',')})` : ''
+        consulta = consulta.or(armarFiltroBusquedaProducto(q) + exactos)
+      }
       const { data, error, count } = await consulta
       if (error) throw error
       const productos = ((data ?? []) as unknown as FilaProductoTotal[]).map(({ stock_ubicaciones, ...p }) => ({

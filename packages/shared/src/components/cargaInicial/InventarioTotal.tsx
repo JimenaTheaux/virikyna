@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { Check, Loader2, Lock, Pencil, Search } from 'lucide-react'
 import {
@@ -10,9 +10,10 @@ import {
   type ErroresFila,
   type ProductoInventarioTotal,
 } from '../../../lib/cargaInicial'
-import { useDebouncedValue } from '../../../lib/useDebouncedValue'
+import { normalizarCodigoBarras } from '../../../lib/productoBusqueda'
 import { formatCurrency } from '../../../lib/format'
 import { MostrarMas } from '../MostrarMas'
+import { ScanButton } from '../ScanButton'
 import { BotonesDialogo, Dialogo } from './comunes'
 
 // clientId (docs/34c): uno por versión de la edición. Cambiar un campo genera otro; guardar de
@@ -58,8 +59,24 @@ type Props = {
 // el refresco cada 15 s no pisa lo que se está tipeando.
 export function InventarioTotal({ supabase, celular, activo, onCerrada }: Props) {
   const [busqueda, setBusqueda] = useState('')
-  const busquedaDebounced = useDebouncedValue(busqueda, 300)
+  // Lo que se consulta: tipeando, 300 ms después de la última tecla; con el lector (Enter al final
+  // del código) o la cámara, al instante.
+  const [busquedaDebounced, setConsultada] = useState('')
+  const buscadorRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    const t = setTimeout(() => setConsultada(busqueda), 300)
+    return () => clearTimeout(t)
+  }, [busqueda])
   const consulta = useInventarioTotal(supabase, busquedaDebounced, activo)
+
+  // Código leído (lector físico o cámara): busca ya y deja el texto seleccionado, así la próxima
+  // lectura lo reemplaza en vez de sumarse al final.
+  function buscarCodigo(codigo: string) {
+    const c = normalizarCodigoBarras(codigo)
+    setBusqueda(c)
+    setConsultada(c)
+    setTimeout(() => buscadorRef.current?.select())
+  }
   const editar = useEditarProductoCarga(supabase)
   const [editandoSheet, setEditandoSheet] = useState<ProductoInventarioTotal | null>(null)
 
@@ -85,20 +102,42 @@ export function InventarioTotal({ supabase, celular, activo, onCerrada }: Props)
   }
 
   const buscador = (
-    <div className="relative">
-      <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-soft" aria-hidden />
-      <label htmlFor="carga-total-buscar" className="sr-only">
-        Buscar por código, nombre o marca
-      </label>
-      <input
-        id="carga-total-buscar"
-        type="search"
-        value={busqueda}
-        onChange={(e) => setBusqueda(e.target.value)}
-        placeholder="Buscar por código, nombre o marca…"
-        className={`w-full rounded border border-line bg-surface pl-11 pr-4 font-sans text-body-md text-ink outline-none focus:border-accent ${
-          celular ? 'h-12' : 'h-10'
-        }`}
+    <div className="flex items-center gap-2">
+      <div className="relative min-w-0 flex-1">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-soft" aria-hidden />
+        <label htmlFor="carga-total-buscar" className="sr-only">
+          Buscar por código, nombre o marca
+        </label>
+        <input
+          ref={buscadorRef}
+          id="carga-total-buscar"
+          type="search"
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          onKeyDown={(e) => {
+            // El lector físico manda Enter al terminar el código.
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              buscarCodigo(busqueda)
+            }
+          }}
+          placeholder={celular ? 'Buscar o escanear…' : 'Buscar por código, nombre o marca… (o escaneá con el lector)'}
+          autoComplete="off"
+          className={`w-full rounded border border-line bg-surface pl-11 pr-4 font-sans text-body-md text-ink outline-none focus:border-accent ${
+            celular ? 'h-12' : 'h-10'
+          }`}
+        />
+      </div>
+      {/* Cámara en celular; en la PC, sin cámara, lleva el foco al buscador para el lector físico. */}
+      <ScanButton
+        size={celular ? 'touch' : 'compact'}
+        className={
+          celular
+            ? 'flex h-12 w-14 flex-shrink-0 items-center justify-center rounded border border-accent bg-accent text-white active:bg-accent-dark'
+            : 'flex h-10 w-10 flex-shrink-0 items-center justify-center rounded border border-accent/40 bg-accent-light text-accent-darker transition hover:bg-accent hover:text-white'
+        }
+        onDetect={buscarCodigo}
+        onFocusCampo={() => buscadorRef.current?.focus()}
       />
     </div>
   )
