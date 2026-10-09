@@ -1,5 +1,11 @@
 # Novedades de Virikyna Local
 
+## 0.4.2 — octubre 2026
+
+### Proveedores
+- **Observaciones del proveedor:** en el formulario de proveedor (nuevo y editar) hay un campo "Observaciones" para anotar lo que haga falta recordar de ese proveedor. Es opcional.
+- Las observaciones aparecen en un recuadro amarillo al elegir el proveedor en "Nueva factura de compra" y en la cuenta corriente del proveedor, arriba de los saldos. Si no tiene observaciones, no se muestra nada.
+
 ## 0.4.1 — octubre 2026
 
 ### Carga inicial de inventario
