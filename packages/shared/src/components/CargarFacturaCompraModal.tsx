@@ -27,6 +27,7 @@ import { EstadoBadge } from './EstadoBadge'
 import { ItemFacturaRow, type CrearProductoRender } from './ItemFacturaRow'
 import { AvisoComprobanteDuplicado } from './AvisosCopiaFactura'
 import { SelectorFacturaCopiaModal } from './SelectorFacturaCopiaModal'
+import { ObservacionesProveedor } from './ObservacionesProveedor'
 
 // Etiquetas compartidas (TIPO_COMPROBANTE_COMPRA_LABEL); acá se aclara cuáles no son fiscales.
 // Presupuesto (docs/31) se carga igual que un remito: suma stock y deuda, y actualiza costo.
@@ -416,6 +417,11 @@ export function CargarFacturaCompraModal({
                 </select>
               </Field>
             </div>
+            {/* Fila propia al terminar la del proveedor: dentro de su celda desalinearía la franja. */}
+            <ObservacionesProveedor
+              observaciones={proveedores.find((p) => p.id === proveedorId)?.observaciones}
+              className="col-span-2 md:col-span-8"
+            />
             <div className="col-span-1 md:col-span-2">
               <Field label="Punto de venta">
                 <input value={puntoVenta} onChange={(e) => setPuntoVenta(e.target.value)} className={inputClass} />

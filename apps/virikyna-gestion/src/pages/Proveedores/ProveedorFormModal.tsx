@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import type { Proveedor } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
-import { friendlyError } from '@virikyna/shared'
+import { friendlyError, proveedorQueryKeys } from '@virikyna/shared'
 import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field, ErrorText, inputClass } from '../../components/FormField'
@@ -13,6 +14,7 @@ type Props = {
 }
 
 export function ProveedorFormModal({ proveedor, onClose, onSaved }: Props) {
+  const queryClient = useQueryClient()
   const [razonSocial, setRazonSocial] = useState(proveedor?.razon_social ?? '')
   const [cuit, setCuit] = useState(proveedor?.cuit ?? '')
   const [direccion, setDireccion] = useState(proveedor?.direccion ?? '')
@@ -21,6 +23,7 @@ export function ProveedorFormModal({ proveedor, onClose, onSaved }: Props) {
   const [contacto, setContacto] = useState(proveedor?.contacto ?? '')
   const [margen1Default, setMargen1Default] = useState(String(proveedor?.margen_1_default ?? 0))
   const [margen2Default, setMargen2Default] = useState(String(proveedor?.margen_2_default ?? 0))
+  const [observaciones, setObservaciones] = useState(proveedor?.observaciones ?? '')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -53,6 +56,8 @@ export function ProveedorFormModal({ proveedor, onClose, onSaved }: Props) {
       contacto: contacto.trim() || null,
       margen_1_default: Number(margen1Default) || 0,
       margen_2_default: Number(margen2Default) || 0,
+      // Vacío o solo espacios → null (ObservacionesProveedor no muestra nada).
+      observaciones: observaciones.trim() || null,
     }
 
     setSaving(true)
@@ -65,6 +70,8 @@ export function ProveedorFormModal({ proveedor, onClose, onSaved }: Props) {
       setError(friendlyError(dbError))
       return
     }
+    // La cuenta corriente (useProveedor) muestra datos y observaciones del proveedor.
+    if (proveedor) void queryClient.invalidateQueries({ queryKey: proveedorQueryKeys.proveedor(proveedor.id) })
     onSaved()
   }
 
@@ -133,6 +140,16 @@ export function ProveedorFormModal({ proveedor, onClose, onSaved }: Props) {
             </Field>
           </div>
         </div>
+
+        <Field label="Observaciones" hint="Opcional. Se muestran al cargar una compra de este proveedor y en su cuenta corriente.">
+          <textarea
+            rows={3}
+            value={observaciones}
+            onChange={(e) => setObservaciones(e.target.value)}
+            placeholder="Notas internas sobre este proveedor"
+            className={`${inputClass} resize-y`}
+          />
+        </Field>
 
         {error && <ErrorText>{error}</ErrorText>}
 

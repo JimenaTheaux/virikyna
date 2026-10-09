@@ -20,6 +20,7 @@ import {
   integrarMarcaEnItemsLibres,
   itemsValidosFacturaCompra,
   nuevoItemFacturaCompraUI,
+  ObservacionesProveedor,
   problemasItemsFacturaCompra,
   TIPO_COMPROBANTE_COMPRA_LABEL,
   TIPOS_COMPROBANTE_COMPRA,
@@ -327,6 +328,7 @@ export function CargarFacturaPage() {
             ))}
           </select>
         </Field>
+        <ObservacionesProveedor observaciones={proveedores.find((p) => p.id === proveedorId)?.observaciones} />
 
         <div className="grid grid-cols-2 gap-stack-sm">
           <Field label="Tipo de comprobante">

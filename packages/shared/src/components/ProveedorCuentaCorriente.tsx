@@ -24,6 +24,7 @@ import { RowActionsMenu, type RowActionsMenuItem } from './RowActionsMenu'
 import { PagarProveedorModal } from './PagarProveedorModal'
 import { EditarFacturaCompraModal } from './EditarFacturaCompraModal'
 import { AnularFacturaCompraModal } from './AnularFacturaCompraModal'
+import { ObservacionesProveedor } from './ObservacionesProveedor'
 
 export type RenderDetalleComprobante = (args: {
   factura: FacturaCompraSaldo
@@ -329,6 +330,8 @@ export function ProveedorCuentaCorriente({
           Registrar pago
         </button>
       </div>
+
+      <ObservacionesProveedor observaciones={proveedor.observaciones} className="mt-stack-md" />
 
       {/* ── KPIs ── */}
       <ul aria-label="Resumen de la cuenta" className="mt-stack-md grid grid-cols-2 gap-stack-sm lg:grid-cols-4">

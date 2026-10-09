@@ -2430,3 +2430,15 @@ SQL y test en `docs/34d_carga_inicial_safeupdate.sql` (después de 34c). Las con
 - **Historial de precio**: cuenta también los cambios de `precio_manual`; costo null se muestra "—" (antes `Number(null)` daba $0).
 - **Paridad** (`npm run paridad-precios`): incluye `precio_manual` en las columnas y en la actualización masiva. 2026-10-08: 79 productos (3 manuales), 0 diferencias; 395 comparaciones de actualización masiva, 0 diferencias.
 - Pendiente: Historial muestra `configuracion` y `carga_inicial_items` con el nombre de tabla crudo.
+
+---
+
+## 26. Observaciones del proveedor
+
+SQL, verificación y test en `docs/41_observaciones_proveedor.sql`. Aplicado el 2026-10-08.
+
+- **`proveedores.observaciones`** (`TEXT`, null, sin default ni constraint): notas internas libres, ayuda memoria de la dueña sobre el proveedor. Vacío o solo espacios se guarda como `null` (lo hace el formulario de proveedor de Local y Gestión).
+- **`proveedores_saldo`** suma `observaciones` al final (mismo cuerpo que docs/31). Se recrea `WITH (security_invoker = on)`: `CREATE OR REPLACE VIEW` reemplaza las opciones de la vista y sin eso perdía la RLS de la sección 25.
+- **RLS, auditoría y reversión**: sin cambios. Las policies de `proveedores` son por fila, `trg_auditoria_proveedores` guarda la fila entera en JSON y `revertir_edicion` restaura cualquier columna.
+- **Dónde se ve**: componente `ObservacionesProveedor` (`packages/shared`), recuadro ámbar (`badge-amber-*`) que no se muestra si no hay texto. Va debajo del selector de proveedor en la carga de factura de compra (modal de escritorio compartido y página de celular de Inventario) y en la cabecera de la cuenta corriente, antes de los KPIs.
+- **Compatibilidad**: las apps hablan directo con Supabase (sin PowerSync, ver docs/05). Las versiones anteriores de Local leen con `select('*')` e ignoran la columna nueva; su formulario no la manda, así que editar un proveedor desde una versión vieja no borra las observaciones.

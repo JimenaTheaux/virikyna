@@ -52,6 +52,7 @@ export * from './src/components/ProveedorCuentaCorriente'
 export * from './src/components/PagarProveedorModal'
 export * from './src/components/EditarFacturaCompraModal'
 export * from './src/components/AnularFacturaCompraModal'
+export * from './src/components/ObservacionesProveedor'
 // Carga inicial de inventario (docs/34, docs/34b): hooks + pantalla compartida por las tres apps.
 export * from './lib/cargaInicial'
 export { CargaInicial } from './src/components/cargaInicial/CargaInicial'

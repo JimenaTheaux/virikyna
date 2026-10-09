@@ -92,6 +92,8 @@ export type Proveedor = {
   margen_2_default: number
   saldo_inicial: number
   created_at: string
+  // Notas internas libres (docs/41). Null si no hay; se muestran con ObservacionesProveedor.
+  observaciones: string | null
 }
 
 // CHECK chk_cliente_tiene_nombre: razon_social y nombre_fantasia no pueden ser ambos null.
