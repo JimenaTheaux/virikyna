@@ -2,6 +2,8 @@
 // apps. El formato del texto (nombre y marca en MAYÚSCULAS, descripción "Así") lo pone la base con
 // un trigger (docs/42, docs/06 sección 27): acá solo se arma, nunca se convierte.
 
+import { formatCurrency } from './format'
+
 export type ProductoTexto = {
   nombre: string | null | undefined
   marca?: string | null
@@ -29,9 +31,26 @@ export function nombreConMarca(p: Pick<ProductoTexto, 'nombre' | 'marca'>): stri
   return unir([p.nombre, p.marca])
 }
 
-// "Con bandeja · 7791234567890"; omite lo que falte. Código de barras o, si no tiene, el interno.
-export function lineaSecundaria(p: Omit<ProductoTexto, 'nombre' | 'marca'>): string {
-  return unir([p.descripcion, p.codigo_barras || p.codigo_interno])
+// Renglón 2 de una lista de productos (ProductoLinea): [marca, código, descripción], sin las partes
+// vacías. Código de barras o, si no tiene, el interno. Cada parte se muestra separada por espacio.
+export function lineaSecundaria(p: Omit<ProductoTexto, 'nombre'>): string[] {
+  return [p.marca, p.codigo_barras || p.codigo_interno, p.descripcion]
+    .map((parte) => parte?.trim() ?? '')
+    .filter(Boolean)
+}
+
+// Lo que anuncia un lector de pantalla: "NOMBRE, MARCA, $ 25.000,00" (o ", Costo $ …").
+export function etiquetaAccesibleProducto(
+  p: Pick<ProductoTexto, 'nombre' | 'marca'>,
+  precio?: number | null,
+  etiquetaPrecio?: string,
+): string {
+  const partes = [p.nombre?.trim(), p.marca?.trim()].filter(Boolean) as string[]
+  if (precio !== undefined) {
+    const monto = precio === null ? 'sin precio' : formatCurrency(precio)
+    partes.push(etiquetaPrecio ? `${etiquetaPrecio} ${monto}` : monto)
+  }
+  return partes.join(', ')
 }
 
 // Ítem de venta o devolución: el nombre y la marca guardados al vender (snapshot, docs/42) y, si la

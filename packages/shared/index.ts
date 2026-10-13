@@ -33,6 +33,7 @@ export * from './src/components/StockBajoCard'
 export * from './src/components/DefectuososCard'
 export * from './src/components/ScanButton'
 export * from './src/components/ProductoBuscador'
+export * from './src/components/ProductoLinea'
 export * from './src/components/CodigoBarrasBox'
 // Primitivos de UI de escritorio (Local y Gestión) — virikyna-inventario usa BottomSheet y los suyos.
 export * from './src/components/Modal'

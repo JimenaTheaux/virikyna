@@ -4,9 +4,8 @@ import {
   coincideBusquedaProducto,
   EstadoBadge,
   formatCantidad,
-  formatCurrency,
   friendlyError,
-  nombreConMarca,
+  ProductoLinea,
   SELECT_PRODUCTOS_INVENTARIO,
   stockTotal,
 } from '@virikyna/shared'
@@ -169,31 +168,15 @@ export function InventarioPage() {
             onClick={() => setModal({ tipo: 'editar', producto })}
             className="w-full rounded-lg border border-line bg-surface p-4 text-left shadow-sm active:bg-bg"
           >
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="font-sans text-label-bold text-ink [overflow-wrap:anywhere]">{nombreConMarca(producto)}</p>
-                {producto.descripcion && (
-                  <p className="font-sans text-label-md text-ink-soft [overflow-wrap:anywhere]">{producto.descripcion}</p>
-                )}
-              </div>
-              <EstadoBadge variant={producto.estado === 'activo' ? 'green' : 'neutral'}>
-                {producto.estado === 'activo' ? 'Activo' : 'Inactivo'}
-              </EstadoBadge>
-            </div>
-            <div className="mt-3 flex items-end justify-between">
-              <p className="font-sans text-body-md tabular-nums text-ink">
-                <span className="text-ink-soft">Stock </span>
-                {formatCantidad(stockTotal(producto))}
-              </p>
-              <div className="text-right">
-                <p className="font-display text-headline-md tabular-nums text-accent-darker">
-                  {formatCurrency(producto.precio_venta)}
-                </p>
-                {producto.precio_manual !== null && (
-                  <p className="font-sans text-label-md text-ink-soft">Precio manual</p>
-                )}
-              </div>
-            </div>
+            <ProductoLinea producto={producto} precio={producto.precio_venta} tamano="card">
+              <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="tabular-nums">Stock {formatCantidad(stockTotal(producto))}</span>
+                <EstadoBadge variant={producto.estado === 'activo' ? 'green' : 'neutral'}>
+                  {producto.estado === 'activo' ? 'Activo' : 'Inactivo'}
+                </EstadoBadge>
+                {producto.precio_manual !== null && <span>Precio manual</span>}
+              </span>
+            </ProductoLinea>
           </button>
         ))}
       </div>

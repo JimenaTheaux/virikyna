@@ -10,6 +10,8 @@ import {
   friendlyError,
   nombreConMarca,
   nombreItemVendido,
+  ProductoLinea,
+  type ProductoTexto,
   precioEfectivoUnitario,
   redondear2,
   totalLineas,
@@ -35,8 +37,8 @@ type Props = {
 
 type ItemVendido = {
   productoId: string
-  nombre: string // nombre · marca, de lo guardado al vender (docs/42) o del producto actual
-  codigo: string
+  nombre: string // nombre · marca, de lo guardado al vender (docs/42) o del producto actual (mensajes)
+  producto: ProductoTexto // para ProductoLinea: nombre y marca como en `nombre`, código y descripción
   vendida: number
   yaDevuelta: number
   precioUnitario: number // lo que el cliente realmente pagó por unidad
@@ -44,8 +46,8 @@ type ItemVendido = {
 
 type ItemNuevo = {
   productoId: string
-  nombre: string // nombre · marca
-  codigo: string
+  nombre: string // nombre · marca (mensajes)
+  producto: ProductoTexto
   precioUnitario: number // precio de lista actual
   cantidad: string
 }
@@ -56,7 +58,13 @@ type VentaItemRow = {
   importe: number
   producto_nombre: string | null
   producto_marca: string | null
-  producto: { nombre: string; marca: string | null; codigo_barras: string | null; codigo_interno: string | null } | null
+  producto: {
+    nombre: string
+    marca: string | null
+    descripcion: string | null
+    codigo_barras: string | null
+    codigo_interno: string | null
+  } | null
 }
 
 type DevueltoRow = { producto_id: string; cantidad: number }
@@ -108,7 +116,7 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
         supabase
           .from('venta_items')
           .select(
-            'producto_id, cantidad, importe, producto_nombre, producto_marca, producto:productos(nombre, marca, codigo_barras, codigo_interno)',
+            'producto_id, cantidad, importe, producto_nombre, producto_marca, producto:productos(nombre, marca, descripcion, codigo_barras, codigo_interno)',
           )
           .eq('venta_id', venta.id),
         supabase
@@ -139,7 +147,12 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
         [...porProducto.entries()].map(([productoId, lineas]) => ({
           productoId,
           nombre: nombreItemVendido(lineas[0], lineas[0].producto),
-          codigo: lineas[0].producto?.codigo_barras ?? lineas[0].producto?.codigo_interno ?? '',
+          producto: {
+            ...lineas[0].producto,
+            // Nombre y marca: los guardados al vender (docs/42); en ventas anteriores, los actuales.
+            nombre: lineas[0].producto_nombre ?? lineas[0].producto?.nombre ?? 'Producto',
+            marca: lineas[0].producto_nombre ? lineas[0].producto_marca : lineas[0].producto?.marca,
+          },
           vendida: lineas.reduce((acc, l) => acc + l.cantidad, 0),
           yaDevuelta: yaDevuelta.get(productoId) ?? 0,
           precioUnitario: precioEfectivoUnitario(
@@ -182,7 +195,7 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
         {
           productoId: p.id,
           nombre: nombreConMarca(p),
-          codigo: p.codigo_barras ?? p.codigo_interno ?? '',
+          producto: p,
           precioUnitario: p.precio_venta,
           cantidad: '1',
         },
@@ -311,18 +324,17 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
             <table className="w-full text-left font-sans text-body-md leading-5">
               <thead>
                 <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-                  <th className="px-3 py-2">Producto</th>
+                  <th className="px-3 py-2">Producto · precio pagado</th>
                   <th className="px-3 py-2 text-right">Vendida</th>
                   <th className="px-3 py-2 text-right">Ya devuelta</th>
                   <th className="px-3 py-2 text-right">Disponible</th>
-                  <th className="px-3 py-2 text-right">Precio pagado</th>
                   <th className="w-[110px] px-3 py-2 text-right">A devolver</th>
                 </tr>
               </thead>
               <tbody>
                 {cargando && (
                   <tr>
-                    <td className="px-3 py-3 text-ink-soft" colSpan={6}>
+                    <td className="px-3 py-3 text-ink-soft" colSpan={5}>
                       Cargando...
                     </td>
                   </tr>
@@ -331,14 +343,12 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
                   const disp = disponible(item)
                   return (
                     <tr key={item.productoId} className="border-b border-line last:border-0">
-                      <td className="px-3 py-1.5 text-ink">
-                        {item.nombre}
-                        {item.codigo && <span className="ml-2 text-label-md text-ink-soft">{item.codigo}</span>}
+                      <td className="px-3 py-1.5 align-top">
+                        <ProductoLinea producto={item.producto} precio={item.precioUnitario} />
                       </td>
                       <td className="px-3 py-1.5 text-right text-ink-soft">{item.vendida}</td>
                       <td className="px-3 py-1.5 text-right text-ink-soft">{item.yaDevuelta}</td>
                       <td className="px-3 py-1.5 text-right text-ink">{disp}</td>
-                      <td className="px-3 py-1.5 text-right text-ink-soft">{formatCurrency(item.precioUnitario)}</td>
                       <td className="px-3 py-1.5 text-right">
                         <input
                           type="number"
@@ -387,7 +397,7 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
         <section>
           <p className="font-sans text-label-bold text-ink-soft">Cambio — productos nuevos (opcional)</p>
           <div className="mt-2">
-            {/* Mismo buscador que Ventas: misma consulta y mismo renglón (nombre · marca, descripción · código). */}
+            {/* Mismo buscador que Ventas: misma consulta y mismo renglón (ProductoLinea). */}
             <ProductoBusqueda variante="compacto" onElegir={agregarNuevo} />
           </div>
 
@@ -397,8 +407,9 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
                 <tbody>
                   {nuevos.map((n) => (
                     <tr key={n.productoId} className="border-b border-line last:border-0">
-                      <td className="px-3 py-1.5 text-ink">{n.nombre}</td>
-                      <td className="px-3 py-1.5 text-right text-ink-soft">{formatCurrency(n.precioUnitario)}</td>
+                      <td className="px-3 py-1.5 align-top">
+                        <ProductoLinea producto={n.producto} precio={n.precioUnitario} />
+                      </td>
                       <td className="w-[110px] px-3 py-1.5">
                         <input
                           type="number"

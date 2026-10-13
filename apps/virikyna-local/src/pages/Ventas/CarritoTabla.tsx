@@ -1,4 +1,4 @@
-import { formatCurrency, lineaSecundaria, nombreConMarca } from '@virikyna/shared'
+import { formatCurrency, ProductoLinea } from '@virikyna/shared'
 import type { CartItem } from './types'
 
 type Props = {
@@ -9,8 +9,9 @@ type Props = {
   onBotonUsado?: () => void
 }
 
-// Producto en dos renglones (nombre · marca; abajo, chico, descripción · código) | P. unit. | Cant. |
-// Importe. Es la lista que el cajero lee mientras cobra: el renglón principal sigue en body-lg (docs/08 §5).
+// Producto (ProductoLinea: nombre y precio unitario arriba; abajo, chico, marca, código y descripción)
+// | Cant. | Importe. Es la lista que el cajero lee mientras cobra: el renglón principal sigue en
+// body-lg (docs/08 §5).
 export function CarritoTabla({ items, onCantidadChange, onQuitar, onBotonUsado }: Props) {
   const unidades = items.reduce((acc, it) => acc + it.cantidad, 0)
   const subtotal = items.reduce((acc, it) => acc + it.cantidad * it.precioUnitario, 0)
@@ -19,7 +20,6 @@ export function CarritoTabla({ items, onCantidadChange, onQuitar, onBotonUsado }
     <div className="mt-stack-md flex flex-1 flex-col overflow-hidden rounded-lg border border-line">
       <div className="flex items-center gap-3 border-b border-line bg-bg px-4 py-2 font-sans text-label-bold text-ink-soft">
         <span className="min-w-0 flex-1">Producto</span>
-        <span className="w-28 text-right">P. unit.</span>
         <span className="w-28 text-center">Cant.</span>
         <span className="w-32 text-right">Importe</span>
         <span className="w-8" />
@@ -31,21 +31,18 @@ export function CarritoTabla({ items, onCantidadChange, onQuitar, onBotonUsado }
           </p>
         )}
         {items.map((item) => {
-          const secundaria = lineaSecundaria({ descripcion: item.descripcion, codigo_barras: item.codigo })
           return (
             <div
               key={item.productoId}
               className="flex min-h-[44px] items-center gap-3 border-b border-line px-4 py-1.5 last:border-0"
             >
-              <span className="min-w-0 flex-1">
-                <span className="block font-sans text-body-lg text-ink [overflow-wrap:anywhere]">{nombreConMarca(item)}</span>
-                {secundaria && (
-                  <span className="block font-sans text-label-md text-ink-soft [overflow-wrap:anywhere]">{secundaria}</span>
-                )}
-              </span>
-              <span className="w-28 text-right font-sans text-body-md tabular-nums text-ink-soft">
-                {formatCurrency(item.precioUnitario)}
-              </span>
+              <div className="min-w-0 flex-1">
+                <ProductoLinea
+                  producto={{ nombre: item.nombre, marca: item.marca, descripcion: item.descripcion, codigo_barras: item.codigo }}
+                  precio={item.precioUnitario}
+                  tamano="lg"
+                />
+              </div>
               <span className="flex w-28 items-center justify-center gap-1">
                 <button
                   type="button"

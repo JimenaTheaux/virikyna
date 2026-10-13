@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Producto } from '../../types/database'
-import { formatCurrencyOpcional } from '../../lib/format'
 import type { ItemFacturaCompraUI } from '../../lib/facturasCompra'
 import { armarFiltroBusquedaProducto, codigoBarrasCoincide, resolverCodigoBarras } from '../../lib/productoBusqueda'
 import { useDebouncedValue } from '../../lib/useDebouncedValue'
 import { DropdownFlotante } from './DropdownFlotante'
+import { ProductoLinea } from './ProductoLinea'
 
 // Lógica de búsqueda de producto de UN ítem de factura de compra — una sola copia para las dos
 // presentaciones: la fila de planilla de escritorio (ItemFacturaRow, Local y Gestión) y la tarjeta
@@ -26,8 +26,10 @@ export type ProductoBusquedaItem = Pick<
   | 'id'
   | 'nombre'
   | 'marca'
+  | 'descripcion'
   | 'costo'
   | 'codigo_barras'
+  | 'codigo_interno'
   | 'margen_1'
   | 'margen_2'
   | 'iva_porcentaje'
@@ -37,7 +39,7 @@ export type ProductoBusquedaItem = Pick<
 >
 
 const SELECT_PRODUCTO_ITEM =
-  'id, nombre, marca, costo, codigo_barras, margen_1, margen_2, iva_porcentaje, proveedor_id, precio_venta, precio_manual'
+  'id, nombre, marca, descripcion, costo, codigo_barras, codigo_interno, margen_1, margen_2, iva_porcentaje, proveedor_id, precio_venta, precio_manual'
 
 export type AvisoCodigo =
   | { tipo: 'no_encontrado'; codigo: string }
@@ -290,7 +292,7 @@ export function SugerenciasProductoFactura({
   const touch = size === 'touch'
   const textoCrear = busqueda.query.trim()
   return (
-    <DropdownFlotante anchorRef={anchorRef} ancho={touch ? 'ancla' : 'fijo'}>
+    <DropdownFlotante anchorRef={anchorRef} ancho={touch ? 'ancla' : 'amplio'}>
       {busqueda.resultados.map((p) => (
         <button
           key={p.id}
@@ -298,14 +300,12 @@ export function SugerenciasProductoFactura({
           onClick={() => busqueda.seleccionarProducto(p)}
           className={
             touch
-              ? 'flex min-h-11 w-full flex-col items-start justify-center border-b border-line px-4 py-2 text-left font-sans active:bg-bg'
-              : 'flex w-full flex-col items-start px-3 py-1.5 text-left font-sans hover:bg-bg'
+              ? 'block min-h-11 w-full border-b border-line px-4 py-2 text-left active:bg-bg'
+              : 'block w-full px-3 py-1.5 text-left hover:bg-bg'
           }
         >
-          <span className="text-body-md text-ink">{p.nombre}</span>
-          <span className="font-sans text-label-md text-ink-soft">
-            {p.marca ? `${p.marca} · ` : ''}Costo actual: {formatCurrencyOpcional(p.costo)}
-          </span>
+          {/* Costo actual (no el precio de venta): es lo que importa al cargar una compra. */}
+          <ProductoLinea producto={p} precio={p.costo === null ? null : Number(p.costo)} etiquetaPrecio="Costo" />
         </button>
       ))}
       <button

@@ -1,13 +1,7 @@
 import { useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent, type Ref, type RefObject } from 'react'
 import type { Producto } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
-import {
-  armarFiltroBusquedaProducto,
-  formatCurrency,
-  lineaSecundaria,
-  nombreConMarca,
-  useDebouncedValue,
-} from '@virikyna/shared'
+import { armarFiltroBusquedaProducto, ProductoLinea, useDebouncedValue } from '@virikyna/shared'
 
 export type ProductoVenta = Pick<
   Producto,
@@ -213,20 +207,12 @@ export function ProductoBusqueda({ inputRef, controlRef, onElegir, variante = 'v
               type="button"
               onClick={() => elegir(p)}
               className={[
-                'flex w-full items-start justify-between gap-3 px-4 text-left font-sans',
+                'block w-full px-4 text-left',
                 ventas ? 'py-3' : 'py-2.5',
                 i === highlighted ? 'bg-accent-light' : 'hover:bg-bg',
               ].join(' ')}
             >
-              <span className="min-w-0">
-                <span className={`block text-ink [overflow-wrap:anywhere] ${ventas ? 'text-body-lg' : 'text-body-md'}`}>
-                  {nombreConMarca(p)}
-                </span>
-                <span className="block text-label-md text-ink-soft [overflow-wrap:anywhere]">{lineaSecundaria(p) || '—'}</span>
-              </span>
-              <span className="whitespace-nowrap font-sans text-label-bold tabular-nums text-accent-darker">
-                {formatCurrency(p.precio_venta)}
-              </span>
+              <ProductoLinea producto={p} precio={p.precio_venta} tamano={ventas ? 'lg' : 'md'} />
             </button>
           ))}
           {!buscando && resultados.length > 0 && (

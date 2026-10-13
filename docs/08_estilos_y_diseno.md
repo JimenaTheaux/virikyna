@@ -142,6 +142,23 @@ una devolución) va en un modal "Ver detalle", no dentro de la celda.
 En Inventario (móvil) el botón "⋮" y cada ítem del menú usan el tamaño `touch` (mínimo 44×44px)
 en vez de los ~26px de escritorio.
 
+## 5.3 Producto en listas (`ProductoLinea`)
+
+Un solo formato para mostrar un producto en una lista, componente `ProductoLinea` (`packages/shared`):
+buscador y carrito de Ventas, Devolución / Cambio, sugerencias de la factura de compra y tarjetas de
+Inventario (celular). No aplica a la tabla de Inventario de escritorio (§5.2) ni al comprobante.
+
+- **Renglón 1:** NOMBRE a la izquierda (salto de línea si no entra, nunca "…") y precio a la derecha,
+  `tabular-nums`, arriba aunque el nombre ocupe varios renglones. En la factura de compra va el costo,
+  con la etiqueta "Costo".
+- **Renglón 2:** MARCA, código y Descripción, en `label-md` `ink-soft`, separados solo por espacio
+  (`gap-x-4`, sin puntos ni guiones). Lo vacío se omite; si no entra, salta de línea. `ink-soft` da
+  contraste AA en todos los fondos de lista (5:1 o más sobre `surface`, `bg`, `accent-light` y
+  `table-row-alt`): no aclararlo con opacidad.
+- **Renglón 3 (opcional):** chico, ej. stock + badge de estado en las tarjetas.
+- **Lector de pantalla:** el bloque se anuncia "NOMBRE, MARCA, $ precio" (`role="group"` + `aria-label`);
+  dentro de un botón, es también el nombre del botón.
+
 ## 6. Accesibilidad y contexto de uso (resumen — detalle en skill `pos-ux-ui-design`)
 
 - Contraste alto siempre; evitar grises medios en texto que importa.

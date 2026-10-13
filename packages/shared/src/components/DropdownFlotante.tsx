@@ -5,10 +5,13 @@ type Props = {
   anchorRef: RefObject<HTMLElement>
   children: ReactNode
   // 'fijo' (default): panel de 256px, para celdas angostas de una planilla de escritorio.
+  // 'amplio': 384px, para sugerencias de producto con precio a la derecha (ProductoLinea).
   // 'ancla': mismo ancho y posición horizontal que el campo — para formularios de celular, donde
   // el campo ocupa todo el ancho de la pantalla.
-  ancho?: 'fijo' | 'ancla'
+  ancho?: 'fijo' | 'amplio' | 'ancla'
 }
+
+const ANCHO_PX = { fijo: 256, amplio: 384 } as const
 
 type Posicion = { left: number; width?: number; top?: number; bottom?: number; maxHeight: number }
 
@@ -36,7 +39,7 @@ export function DropdownFlotante({ anchorRef, children, ancho = 'fijo' }: Props)
     const horizontal: Pick<Posicion, 'left' | 'width'> =
       ancho === 'ancla'
         ? { left: r.left, width: r.width }
-        : { left: Math.max(8, Math.min(r.left, window.innerWidth - 264)) }
+        : { left: Math.max(8, Math.min(r.left, window.innerWidth - ANCHO_PX[ancho] - 8)), width: ANCHO_PX[ancho] }
     const nueva: Posicion = abajo
       ? { ...horizontal, top: r.bottom + 4, maxHeight: Math.max(espacioAbajo, 120) }
       : { ...horizontal, bottom: window.innerHeight - r.top + 4, maxHeight: Math.max(espacioArriba, 120) }
@@ -77,7 +80,7 @@ export function DropdownFlotante({ anchorRef, children, ancho = 'fijo' }: Props)
     // blur cerraría el dropdown antes de que el click llegue a dispararse).
     <div
       ref={panelRef}
-      className={`fixed z-[60] overflow-y-auto rounded-lg border border-line bg-surface shadow-sm ${ancho === 'fijo' ? 'w-64' : ''}`}
+      className="fixed z-[60] max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg border border-line bg-surface shadow-sm"
       style={pos}
       onMouseDown={(e) => e.preventDefault()}
     >
