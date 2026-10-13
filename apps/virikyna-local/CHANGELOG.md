@@ -1,5 +1,25 @@
 # Novedades de Virikyna Local
 
+## 0.5.0 — octubre 2026
+
+### Productos
+- **Formato fijo del texto:** el nombre y la marca de los productos se guardan siempre en MAYÚSCULAS, y la descripción con solo la primera letra en mayúscula ("Auto de spiderman"). Se puede tipear como sea: el sistema lo acomoda solo. Los códigos se guardan tal cual.
+- **Tabla de Inventario más simple:** Nombre, Marca, Descripción, Precio de venta, Stock y Estado. Proveedor, costo, márgenes y códigos se ven con un clic en la fila.
+
+### Ventas
+- **Nombre y marca en todos lados:** la búsqueda, el carrito y el comprobante muestran "NOMBRE · MARCA", y abajo la descripción y el código.
+- **El lector y los atajos ya no chocan:** mientras el cursor está en el buscador, las letras son texto ("toalla", "crema", "dino" se escriben enteros). Para usar los atajos E, T, Q, Z, C, D y R, apretá Esc con el buscador vacío: aparece "Atajos activos" debajo de la forma de pago. Cualquier otra letra vuelve al buscador.
+- **El lector agrega al primer Enter**, también con códigos con letras (INT-…, Code 128). Si lo tipeado no es un código exacto, se muestra la lista y no se agrega nada solo: se elige con las flechas y Enter, o con un clic.
+- **Esc ya no vacía el ticket.** Para vaciarlo está el botón "Vaciar ticket", que pide confirmación.
+- Después de tocar un botón (forma de pago, +, −, ✕, cliente, tickets) o de cerrar una ventana, el cursor vuelve solo al buscador. Enter sobre un botón ya no lo dispara sin querer.
+- **Nunca se cobra dos veces:** si se corta internet o se cierra la app justo al cobrar, al volver el sistema se da cuenta de que esa venta ya se registró, cierra el ticket y avisa.
+- Mientras se está guardando un cobro no se puede cerrar la ventana. F5 y Ctrl+R ya no recargan la app.
+
+### Comprobantes y devoluciones
+- El comprobante (en pantalla, PDF e imagen) muestra el nombre y la marca completos, sin cortar. Si después se cambia el nombre de un producto, los comprobantes y devoluciones viejos siguen mostrando el de ese momento.
+- Devolución / Cambio: el buscador del cambio funciona igual que el de Ventas, Esc cierra la ventana (pregunta antes si hay datos cargados).
+- Stock bajo, defectuosos y actualizar precios también muestran nombre y marca.
+
 ## 0.4.2 — octubre 2026
 
 ### Proveedores
