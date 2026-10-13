@@ -9,6 +9,7 @@ import {
   formatCurrency,
   MODOS_ACTUALIZAR_PRECIOS,
   MostrarMas,
+  nombreConMarca,
   resumenVistaPreviaPrecios,
   useActualizarPrecios,
 } from '@virikyna/shared'
@@ -182,7 +183,7 @@ export function ActualizarPreciosSheet({ productos, proveedores, onClose, onSave
                     className="flex min-h-12 flex-1 cursor-pointer flex-col justify-center py-2 active:bg-bg"
                   >
                     <span id={`${id}-nom-${p.id}`} className="font-sans text-body-md text-ink [overflow-wrap:anywhere]">
-                      {p.nombre}
+                      {nombreConMarca(p)}
                     </span>
                     <span id={`${id}-prv-${p.id}`} className="font-sans text-label-md text-ink-soft">
                       {p.proveedor?.razon_social ?? 'Sin proveedor'}

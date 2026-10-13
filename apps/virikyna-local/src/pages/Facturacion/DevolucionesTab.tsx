@@ -43,7 +43,7 @@ export function DevolucionesTab() {
     setError(null)
     const { data, error: dbError } = await supabase
       .from('devoluciones')
-      .select('*, venta:ventas(numero), items:devolucion_items(*, producto:productos(nombre))')
+      .select('*, venta:ventas(numero), items:devolucion_items(*, producto:productos(nombre, marca))')
       .gte('fecha', desde)
       .lte('fecha', hasta)
       .order('created_at', { ascending: false })

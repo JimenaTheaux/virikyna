@@ -10,6 +10,8 @@ import {
   generarCodigoInterno,
   historialDeMargen,
   IVA_DEFAULT,
+  MAYUSCULAS,
+  nombreConMarca,
   NotaRedondeoPrecio,
 } from '@virikyna/shared'
 import { Modal } from '../../components/Modal'
@@ -304,7 +306,7 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, codigo
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
                 placeholder="Ej: Agua mineral 500ml"
-                className={inputCompacto}
+                className={`${inputCompacto} ${MAYUSCULAS}`}
               />
             </Field>
             <Field compact label="Marca">
@@ -312,7 +314,7 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, codigo
                 value={marca}
                 onChange={(e) => setMarca(e.target.value)}
                 placeholder="Ej: Coca Cola"
-                className={inputCompacto}
+                className={`${inputCompacto} ${MAYUSCULAS}`}
               />
             </Field>
           </div>
@@ -499,7 +501,7 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, codigo
       {producto && ajusteUbicacion && (
         <AjustarStockModal
           productoId={producto.id}
-          productoNombre={producto.nombre}
+          productoNombre={nombreConMarca(producto)}
           ubicacion={ajusteUbicacion}
           onClose={() => setAjusteUbicacion(null)}
           onSaved={async () => {

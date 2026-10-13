@@ -14,7 +14,7 @@ import { normalizarCodigoBarras } from '../../../lib/productoBusqueda'
 import { formatCurrency } from '../../../lib/format'
 import { MostrarMas } from '../MostrarMas'
 import { ScanButton } from '../ScanButton'
-import { BotonesDialogo, Dialogo } from './comunes'
+import { BotonesDialogo, claseCampoTexto, Dialogo } from './comunes'
 
 // clientId (docs/34c): uno por versión de la edición. Cambiar un campo genera otro; guardar de
 // nuevo sin cambios (reintento tras un error de red) reusa el mismo y la base no lo aplica dos veces.
@@ -314,7 +314,7 @@ function FilaProducto({
         onChange={(e) => setEdicion({ ...edicion, [campo]: e.target.value, clientId: crypto.randomUUID() })}
         onKeyDown={onKeyDown}
         aria-invalid={!!errores[campo as keyof ErroresFila]}
-        className={inputEscritorio}
+        className={claseCampoTexto(inputEscritorio, campo)}
         {...extra}
       />
     )
@@ -420,7 +420,7 @@ function EditorProductoSheet({
         value={e[k]}
         onChange={(ev) => setE({ ...e, [k]: ev.target.value, clientId: crypto.randomUUID() })}
         aria-invalid={!!errores[k as keyof ErroresFila]}
-        className={inputCelular}
+        className={claseCampoTexto(inputCelular, k)}
         {...extra}
       />
       {errores[k as keyof ErroresFila] && <span className="font-sans text-label-md text-error">{errores[k as keyof ErroresFila]}</span>}

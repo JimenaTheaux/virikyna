@@ -1,6 +1,7 @@
 import type { FormaPagoVenta } from '@virikyna/shared'
 
-// Atajos exactos de docs/04_modulos_y_funciones.md (módulo 3).
+// Atajos de docs/04_modulos_y_funciones.md (módulo 3) — los mismos que ATAJOS_FORMA_PAGO de
+// VentasPage. Funcionan solo con el foco fuera de los campos de texto.
 const OPCIONES: { value: FormaPagoVenta; label: string; atajo?: string }[] = [
   { value: 'efectivo', label: 'Efectivo', atajo: 'E' },
   { value: 'transferencia', label: 'Transferencia', atajo: 'T' },
@@ -15,9 +16,11 @@ type Props = {
   disponibleCuentaCorriente: boolean
   onChange: (value: FormaPagoVenta) => void
   onCombinado: () => void
+  // false en Devolución / Cambio: ahí no hay atajos con letras.
+  mostrarAtajos?: boolean
 }
 
-export function FormaPagoSelector({ value, disponibleCuentaCorriente, onChange, onCombinado }: Props) {
+export function FormaPagoSelector({ value, disponibleCuentaCorriente, onChange, onCombinado, mostrarAtajos = true }: Props) {
   return (
     <div>
       <p className="font-sans text-label-bold text-ink-soft">Forma de pago</p>
@@ -39,7 +42,7 @@ export function FormaPagoSelector({ value, disponibleCuentaCorriente, onChange, 
               ].join(' ')}
             >
               <span>{opt.label}</span>
-              {opt.atajo && <span className={activo ? 'text-white/80' : 'text-ink-soft'}>({opt.atajo})</span>}
+              {mostrarAtajos && opt.atajo && <span className={activo ? 'text-white/80' : 'text-ink-soft'}>({opt.atajo})</span>}
             </button>
           )
         })}

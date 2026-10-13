@@ -66,7 +66,7 @@ export function PagoCombinadoModal({ total, valorActual, onClose, onAplicar }: P
   }
 
   return (
-    <Modal title="Pago combinado" onClose={onClose} widthClassName="max-w-[400px]">
+    <Modal title="Pago combinado" onClose={onClose} widthClassName="max-w-[400px]" dialogo={{ onEscape: onClose }}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-stack-md">
         <p className="text-center font-sans text-body-md text-ink-soft">
           Total a cubrir: <span className="font-sans text-label-bold text-ink">{formatCurrency(total)}</span>

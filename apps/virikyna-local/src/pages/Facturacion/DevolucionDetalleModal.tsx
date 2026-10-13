@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import type { Devolucion, DevolucionItem, DevolucionPago } from '@virikyna/shared'
-import { MOTIVO_DEVOLUCION_LABEL, EstadoBadge, formatCurrency, formatFechaHora } from '@virikyna/shared'
+import { MOTIVO_DEVOLUCION_LABEL, EstadoBadge, formatCurrency, formatFechaHora, nombreItemVendido } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { FORMA_PAGO_LABEL } from '../../lib/comprobante'
 import { Modal } from '../../components/Modal'
 
-export type ItemDevolucionConProducto = DevolucionItem & { producto: { nombre: string } | null }
+// producto: respaldo para devoluciones anteriores a docs/42, sin producto_nombre/producto_marca guardados.
+export type ItemDevolucionConProducto = DevolucionItem & { producto: { nombre: string; marca: string | null } | null }
 
 export type DevolucionConDetalle = Devolucion & {
   venta: { numero: number } | null
@@ -122,7 +123,7 @@ function ListaItems({ titulo, items }: { titulo: string; items: ItemDevolucionCo
             <li key={it.id} className="flex items-start justify-between gap-3 py-2">
               <div className="min-w-0">
                 <p className="[overflow-wrap:anywhere]">
-                  {it.cantidad} × {it.producto?.nombre ?? 'Producto'}
+                  {it.cantidad} × {nombreItemVendido(it, it.producto)}
                 </p>
                 <p className="text-label-md text-ink-soft">
                   {formatCurrency(it.precio_unitario)} c/u

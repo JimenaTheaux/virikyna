@@ -3,6 +3,8 @@ import type { FormaPagoVenta } from '@virikyna/shared'
 export type CartItem = {
   productoId: string
   nombre: string
+  marca: string // '' si no tiene (y en tickets guardados antes de que existiera, ver ticketsStorage)
+  descripcion: string // ídem
   codigo: string
   precioUnitario: number
   cantidad: number
@@ -34,4 +36,9 @@ export type Ticket = {
   descuentoPorcentaje: number
   recargoPorcentaje: number
   nota: string
+  // Idempotencia del cobro (docs/43): id del intento en curso (`<id>:<intento>`), guardado ANTES de
+  // llamar a confirmar_venta. Si la app se cierra o pierde la respuesta, al volver se busca la venta
+  // con ese client_id: si existe, el ticket ya se cobró. Null = ningún intento pendiente.
+  cobroClientId: string | null
+  intentosCobro: number
 }

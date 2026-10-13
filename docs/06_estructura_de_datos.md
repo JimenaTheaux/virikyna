@@ -176,7 +176,7 @@ CREATE INDEX idx_movimientos_cuenta_cuenta ON movimientos_cuenta(cuenta_id);
 
 CREATE TABLE productos (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  nombre TEXT NOT NULL,
+  nombre TEXT NOT NULL,  -- ⚠ docs/42 (sección 27): nombre y marca en MAYÚSCULAS, descripcion "Así", por trigger
   descripcion TEXT,
   codigo_barras TEXT UNIQUE,
   codigo_interno TEXT UNIQUE,  -- generado por el sistema si no hay codigo_barras
@@ -237,7 +237,8 @@ CREATE TABLE ventas (
   nota TEXT,
   terminal_id TEXT NOT NULL DEFAULT 'POS001',  -- preparado para multi-caja futura, sin uso real en Fase 1
   usuario_id UUID NOT NULL REFERENCES perfiles(id),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  client_id TEXT  -- docs/43: id del intento de cobro de Local (<ticket>:<intento>), único si no es null — ver sección 28
 );
 -- Corregido en QA: una venta a cuenta corriente siempre necesita un cliente asignado —
 -- protegido a nivel schema, no solo en el RPC, para que ni un INSERT directo lo salte.
@@ -253,6 +254,7 @@ CREATE TABLE venta_items (
   precio_unitario NUMERIC(12,2) NOT NULL,  -- snapshot del precio al momento de vender
   descuento_porcentaje NUMERIC(5,2) NOT NULL DEFAULT 0,
   importe NUMERIC(12,2) NOT NULL
+  -- ⚠ docs/42 (sección 27): + producto_nombre, producto_marca (snapshot que copia confirmar_venta)
 );
 
 -- Detalle de pagos combinados (docs/22) — 1 fila = 1 medio de pago de la venta. Se puebla para
@@ -2066,6 +2068,8 @@ $$;
 GRANT EXECUTE ON FUNCTION productos_stock_bajo(INT) TO authenticated;
 ```
 
+⚠ **docs/42 (sección 27):** devuelve también `marca` (después de `nombre`). Cambió el `RETURNS TABLE`, así que se recreó con `DROP` + `CREATE`.
+
 - **Mismo criterio que antes**: stock total = suma de todas las ubicaciones (0 si el producto no tiene filas en `stock_ubicaciones`), solo `estado = 'activo'`, `stock_total <= stock_minimo`, más crítico primero (`stock_total - stock_minimo` ascendente). Se agregó desempate por `nombre` para que el orden sea estable.
 - **`total_count`** sale de `COUNT(*) OVER ()`, que se calcula antes del `LIMIT`: es la cantidad total de productos con stock bajo, la misma en todas las filas. La card la usa para el título ("N productos") y para el "+N más". Si no hay ninguno, la RPC no devuelve filas (total 0).
 - **`p_limite` NULL** = sin límite.
@@ -2442,3 +2446,57 @@ SQL, verificación y test en `docs/41_observaciones_proveedor.sql`. Aplicado el 
 - **RLS, auditoría y reversión**: sin cambios. Las policies de `proveedores` son por fila, `trg_auditoria_proveedores` guarda la fila entera en JSON y `revertir_edicion` restaura cualquier columna.
 - **Dónde se ve**: componente `ObservacionesProveedor` (`packages/shared`), recuadro ámbar (`badge-amber-*`) que no se muestra si no hay texto. Va debajo del selector de proveedor en la carga de factura de compra (modal de escritorio compartido y página de celular de Inventario) y en la cabecera de la cuenta corriente, antes de los KPIs.
 - **Compatibilidad**: las apps hablan directo con Supabase (sin PowerSync, ver docs/05). Las versiones anteriores de Local leen con `select('*')` e ignoran la columna nueva; su formulario no la manda, así que editar un proveedor desde una versión vieja no borra las observaciones.
+
+---
+
+## 27. Formato de texto de productos y snapshot de nombre/marca en ventas
+
+SQL, verificación y test en `docs/42_formato_texto_y_snapshot.sql` (después de 41; el 40 es `docs/40_restauracion.md`).
+
+**Formato de texto (triggers, no las apps).** Nombre, marca y descripción se escriben desde 6 lugares: los formularios de las 3 apps (también el alta desde una factura de compra), `carga_inicial_finalizar`, `carga_inicial_editar_producto` y `revertir_alta`/`revertir_edicion`. Un trigger los cubre a todos, incluidas las versiones viejas de las apps.
+
+| Tabla | Trigger (BEFORE INSERT OR UPDATE) | Regla |
+|---|---|---|
+| `productos` | `trg_normalizar_texto_producto` → `normalizar_texto_producto()` | `nombre` = `upper(btrim())`; `marca` = `upper(btrim())`, vacía → null; `descripcion` = `btrim`, primera letra mayúscula y el resto minúscula (`'AUTO de Spiderman'` → `'Auto de spiderman'`), vacía → null |
+| `carga_inicial_items` | `trg_normalizar_texto_carga_inicial` → la misma función | igual que `productos`: el borrador se ve como va a quedar |
+| `facturas_compra_items` | `trg_normalizar_descripcion_item_libre` → `normalizar_descripcion_item_libre()` | `descripcion` = `upper(btrim())` **solo si `producto_id` es null** (ítem libre). En un ítem vinculado la descripción es la copia de `producto.nombre`, que ya viene en mayúsculas |
+
+- `codigo_barras` y `codigo_interno` **no se tocan** (un Code 128 puede tener minúsculas; son los únicos UNIQUE de la tabla).
+- Collation ICU en-US: `upper()`/`lower()` respetan Ñ y acentos (`'muñeca árbol'` → `'MUÑECA ÁRBOL'`).
+- La búsqueda ya era case-insensitive en todos lados (`ilike` en el servidor, `toLowerCase` en el cliente, `packages/shared/lib/productoBusqueda.ts`): no cambia nada. Sigue sin ignorar acentos.
+- Las dos funciones son triggers: sin `EXECUTE` para `authenticated` (regla de la sección 25 / docs/39).
+- Al aplicarse se normalizaron los productos existentes (`UPDATE productos SET nombre = nombre`, una fila de auditoría `edicion` por producto).
+- Efecto conocido: `carga_inicial_editar_producto` compara lo tipeado con lo guardado para decidir si hace el UPDATE. Con texto en minúsculas siempre "difiere" y hace un UPDATE que no cambia nada (una fila de auditoría de más).
+
+**Snapshot en ventas y devoluciones.** `venta_items` y `devolucion_items` suman `producto_nombre` y `producto_marca` (`TEXT`, null). Antes solo guardaban `producto_id`, y los comprobantes y devoluciones viejos mostraban el nombre **actual** del producto (join a `productos`).
+- `confirmar_venta` y `crear_devolucion` los copian del producto al insertar (cuerpo igual al vigente + ese `SELECT nombre, marca`). En una devolución, tanto los ítems `devuelto` como los `nuevo` toman el nombre del producto en el momento de la devolución.
+- Las filas anteriores se completaron con el producto actual (backfill al aplicar).
+- Frontend: los comprobantes (pantalla, PDF y JPG) y las devoluciones usan `producto_nombre`/`producto_marca`, con el join a `productos(nombre, marca)` como respaldo para filas null (`nombreItemVendido`, `packages/shared/lib/productoTexto.ts`; `SELECT_ITEMS_COMPROBANTE`, `lib/comprobante.ts`).
+- Factura C no cambia: a ARCA no se mandan ítems, solo totales (`supabase/functions/arca-emitir-factura`).
+
+**`productos_stock_bajo`** devuelve `marca` (sección 17); `StockBajoCard` la muestra como "NOMBRE · MARCA".
+
+**Prueba.** La PARTE C del SQL corre todo dentro de `BEGIN … ROLLBACK`, pero llama a `confirmar_venta` y `crear_devolucion`, que consumen `ventas.numero` y `devoluciones.numero` (ver "Numeración" en la sección 25). Con ventas reales en la base, no correrla.
+
+## 28. Idempotencia del cobro: `ventas.client_id`
+
+SQL, verificación y test en `docs/43_idempotencia_venta.sql` (después de 42).
+
+**Problema.** Virikyna Local graba la venta (`confirmar_venta`) y recién después saca el ticket de la barra. Si en el medio la app se recarga, se cierra o pierde la respuesta del RPC, la venta queda grabada pero el ticket sigue ahí y se puede volver a cobrar.
+
+**Columna.** `ventas.client_id TEXT` (null), con índice único parcial `ventas_client_id_unico` (solo filas con valor) y `CHECK (char_length(client_id) <= 100)`. Las ventas anteriores quedan en null.
+
+**`confirmar_venta(…, p_client_id TEXT DEFAULT NULL)`** — cuerpo igual al vigente (docs/42) +:
+- Si ya existe una venta con ese `client_id`, devuelve su id sin mover nada (stock, pagos, ítems).
+- El INSERT en `ventas` usa `ON CONFLICT (client_id) WHERE client_id IS NOT NULL DO NOTHING`: dos llamadas simultáneas con el mismo id terminan en la misma venta.
+- Sin `p_client_id`, igual que antes.
+- Cambió la firma: va `DROP` + `CREATE` y se repusieron los grants (authenticated y service_role, sin PUBLIC ni anon).
+
+**Local (Ventas).** Cada ticket guarda `cobroClientId` e `intentosCobro` (`apps/virikyna-local/src/pages/Ventas/types.ts`).
+- Al confirmar, si no hay intento pendiente se crea `<ticket.id>:<intentosCobro + 1>` y se guarda en localStorage **antes** de llamar al RPC.
+- Si ya había uno (el anterior falló o no llegó la respuesta), primero se busca la venta con ese `client_id`: si existe, el ticket se cierra con aviso y no se vuelve a cobrar. Si no, se reintenta con el mismo id.
+- Al abrir Ventas, los tickets con intento pendiente que ya son una venta se cierran con aviso ("El Ticket N ya se había cobrado (venta X)…").
+- "Vaciar ticket" descarta el intento pendiente: lo que se cargue después es otra venta.
+- Caso límite: si el intento anterior sí se grabó y después se agregaron productos al ticket, el reintento cierra el ticket y avisa; lo agregado se carga en una venta nueva.
+
+**Prueba.** La PARTE C llama a `confirmar_venta` (3 ventas, `BEGIN … ROLLBACK`) y consume `ventas.numero`. Con ventas reales en la base, no correrla.

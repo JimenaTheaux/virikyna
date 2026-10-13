@@ -3,8 +3,14 @@ import { BottomSheet } from '../BottomSheet'
 import { Modal } from '../Modal'
 import type { CargaInicialFinalizarResultado } from '../../../types/database'
 import { formatCantidad } from '../../../lib/cargaInicial'
+import { MAYUSCULAS } from '../../../lib/productoTexto'
 
 export type Variante = 'escritorio' | 'celular'
+
+// Nombre y marca se ven en mayúsculas mientras se tipean (la base los guarda así, docs/42).
+export function claseCampoTexto(base: string, campo: string): string {
+  return campo === 'nombre' || campo === 'marca' ? `${base} ${MAYUSCULAS}` : base
+}
 
 // Diálogo según el dispositivo: Modal centrado en escritorio, BottomSheet a pantalla completa en
 // celular. Siempre con role="dialog", Esc y foco atrapado.

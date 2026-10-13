@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { nombreConMarca } from '../../lib/productoTexto'
 
 export type ProductoStockBajo = {
   id: string
-  nombre: string
+  nombre: string // nombre · marca
   stockMinimo: number
   stockTotal: number
 }
@@ -22,6 +23,7 @@ export async function fetchProductosStockBajo(
   const filas = (data ?? []) as {
     id: string
     nombre: string
+    marca: string | null // docs/42
     stock_total: number | string
     stock_minimo: number | string
     total_count: number
@@ -29,7 +31,7 @@ export async function fetchProductosStockBajo(
   return {
     productos: filas.map((fila) => ({
       id: fila.id,
-      nombre: fila.nombre,
+      nombre: nombreConMarca(fila),
       stockMinimo: Number(fila.stock_minimo),
       stockTotal: Number(fila.stock_total),
     })),

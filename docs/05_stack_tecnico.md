@@ -44,7 +44,7 @@ Una sola caja física para arrancar (Terminal #001). El campo `terminal_id` qued
 | Backend / DB central | **Supabase (Postgres + Auth)** | Centraliza datos, reportes, backup |
 | Facturación electrónica | SDK TypeScript para ARCA (WSFEv1) — ej. `afip.js` / `arca-facturacion` | Obtiene el CAE en tiempo real, tipado, mantenido |
 | Código de barras | Lector HID (USB) | Se comporta como teclado — cero drivers ni configuración |
-| Atajos de teclado | Definidos en Ventas (Enter, E, T, Q, C, D, Esc — ver `04_modulos_y_funciones.md`) | Agilidad de cajero, sin depender del mouse |
+| Atajos de teclado | Definidos en Ventas (Enter, Esc; E, T, Q, Z, C, D, R solo con el foco fuera de los campos — ver "Regla del buscador" en `04_modulos_y_funciones.md`, módulo 3) | Agilidad de cajero, sin depender del mouse ni chocar con el lector |
 
 **Sin impresora fiscal.** Facturación 100% vía ARCA electrónica, manual: el cajero decide qué comprobantes facturar desde la pestaña Facturación. No hay modo de contingencia offline para facturar — si no hay internet al momento de facturar, la emisión queda pendiente hasta que vuelva la conexión (la venta en sí no se bloquea, solo la Factura C).
 

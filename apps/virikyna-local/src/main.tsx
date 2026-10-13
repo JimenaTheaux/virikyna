@@ -7,9 +7,11 @@ import App from './App'
 import { AuthProvider } from './auth/AuthContext'
 import { Toaster } from './components/Toaster'
 import { checkForUpdates } from './lib/updater'
+import { instalarProteccionVentana } from './lib/proteccionVentana'
 import './index.css'
 
 disableNumberInputScroll()
+instalarProteccionVentana()
 void checkForUpdates()
 
 // Mismos defaults que Virikyna Gestión — hoy solo lo usa la card compartida de Stock bajo.

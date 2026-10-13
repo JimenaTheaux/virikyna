@@ -5,6 +5,7 @@ import {
   AvisoCodigoFactura,
   AvisoProductoInactivoFactura,
   formatCurrency,
+  MAYUSCULAS,
   ScanButton,
   SugerenciasProductoFactura,
   totalItemFacturaCompra,
@@ -141,7 +142,7 @@ export function ItemFacturaRow({
             onBlur={() => busqueda.setCampoActivo(null)}
             onKeyDown={busqueda.onKeyDownProducto}
             placeholder="Buscar por nombre o marca"
-            className={inputClass}
+            className={`${inputClass} ${MAYUSCULAS}`}
           />
         </Field>
         {busqueda.mostrarDropdownProducto && (
@@ -153,7 +154,7 @@ export function ItemFacturaRow({
             value={item.marca}
             onChange={(e) => onChange({ marca: e.target.value })}
             placeholder="—"
-            className={inputClass}
+            className={`${inputClass} ${MAYUSCULAS}`}
           />
         </Field>
 

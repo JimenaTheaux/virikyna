@@ -2,6 +2,7 @@ import { useRef, type ReactNode } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Proveedor, UbicacionStock } from '../../types/database'
 import { formatCurrency } from '../../lib/format'
+import { MAYUSCULAS } from '../../lib/productoTexto'
 import { totalItemFacturaCompra, type ItemFacturaCompraUI } from '../../lib/facturasCompra'
 import type { CambioPrecioFactura } from '../../lib/precios'
 import { selectClass } from './FormField'
@@ -118,7 +119,7 @@ export function ItemFacturaRow({
             onBlur={() => busqueda.setCampoActivo(null)}
             onKeyDown={busqueda.onKeyDownProducto}
             placeholder="Buscar por código, nombre o marca..."
-            className={cellInputClass}
+            className={`${cellInputClass} ${MAYUSCULAS}`}
           />
           {busqueda.mostrarDropdownProducto && (
             <SugerenciasProductoFactura busqueda={busqueda} campo="producto" anchorRef={productoRef} />
@@ -130,7 +131,7 @@ export function ItemFacturaRow({
             title={item.marca}
             onChange={(e) => onChange({ marca: e.target.value })}
             placeholder="—"
-            className={cellInputClass}
+            className={`${cellInputClass} ${MAYUSCULAS}`}
           />
         </td>
         <td className="px-2 py-1.5 align-top">

@@ -4,35 +4,19 @@ import { FileText } from 'lucide-react'
 import { friendlyError } from '../../lib/supabaseErrors'
 import { formatCurrency, fechaHoyISO, formatFechaCortaLocal, formatHora, rangoTimestampsAR } from '../../lib/format'
 import { emitirFacturaCReal } from '../../lib/arcaFacturacion'
-import type { Cliente, FacturaC, FormaPagoVenta, Producto, Venta, VentaItem, VentaPago } from '../../types/database'
+import type { Cliente, FacturaC, FormaPagoVenta, Venta, VentaPago } from '../../types/database'
+import {
+  itemsComprobanteDesdeVenta,
+  SELECT_ITEMS_COMPROBANTE,
+  type DatosComprobante,
+  type VentaItemComprobanteRow,
+} from '../../lib/comprobante'
 import { EstadoBadge } from './EstadoBadge'
 import { RowActionsMenu, type RowActionsMenuItem } from './RowActionsMenu'
 
 export type VentaConFactura = Venta & {
   factura_c: FacturaC | null
   cliente: Pick<Cliente, 'razon_social' | 'nombre_fantasia' | 'mail' | 'celular'> | null
-}
-
-export type VentaItemConProducto = Pick<VentaItem, 'cantidad' | 'precio_unitario' | 'importe'> & {
-  producto: Pick<Producto, 'nombre' | 'codigo_barras' | 'codigo_interno'> | null
-}
-
-export type DatosComprobante = {
-  tipo: 'comprobante_x' | 'factura_c'
-  numero: string
-  fecha: string
-  clienteNombre: string
-  clienteMail: string | null
-  clienteCelular: string | null
-  formaPago: FormaPagoVenta
-  pagos?: { formaPago: FormaPagoVenta; monto: number }[] // solo con más de 1 elemento = pago combinado
-  items: { nombre: string; codigo: string; cantidad: number; precioUnitario: number; importe: number }[]
-  subtotal: number
-  descuentoPorcentaje: number
-  recargoPorcentaje: number
-  precioOficial: number // calculado por el sistema, antes del redondeo manual del cajero
-  total: number // = precio cobrado (puede diferir de precioOficial por redondeo)
-  cae: string | null
 }
 
 export interface VentasDelDiaTabProps {
@@ -89,9 +73,9 @@ export function VentasDelDiaTab({
   async function armarComprobante(venta: VentaConFactura): Promise<DatosComprobante> {
     const { data: itemsData } = await supabase
       .from('venta_items')
-      .select('cantidad, precio_unitario, importe, producto:productos(nombre, codigo_barras, codigo_interno)')
+      .select(SELECT_ITEMS_COMPROBANTE)
       .eq('venta_id', venta.id)
-    const items = (itemsData ?? []) as unknown as VentaItemConProducto[]
+    const items = itemsComprobanteDesdeVenta((itemsData ?? []) as unknown as VentaItemComprobanteRow[])
 
     let pagos: { formaPago: FormaPagoVenta; monto: number }[] | undefined
     if (venta.forma_pago === 'combinado') {
@@ -120,13 +104,7 @@ export function VentasDelDiaTab({
       clienteCelular: venta.cliente?.celular ?? null,
       formaPago: venta.forma_pago,
       pagos,
-      items: items.map((it) => ({
-        nombre: it.producto?.nombre ?? 'Producto',
-        codigo: it.producto?.codigo_barras ?? it.producto?.codigo_interno ?? '',
-        cantidad: it.cantidad,
-        precioUnitario: it.precio_unitario,
-        importe: it.importe,
-      })),
+      items,
       subtotal: venta.subtotal,
       descuentoPorcentaje: venta.descuento_porcentaje,
       recargoPorcentaje: venta.recargo_porcentaje,

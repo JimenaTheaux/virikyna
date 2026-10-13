@@ -148,12 +148,12 @@ export type MovimientoCuenta = {
 
 export type Producto = {
   id: string
-  nombre: string
-  descripcion: string | null
+  nombre: string // docs/42: siempre en MAYÚSCULAS (trigger trg_normalizar_texto_producto)
+  descripcion: string | null // docs/42: solo la primera letra en mayúscula; vacía → null
   codigo_barras: string | null
   codigo_interno: string | null
   proveedor_id: string | null
-  marca: string | null
+  marca: string | null // docs/42: siempre en MAYÚSCULAS; vacía → null
   costo: number | null // null = sin costo (carga inicial, docs/34): el precio sale de precio_manual
   margen_1: number
   margen_2: number
@@ -201,6 +201,7 @@ export type Venta = {
   nota: string | null
   terminal_id: string
   usuario_id: string
+  client_id: string | null // docs/43: id del intento de cobro de Local (idempotencia); null en ventas anteriores
   created_at: string
 }
 
@@ -212,6 +213,10 @@ export type VentaItem = {
   precio_unitario: number // snapshot del precio al momento de vender
   descuento_porcentaje: number
   importe: number
+  // docs/42: snapshot del producto al vender (lo copia confirmar_venta). Null en filas anteriores a
+  // docs/42 que no se completaron: usar el nombre actual del producto como respaldo.
+  producto_nombre: string | null
+  producto_marca: string | null
 }
 
 export type VentaPago = {
@@ -259,6 +264,7 @@ export type FacturaCompraItem = {
   id: string
   factura_compra_id: string
   producto_id: string | null // null = ítem libre (ej. "juguetes varios", ajustes)
+  // Ítem vinculado: copia de producto.nombre. Ítem libre: en MAYÚSCULAS (docs/42, trigger).
   descripcion: string
   cantidad: number
   precio_unitario_sin_iva: number
@@ -493,6 +499,9 @@ export type DevolucionItem = {
   cantidad: number
   precio_unitario: number // snapshot al momento
   reingresa_stock: boolean // false = mercadería defectuosa, separada del stock
+  // docs/42: snapshot del producto al registrar la devolución/cambio (lo copia crear_devolucion).
+  producto_nombre: string | null
+  producto_marca: string | null
 }
 
 export type DevolucionPago = {

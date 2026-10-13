@@ -17,6 +17,7 @@
     "react-router-dom": "^6.27.0"
   },
   "dependencies": {
-    "barcode-detector-api-polyfill": "^1.2.2"
+    "barcode-detector-api-polyfill": "^1.2.2",
+    "jspdf": "^4.2.1"
   }
 }

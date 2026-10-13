@@ -1,6 +1,15 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import type { Proveedor } from '@virikyna/shared'
-import { formatCurrency, friendlyError, coincideBusquedaProducto, EstadoBadge } from '@virikyna/shared'
+import {
+  coincideBusquedaProducto,
+  EstadoBadge,
+  formatCantidad,
+  formatCurrency,
+  friendlyError,
+  nombreConMarca,
+  SELECT_PRODUCTOS_INVENTARIO,
+  stockTotal,
+} from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { usePerfil } from '../../auth/AuthContext'
 import { IconBuscar, IconCamara, IconMas, IconPorcentaje } from '../../components/icons'
@@ -9,9 +18,6 @@ import { ActualizarPreciosSheet } from './ActualizarPreciosSheet'
 import type { ProductoConRelaciones } from './types'
 
 const BarcodeScanner = lazy(() => import('../../components/BarcodeScanner'))
-
-const SELECT_PRODUCTOS =
-  '*, proveedor:proveedores(razon_social, margen_1_default, margen_2_default), stock_ubicaciones(ubicacion, cantidad)'
 
 type Modal =
   | { tipo: 'nuevo'; codigoBarras?: string; nombre?: string }
@@ -41,7 +47,7 @@ export function InventarioPage() {
     setError(null)
 
     const [productosRes, proveedoresRes] = await Promise.all([
-      supabase.from('productos').select(SELECT_PRODUCTOS).order('nombre'),
+      supabase.from('productos').select(SELECT_PRODUCTOS_INVENTARIO).order('nombre'),
       supabase.from('proveedores').select('*').order('razon_social'),
     ])
 
@@ -156,53 +162,40 @@ export function InventarioPage() {
           </div>
         )}
 
-        {productosFiltrados.map((producto) => {
-          const stockLocal = producto.stock_ubicaciones.find((s) => s.ubicacion === 'local')?.cantidad ?? 0
-          const stockDeposito =
-            producto.stock_ubicaciones.find((s) => s.ubicacion === 'deposito')?.cantidad ?? 0
-          const codigo = producto.codigo_barras || producto.codigo_interno
-          return (
-            <button
-              key={producto.id}
-              type="button"
-              onClick={() => setModal({ tipo: 'editar', producto })}
-              className="w-full rounded-lg border border-line bg-surface p-4 text-left shadow-sm active:bg-bg"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="font-sans text-label-bold text-ink">{producto.nombre}</p>
-                  {(producto.marca || codigo) && (
-                    <p className="break-all font-sans text-label-md text-ink">
-                      {[producto.marca, codigo].filter(Boolean).join(' · ')}
-                    </p>
-                  )}
-                  <p className="font-sans text-label-md text-ink-soft">
-                    {producto.proveedor?.razon_social ?? 'Sin proveedor'}
-                  </p>
-                </div>
-                <EstadoBadge variant={producto.estado === 'activo' ? 'green' : 'neutral'}>
-                  {producto.estado === 'activo' ? 'Activo' : 'Inactivo'}
-                </EstadoBadge>
+        {productosFiltrados.map((producto) => (
+          <button
+            key={producto.id}
+            type="button"
+            onClick={() => setModal({ tipo: 'editar', producto })}
+            className="w-full rounded-lg border border-line bg-surface p-4 text-left shadow-sm active:bg-bg"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="font-sans text-label-bold text-ink [overflow-wrap:anywhere]">{nombreConMarca(producto)}</p>
+                {producto.descripcion && (
+                  <p className="font-sans text-label-md text-ink-soft [overflow-wrap:anywhere]">{producto.descripcion}</p>
+                )}
               </div>
-              <div className="mt-3 flex items-end justify-between">
-                <div>
-                  <p className="font-sans text-label-md text-ink-soft">Stock Local / Depósito</p>
-                  <p className="font-sans text-body-md text-ink">
-                    {stockLocal} / {stockDeposito}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="font-display text-headline-md text-accent-darker">
-                    {formatCurrency(producto.precio_venta)}
-                  </p>
-                  {producto.precio_manual !== null && (
-                    <p className="font-sans text-label-md text-ink-soft">Precio manual</p>
-                  )}
-                </div>
+              <EstadoBadge variant={producto.estado === 'activo' ? 'green' : 'neutral'}>
+                {producto.estado === 'activo' ? 'Activo' : 'Inactivo'}
+              </EstadoBadge>
+            </div>
+            <div className="mt-3 flex items-end justify-between">
+              <p className="font-sans text-body-md tabular-nums text-ink">
+                <span className="text-ink-soft">Stock </span>
+                {formatCantidad(stockTotal(producto))}
+              </p>
+              <div className="text-right">
+                <p className="font-display text-headline-md tabular-nums text-accent-darker">
+                  {formatCurrency(producto.precio_venta)}
+                </p>
+                {producto.precio_manual !== null && (
+                  <p className="font-sans text-label-md text-ink-soft">Precio manual</p>
+                )}
               </div>
-            </button>
-          )
-        })}
+            </div>
+          </button>
+        ))}
       </div>
 
       <button

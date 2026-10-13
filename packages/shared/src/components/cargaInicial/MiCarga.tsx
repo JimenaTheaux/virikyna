@@ -19,7 +19,7 @@ import { normalizarCodigoBarras } from '../../../lib/productoBusqueda'
 import { formatCurrency } from '../../../lib/format'
 import { ScanButton } from '../ScanButton'
 import { RowActionsMenu, type RowActionsMenuItem } from '../RowActionsMenu'
-import { BotonesDialogo, Dialogo, ResultadoFinalizar, textoAccion } from './comunes'
+import { BotonesDialogo, claseCampoTexto, Dialogo, ResultadoFinalizar, textoAccion } from './comunes'
 
 type Campos = { codigo: string; nombre: string; marca: string; descripcion: string; precio: string; cantidad: string }
 const VACIO: Campos = { codigo: '', nombre: '', marca: '', descripcion: '', precio: '', cantidad: '' }
@@ -590,7 +590,7 @@ function Entrada({
     onKeyDown: onKeyDownCampo,
     'aria-invalid': campo in errores && !!errores[campo as keyof ErroresFila],
     'aria-describedby': errores[campo as keyof ErroresFila] ? `err-carga-${campo}` : undefined,
-    className: inputClass,
+    className: claseCampoTexto(inputClass, campo),
   })
 
   const inputCodigo = (
@@ -908,7 +908,7 @@ function FilaBorrador({
         onChange={(e) => setEdicion({ ...edicion, [campo]: e.target.value })}
         onKeyDown={onKeyDown}
         aria-invalid={!!errores[campo as keyof ErroresFila]}
-        className={inputEscritorio}
+        className={claseCampoTexto(inputEscritorio, campo)}
         {...extra}
       />
     )
@@ -1065,7 +1065,7 @@ function EditorBorradorSheet({
         onChange={(e) => setC({ ...c, [k]: e.target.value })}
         readOnly={soloCantidad && k !== 'cantidad'}
         aria-invalid={!!errores[k as keyof ErroresFila]}
-        className={inputCelular}
+        className={claseCampoTexto(inputCelular, k)}
         {...extra}
       />
       {errores[k as keyof ErroresFila] && <span className="font-sans text-label-md text-error">{errores[k as keyof ErroresFila]}</span>}

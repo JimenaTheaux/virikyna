@@ -2,13 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormaPagoVenta } from '@virikyna/shared'
 import { supabase } from '../lib/supabaseClient'
 import { mensajeErrorGuardado } from '@virikyna/shared'
-import { formatCurrency } from '@virikyna/shared'
+import { formatCurrency, nombreConMarca } from '@virikyna/shared'
 import type { DatosComprobante } from '../lib/comprobante'
 import { ComprobanteModal } from '../components/ComprobanteModal'
 import { Modal } from '../components/Modal'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Field, inputClass } from '../components/FormField'
-import { ProductoBusqueda } from './Ventas/ProductoBusqueda'
+import { showToast } from '../lib/toast'
+import { marcarCobroEnCurso } from '../lib/proteccionVentana'
+import { ProductoBusqueda, type ProductoBusquedaControl } from './Ventas/ProductoBusqueda'
 import { CarritoTabla } from './Ventas/CarritoTabla'
 import { ClienteSelector } from './Ventas/ClienteSelector'
 import { FormaPagoSelector } from './Ventas/FormaPagoSelector'
@@ -18,6 +20,24 @@ import { TicketsBar } from './Ventas/TicketsBar'
 import { MAX_TICKETS, cargarTicketsGuardados, crearTicketVacio, guardarTickets } from './Ventas/ticketsStorage'
 import type { TicketsPersistState } from './Ventas/ticketsStorage'
 import type { CartItem, ClienteSeleccionado, PagoParcial, Ticket } from './Ventas/types'
+
+// Atajos con letras de Ventas (docs/04, módulo 3). Solo con el foco fuera de los campos de texto.
+const ATAJOS_FORMA_PAGO: Record<string, FormaPagoVenta> = {
+  e: 'efectivo',
+  t: 'transferencia',
+  q: 'qr',
+  z: 'tarjeta_debito',
+  c: 'tarjeta_credito',
+}
+
+function esCampoDeTexto(el: Element | null) {
+  if (!(el instanceof HTMLElement)) return false
+  return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable
+}
+
+function avisoTicketYaCobrado(numeroTicket: number, numeroVenta: number) {
+  showToast(`El Ticket ${numeroTicket} ya se había cobrado (venta ${numeroVenta}). Se cerró para no cobrarlo dos veces.`)
+}
 
 function estadoInicial(): TicketsPersistState {
   const guardado = cargarTicketsGuardados()
@@ -57,6 +77,7 @@ export function VentasPage() {
   const [descuentoModalOpen, setDescuentoModalOpen] = useState(false)
   const [recargoModalOpen, setRecargoModalOpen] = useState(false)
   const [eliminarConfirmId, setEliminarConfirmId] = useState<string | null>(null)
+  const [vaciarConfirmOpen, setVaciarConfirmOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [comprobante, setComprobante] = useState<DatosComprobante | null>(null)
@@ -67,11 +88,68 @@ export function VentasPage() {
   const [precioCobradoStr, setPrecioCobradoStr] = useState('')
 
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const buscadorRef = useRef<ProductoBusquedaControl>(null)
   const precioCobradoInputRef = useRef<HTMLInputElement>(null)
+  const confirmarBtnRef = useRef<HTMLButtonElement>(null)
+
+  // Foco fuera de los campos de texto = atajos con letras activos (se muestra cerca de forma de pago).
+  const [focoEnCampo, setFocoEnCampo] = useState(true)
+  useEffect(() => {
+    function actualizar() {
+      setFocoEnCampo(esCampoDeTexto(document.activeElement))
+    }
+    // En focusout el activeElement todavía es el body: se mira en el tick siguiente.
+    function alSalir() {
+      setTimeout(actualizar, 0)
+    }
+    actualizar()
+    document.addEventListener('focusin', actualizar)
+    document.addEventListener('focusout', alSalir)
+    return () => {
+      document.removeEventListener('focusin', actualizar)
+      document.removeEventListener('focusout', alSalir)
+    }
+  }, [])
+
+  // Después de un clic en un botón de Ventas o al cerrar un modal, el foco vuelve al buscador para
+  // que el próximo escaneo entre ahí. En el tick siguiente: al desmontarse, un modal con
+  // useFocoAtrapado devuelve el foco a donde estaba antes de abrirse.
+  function focoBuscador() {
+    setTimeout(() => searchInputRef.current?.focus(), 0)
+  }
 
   useEffect(() => {
     guardarTickets(ticketsState)
   }, [ticketsState])
+
+  // Idempotencia del cobro (docs/43): un ticket con un intento pendiente que en la base ya es una
+  // venta se cobró (la app se cerró o perdió la respuesta antes de sacarlo de la barra). Se cierra.
+  useEffect(() => {
+    const pendientes = ticketsState.tickets.filter((t) => t.cobroClientId)
+    if (pendientes.length === 0) return
+    let cancelado = false
+    supabase
+      .from('ventas')
+      .select('numero, client_id')
+      .in(
+        'client_id',
+        pendientes.map((t) => t.cobroClientId as string),
+      )
+      .then(({ data }) => {
+        if (cancelado) return
+        for (const v of data ?? []) {
+          const t = pendientes.find((p) => p.cobroClientId === v.client_id)
+          if (!t) continue
+          quitarTicket(t.id)
+          avisoTicketYaCobrado(t.numero, v.numero)
+        }
+      })
+    return () => {
+      cancelado = true
+    }
+    // Solo al abrir la pantalla, con los tickets recuperados de localStorage.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // El input de nota es no controlado por ticket directamente para no perder el cursor al tipear
   // (actualizarTicket dispararía un round-trip); se sincroniza al cambiar de ticket activo.
@@ -115,10 +193,17 @@ export function VentasPage() {
 
   function setCliente(cliente: ClienteSeleccionado | null) {
     actualizarTicket(activeTicketId, { cliente })
+    focoBuscador()
   }
 
   function setFormaPago(formaPago: FormaPagoVenta | null) {
     actualizarTicket(activeTicketId, { formaPago, pagosCombinados: null })
+  }
+
+  // Clic en un botón de forma de pago (el atajo con letra usa setFormaPago y deja el foco donde está).
+  function elegirFormaPago(formaPago: FormaPagoVenta) {
+    setFormaPago(formaPago)
+    focoBuscador()
   }
 
   function aplicarPagoCombinado(pagos: PagoParcial[]) {
@@ -139,9 +224,17 @@ export function VentasPage() {
       descuentoPorcentaje: 0,
       recargoPorcentaje: 0,
       nota: '',
+      // Lo que se cargue después es otra venta: si hubo un intento pendiente, no se arrastra.
+      cobroClientId: null,
     })
     setError(null)
     setConfirmandoId(null)
+  }
+
+  function confirmarVaciarTicket() {
+    limpiarTicketActivo()
+    setVaciarConfirmOpen(false)
+    focoBuscador()
   }
 
   function agregarProducto(item: Omit<CartItem, 'cantidad'>) {
@@ -170,6 +263,7 @@ export function VentasPage() {
     if (bloqueado) return
     setTicketsState((prev) => (prev.tickets.some((t) => t.id === id) ? { ...prev, activeTicketId: id } : prev))
     setError(null)
+    focoBuscador()
   }
 
   function nuevoTicket() {
@@ -180,6 +274,7 @@ export function VentasPage() {
       return { tickets: [...prev.tickets, t], activeTicketId: t.id, nextNumero: prev.nextNumero + 1 }
     })
     setError(null)
+    focoBuscador()
   }
 
   // Quita un ticket de la barra — se usa tanto al eliminarlo manualmente como al cerrarlo por
@@ -205,6 +300,12 @@ export function VentasPage() {
     if (!eliminarConfirmId) return
     quitarTicket(eliminarConfirmId)
     setEliminarConfirmId(null)
+    focoBuscador()
+  }
+
+  function cancelarEliminarTicket() {
+    setEliminarConfirmId(null)
+    focoBuscador()
   }
 
   function intentarCobrar(id: string) {
@@ -215,6 +316,7 @@ export function VentasPage() {
     const mensaje = validarTicket(ticket)
     if (mensaje) {
       setError(mensaje)
+      focoBuscador()
       return
     }
     setError(null)
@@ -229,6 +331,12 @@ export function VentasPage() {
   function cancelarConfirmacion() {
     setConfirmandoId(null)
     setPrecioCobradoStr('')
+    focoBuscador()
+  }
+
+  function cerrarComprobante() {
+    setComprobante(null)
+    focoBuscador()
   }
 
   async function confirmarCobro() {
@@ -238,6 +346,45 @@ export function VentasPage() {
 
     setError(null)
     setSaving(true)
+    // Mientras dura el cobro no se puede cerrar la ventana ni recargar (lib/proteccionVentana.ts).
+    marcarCobroEnCurso(true)
+    try {
+      await cobrar(ticket)
+    } finally {
+      marcarCobroEnCurso(false)
+    }
+  }
+
+  async function cobrar(ticket: Ticket) {
+    if (!ticket.formaPago) return
+
+    // Idempotencia (docs/43). Con un intento pendiente (el anterior falló o no llegó la respuesta),
+    // primero se mira si ya es una venta. Si no hay, se crea el intento y se guarda en localStorage
+    // ANTES de llamar al RPC — sin esperar al efecto de guardarTickets —, así un cierre en el medio
+    // no lo pierde. confirmar_venta con un client_id que ya existe devuelve esa misma venta.
+    let clientId = ticket.cobroClientId
+    if (clientId) {
+      const { data: previa } = await supabase.from('ventas').select('numero').eq('client_id', clientId).maybeSingle()
+      if (previa) {
+        setSaving(false)
+        setConfirmandoId(null)
+        quitarTicket(ticket.id)
+        avisoTicketYaCobrado(ticket.numero, previa.numero)
+        focoBuscador()
+        return
+      }
+    } else {
+      const intentos = ticket.intentosCobro + 1
+      clientId = `${ticket.id}:${intentos}`
+      const conIntento: TicketsPersistState = {
+        ...ticketsState,
+        tickets: ticketsState.tickets.map((t) =>
+          t.id === ticket.id ? { ...t, cobroClientId: clientId, intentosCobro: intentos } : t,
+        ),
+      }
+      guardarTickets(conIntento)
+      setTicketsState(conIntento)
+    }
 
     const subtotalTicket = ticket.cart.reduce((acc, it) => acc + it.cantidad * it.precioUnitario, 0)
     const totalTicket =
@@ -271,6 +418,7 @@ export function VentasPage() {
       // Precio final a cobrar (docs/23): precargado con totalTicket, editable por el cajero antes
       // de confirmar. El backend guarda ambos valores (precio_oficial y precio_cobrado).
       p_precio_cobrado: precioCobradoNum,
+      p_client_id: clientId,
     })
 
     if (rpcError || !ventaId) {
@@ -308,7 +456,7 @@ export function VentasPage() {
       formaPago: ticket.formaPago,
       pagos: pagosComprobante,
       items: ticket.cart.map((it) => ({
-        nombre: it.nombre,
+        nombre: nombreConMarca(it),
         codigo: it.codigo,
         cantidad: it.cantidad,
         precioUnitario: it.precioUnitario,
@@ -327,92 +475,108 @@ export function VentasPage() {
 
   // Referencia con el estado más reciente para que el listener global de teclado (registrado una sola vez)
   // no quede con closures viejas — ver docs/04_modulos_y_funciones.md, atajos de la pantalla de Ventas.
-  const stateRef = useRef({
-    saving,
-    confirmando: confirmandoId !== null,
-    modalOpen:
-      descuentoModalOpen || recargoModalOpen || pagoCombinadoModalOpen || comprobante !== null || eliminarConfirmId !== null,
-  })
+  const modalOpen =
+    descuentoModalOpen ||
+    recargoModalOpen ||
+    pagoCombinadoModalOpen ||
+    comprobante !== null ||
+    eliminarConfirmId !== null ||
+    vaciarConfirmOpen
+  const stateRef = useRef({ saving, confirmando: confirmandoId !== null, modalOpen })
   useEffect(() => {
-    stateRef.current = {
-      saving,
-      confirmando: confirmandoId !== null,
-      modalOpen:
-        descuentoModalOpen || recargoModalOpen || pagoCombinadoModalOpen || comprobante !== null || eliminarConfirmId !== null,
-    }
+    stateRef.current = { saving, confirmando: confirmandoId !== null, modalOpen }
   })
-  const actionsRef = useRef({ iniciarCobro, confirmarCobro, cancelarConfirmacion, limpiarTicketActivo })
+  const actionsRef = useRef({ iniciarCobro, confirmarCobro, cancelarConfirmacion, setFormaPago })
   useEffect(() => {
-    actionsRef.current = { iniciarCobro, confirmarCobro, cancelarConfirmacion, limpiarTicketActivo }
+    actionsRef.current = { iniciarCobro, confirmarCobro, cancelarConfirmacion, setFormaPago }
   })
 
+  // Teclado de Ventas (docs/04, módulo 3). Regla del buscador: las letras son texto mientras el foco
+  // está en un campo (buscador incluido, vacío o no) y atajos solo con el foco afuera — Esc en el
+  // buscador vacío saca el foco. Así un código del lector que empieza con E, T, D… nunca dispara nada.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      // Los modales de Ventas manejan su propio teclado (useFocoAtrapado).
       if (stateRef.current.modalOpen) return
+      const { confirmando, saving } = stateRef.current
 
       const target = e.target as HTMLElement
-      const tag = target.tagName
       const isSearch = target === searchInputRef.current
-      const isPrecioCobrado = target === precioCobradoInputRef.current
-      const isTextish = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
-      const searchEmpty = isSearch && (target as HTMLInputElement).value.trim() === ''
+      const enCampo = esCampoDeTexto(target)
+      const enBoton = target.tagName === 'BUTTON'
 
       if (e.key === 'Escape') {
-        if (isTextish && !isSearch) return
-        e.preventDefault()
-        if (stateRef.current.confirmando) {
+        // Con texto, el buscador ya lo limpió (y frenó el evento). Esc nunca vacía el ticket.
+        if (confirmando) {
+          e.preventDefault()
           actionsRef.current.cancelarConfirmacion()
-        } else {
-          actionsRef.current.limpiarTicketActivo()
+        } else if (isSearch) {
+          e.preventDefault()
+          searchInputRef.current?.blur()
         }
         return
       }
 
       if (e.key === 'Enter') {
-        if ((isTextish && !isSearch && !isPrecioCobrado) || tag === 'BUTTON') return
-        if (stateRef.current.saving) return
-        e.preventDefault()
-        if (stateRef.current.confirmando) {
-          actionsRef.current.confirmarCobro()
-        } else {
-          actionsRef.current.iniciarCobro()
+        if (saving) {
+          e.preventDefault()
+          return
         }
+        if (confirmando) {
+          // En la confirmación Enter confirma, salvo en un botón: el de Confirmar se dispara solo
+          // (clic nativo) y los demás (Cancelar, ✕) no hacen nada con Enter.
+          if (target === confirmarBtnRef.current) return
+          e.preventDefault()
+          if (!enBoton) actionsRef.current.confirmarCobro()
+          return
+        }
+        // Enter en un botón de Ventas no lo dispara ni cobra: si el foco quedó ahí, el Enter del
+        // lector no puede vaciar, restar ni crear nada. (Espacio sigue activando el botón.)
+        if (enBoton) {
+          e.preventDefault()
+          return
+        }
+        if (enCampo && !isSearch) return
+        // Buscador vacío (con texto no llega: ProductoBusqueda lo frena) o foco fuera de los campos.
+        e.preventDefault()
+        actionsRef.current.iniciarCobro()
         return
       }
 
-      if (stateRef.current.confirmando) return
-      if (isTextish && !searchEmpty) return
-      if (stateRef.current.saving) return
+      if (confirmando || saving || enCampo) return
+      if (e.ctrlKey || e.altKey || e.metaKey || e.repeat || e.isComposing) return
 
       const key = e.key.toLowerCase()
-      if (key === 'e') {
+      const formaPago = ATAJOS_FORMA_PAGO[key]
+      if (formaPago) {
         e.preventDefault()
-        setFormaPago('efectivo')
-      } else if (key === 't') {
-        e.preventDefault()
-        setFormaPago('transferencia')
-      } else if (key === 'q') {
-        e.preventDefault()
-        setFormaPago('qr')
-      } else if (key === 'z') {
-        e.preventDefault()
-        setFormaPago('tarjeta_debito')
-      } else if (key === 'c') {
-        e.preventDefault()
-        setFormaPago('tarjeta_credito')
+        actionsRef.current.setFormaPago(formaPago)
       } else if (key === 'd') {
         e.preventDefault()
         setDescuentoModalOpen(true)
       } else if (key === 'r') {
         e.preventDefault()
         setRecargoModalOpen(true)
+      } else if (e.key.length === 1 && e.key !== ' ') {
+        // Cualquier otra tecla imprimible vuelve al buscador y se escribe ahí (un escaneo con el foco
+        // afuera no se pierde, salvo un primer carácter que sea atajo).
+        e.preventDefault()
+        buscadorRef.current?.escribir(e.key)
       }
     }
 
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTicketId])
+  }, [])
+
+  const atajosActivos = !focoEnCampo && !modalOpen && !bloqueado
+  const ticketVacio =
+    activeTicket.cart.length === 0 &&
+    !activeTicket.cliente &&
+    !activeTicket.formaPago &&
+    activeTicket.descuentoPorcentaje === 0 &&
+    activeTicket.recargoPorcentaje === 0 &&
+    !activeTicket.nota
 
   return (
     <div className="flex h-full flex-col gap-stack-sm">
@@ -438,10 +602,28 @@ export function VentasPage() {
           </div>
 
           <div className="mt-stack-md">
-            <ProductoBusqueda inputRef={searchInputRef} onAgregar={agregarProducto} />
+            <ProductoBusqueda
+              inputRef={searchInputRef}
+              controlRef={buscadorRef}
+              onElegir={(p) =>
+                agregarProducto({
+                  productoId: p.id,
+                  nombre: p.nombre,
+                  marca: p.marca ?? '',
+                  descripcion: p.descripcion ?? '',
+                  codigo: p.codigo_barras ?? p.codigo_interno ?? '',
+                  precioUnitario: p.precio_venta,
+                })
+              }
+            />
           </div>
 
-          <CarritoTabla items={activeTicket.cart} onCantidadChange={cambiarCantidad} onQuitar={quitarItem} />
+          <CarritoTabla
+            items={activeTicket.cart}
+            onCantidadChange={cambiarCantidad}
+            onQuitar={quitarItem}
+            onBotonUsado={focoBuscador}
+          />
         </section>
 
         <aside className="flex w-[340px] flex-shrink-0 flex-col overflow-y-auto rounded-lg bg-surface p-card-sm shadow-sm">
@@ -467,9 +649,16 @@ export function VentasPage() {
             <FormaPagoSelector
               value={activeTicket.formaPago}
               disponibleCuentaCorriente={activeTicket.cliente !== null}
-              onChange={setFormaPago}
+              onChange={elegirFormaPago}
               onCombinado={() => setPagoCombinadoModalOpen(true)}
             />
+            {/* Regla del buscador (docs/04, módulo 3): las letras son atajos solo con el foco afuera. */}
+            <p
+              aria-live="polite"
+              className={`mt-1 text-right font-sans text-label-md ${atajosActivos ? 'text-accent-darker' : 'text-ink-soft'}`}
+            >
+              {atajosActivos ? 'Atajos activos (E T Q Z C · D R)' : 'Esc en el buscador vacío para usar atajos'}
+            </p>
           </div>
 
           <div className="mt-2">
@@ -504,10 +693,11 @@ export function VentasPage() {
             </button>
             <button
               type="button"
-              onClick={limpiarTicketActivo}
-              className="rounded-lg border border-error px-4 py-2 font-sans text-label-bold text-error hover:bg-error/10"
+              onClick={() => setVaciarConfirmOpen(true)}
+              disabled={ticketVacio || confirmandoId !== null}
+              className="rounded-lg border border-error px-4 py-2 font-sans text-label-bold text-error hover:bg-error/10 disabled:opacity-50"
             >
-              Cancelar (Esc)
+              Vaciar ticket
             </button>
           </div>
 
@@ -523,7 +713,12 @@ export function VentasPage() {
       </div>
 
       {confirmandoId !== null && (
-        <Modal title="Confirmar venta" onClose={cancelarConfirmacion} widthClassName="max-w-[400px]">
+        <Modal
+          title="Confirmar venta"
+          onClose={cancelarConfirmacion}
+          widthClassName="max-w-[400px]"
+          dialogo={{ onEscape: cancelarConfirmacion }}
+        >
           <p className="text-center font-sans text-label-bold text-accent-darker">
             ¿Confirmar venta por {formatCurrency(total)}?
           </p>
@@ -565,6 +760,7 @@ export function VentasPage() {
               Cancelar (Esc)
             </button>
             <button
+              ref={confirmarBtnRef}
               type="button"
               onClick={confirmarCobro}
               disabled={saving}
@@ -581,8 +777,21 @@ export function VentasPage() {
           title="Eliminar ticket"
           mensaje="¿Eliminar este ticket? Se perderán los productos cargados."
           confirmLabel="Eliminar ticket"
-          onCancel={() => setEliminarConfirmId(null)}
+          onCancel={cancelarEliminarTicket}
           onConfirm={confirmarEliminarTicket}
+        />
+      )}
+
+      {vaciarConfirmOpen && (
+        <ConfirmDialog
+          title="Vaciar ticket"
+          mensaje="¿Vaciar este ticket? Se quitan los productos, el cliente, la forma de pago, el descuento, el recargo y la nota."
+          confirmLabel="Vaciar ticket"
+          onCancel={() => {
+            setVaciarConfirmOpen(false)
+            focoBuscador()
+          }}
+          onConfirm={confirmarVaciarTicket}
         />
       )}
 
@@ -592,7 +801,10 @@ export function VentasPage() {
           etiqueta="Descuento sobre el total (%)"
           valorActual={activeTicket.descuentoPorcentaje}
           max={100}
-          onClose={() => setDescuentoModalOpen(false)}
+          onClose={() => {
+            setDescuentoModalOpen(false)
+            focoBuscador()
+          }}
           onAplicar={(v) => actualizarTicket(activeTicketId, { descuentoPorcentaje: v })}
         />
       )}
@@ -603,7 +815,10 @@ export function VentasPage() {
           etiqueta="Recargo sobre el total (%)"
           valorActual={activeTicket.recargoPorcentaje}
           max={999}
-          onClose={() => setRecargoModalOpen(false)}
+          onClose={() => {
+            setRecargoModalOpen(false)
+            focoBuscador()
+          }}
           onAplicar={(v) => actualizarTicket(activeTicketId, { recargoPorcentaje: v })}
         />
       )}
@@ -612,7 +827,10 @@ export function VentasPage() {
         <PagoCombinadoModal
           total={total}
           valorActual={activeTicket.pagosCombinados}
-          onClose={() => setPagoCombinadoModalOpen(false)}
+          onClose={() => {
+            setPagoCombinadoModalOpen(false)
+            focoBuscador()
+          }}
           onAplicar={aplicarPagoCombinado}
         />
       )}
@@ -620,14 +838,14 @@ export function VentasPage() {
       {comprobante && (
         <ComprobanteModal
           datos={comprobante}
-          onClose={() => setComprobante(null)}
+          onClose={cerrarComprobante}
+          dialogo
           footer={
             <button
               type="button"
-              onClick={() => {
-                setComprobante(null)
-                searchInputRef.current?.focus()
-              }}
+              // Foco inicial del comprobante: Enter (o el Enter del lector) pasa a la venta siguiente.
+              data-autofocus
+              onClick={cerrarComprobante}
               className="rounded bg-accent px-4 py-3 font-sans text-label-bold text-white hover:bg-accent-dark"
             >
               Nueva venta

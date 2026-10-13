@@ -8,6 +8,8 @@ import {
   friendlyError,
   generarCodigoInterno,
   IVA_DEFAULT,
+  MAYUSCULAS,
+  nombreConMarca,
   NotaRedondeoPrecio,
 } from '@virikyna/shared'
 import { CodigoBarrasBox } from '@virikyna/shared'
@@ -268,13 +270,13 @@ export function ProductoFormSheet({
               setErrorNombre(null)
             }}
             aria-invalid={errorNombre ? true : undefined}
-            className={`${inputClass} ${errorNombre ? '!border-error' : ''}`}
+            className={`${inputClass} ${MAYUSCULAS} ${errorNombre ? '!border-error' : ''}`}
           />
           {errorNombre && <span className="font-sans text-label-md text-error">{errorNombre}</span>}
         </Field>
 
         <Field label="Marca">
-          <input value={marca} onChange={(e) => setMarca(e.target.value)} className={inputClass} />
+          <input value={marca} onChange={(e) => setMarca(e.target.value)} className={`${inputClass} ${MAYUSCULAS}`} />
         </Field>
 
         <Field label="Descripción">
@@ -436,7 +438,7 @@ export function ProductoFormSheet({
       {producto && ajusteUbicacion && (
         <AjustarStockSheet
           productoId={producto.id}
-          productoNombre={producto.nombre}
+          productoNombre={nombreConMarca(producto)}
           ubicacion={ajusteUbicacion}
           onClose={() => setAjusteUbicacion(null)}
           onSaved={async () => {

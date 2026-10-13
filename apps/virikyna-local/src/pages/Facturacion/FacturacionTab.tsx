@@ -5,10 +5,16 @@ import { supabase } from '../../lib/supabaseClient'
 import { friendlyError, emitirFacturaCReal } from '@virikyna/shared'
 import { formatCurrency, formatFechaCortaLocal, formatHora, rangoTimestampsAR } from '@virikyna/shared'
 import { EstadoBadge, RowActionsMenu } from '@virikyna/shared'
-import { FORMA_PAGO_LABEL, type DatosComprobante } from '../../lib/comprobante'
+import {
+  FORMA_PAGO_LABEL,
+  itemsComprobanteDesdeVenta,
+  SELECT_ITEMS_COMPROBANTE,
+  type DatosComprobante,
+  type VentaItemComprobanteRow,
+} from '@virikyna/shared'
 import { ComprobanteModal } from '../../components/ComprobanteModal'
 import { DevolucionModal } from './DevolucionModal'
-import type { VentaConFactura, VentaItemConProducto } from './types'
+import type { VentaConFactura } from './types'
 
 const ESTADO_LABEL: Record<'sin_facturar' | 'facturado', string> = {
   sin_facturar: 'Sin facturar',
@@ -117,9 +123,9 @@ export function FacturacionTab() {
   async function verDetalle(venta: VentaConFactura) {
     const { data: itemsData } = await supabase
       .from('venta_items')
-      .select('cantidad, precio_unitario, importe, producto:productos(nombre, codigo_barras, codigo_interno)')
+      .select(SELECT_ITEMS_COMPROBANTE)
       .eq('venta_id', venta.id)
-    const items = (itemsData ?? []) as unknown as VentaItemConProducto[]
+    const items = itemsComprobanteDesdeVenta((itemsData ?? []) as unknown as VentaItemComprobanteRow[])
 
     let pagos: { formaPago: FormaPagoVenta; monto: number }[] | undefined
     if (venta.forma_pago === 'combinado') {
@@ -145,13 +151,7 @@ export function FacturacionTab() {
       clienteCelular: venta.cliente?.celular ?? null,
       formaPago: venta.forma_pago,
       pagos,
-      items: items.map((it) => ({
-        nombre: it.producto?.nombre ?? 'Producto',
-        codigo: it.producto?.codigo_barras ?? it.producto?.codigo_interno ?? '',
-        cantidad: it.cantidad,
-        precioUnitario: it.precio_unitario,
-        importe: it.importe,
-      })),
+      items,
       subtotal: venta.subtotal,
       descuentoPorcentaje: venta.descuento_porcentaje,
       recargoPorcentaje: venta.recargo_porcentaje,

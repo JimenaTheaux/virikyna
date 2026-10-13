@@ -33,16 +33,25 @@ Roles del sistema: **Admin** (Alicia, Ana Julia) y **Cajero** (Jose, Ale, Belu).
 
 **Atajos de teclado:**
 
-| Tecla | Acción |
-|---|---|
-| Enter | Confirmar venta |
-| E | Pago en efectivo |
-| T | Transferencia (Mercado Pago) |
-| Q | Pago con QR (Galicia) |
-| C | Tarjeta débito/crédito (Galicia) |
-| D | Aplicar descuento |
-| R | Aplicar recargo |
-| Esc | Cancelar venta en curso |
+| Tecla | Acción | Cuándo |
+|---|---|---|
+| Enter | Cobrar: abre la confirmación; adentro de la confirmación, confirma | Buscador vacío o foco fuera de los campos. Con texto en el buscador, Enter agrega el producto (ver abajo) |
+| E | Pago en efectivo | Foco fuera de los campos |
+| T | Transferencia (Mercado Pago) | Foco fuera de los campos |
+| Q | Pago con QR (Galicia) | Foco fuera de los campos |
+| Z | Tarjeta de débito (Galicia) | Foco fuera de los campos |
+| C | Tarjeta de crédito (Galicia) | Foco fuera de los campos |
+| D | Aplicar descuento | Foco fuera de los campos |
+| R | Aplicar recargo | Foco fuera de los campos |
+| Esc | Buscador con texto: lo limpia. Buscador vacío: saca el foco del buscador (atajos activos). Confirmación o cualquier modal: lo cierra | Siempre. **Nunca vacía el ticket**: eso es solo con el botón "Vaciar ticket", que pide confirmación |
+
+**Regla del buscador (convivencia con el lector de código de barras):**
+- Las letras son texto mientras el foco está en un campo (buscador incluido, vacío o no). Los atajos con letras funcionan solo con el foco afuera; para eso, Esc en el buscador vacío. Cerca de la forma de pago se ve "Atajos activos (E T Q Z C · D R)" mientras están activos. Con Ctrl, Alt o una tecla mantenida apretada no hacen nada.
+- Con el foco afuera, cualquier otra tecla imprimible vuelve al buscador y se escribe ahí. Después de un clic en un botón de Ventas (forma de pago, −, +, ✕, cliente, tickets) o de cerrar un modal, el foco vuelve solo al buscador.
+- Enter en el buscador con texto: si se eligió un resultado con ↑ ↓ agrega ese; si no, busca el código **exacto** (código de barras o interno) en la base sin esperar y, si existe, lo agrega. Si no hay código exacto, muestra la lista y no agrega nada: el primer resultado parcial nunca se agrega solo.
+- Enter con el foco en un botón no lo dispara ni cobra (Espacio sí lo activa), salvo el botón "Confirmar" de la confirmación.
+- Mientras se guarda un cobro no se puede cerrar la ventana ni recargar. En la app instalada F5, Ctrl+R, Ctrl+Shift+R y Alt+← / Alt+→ no hacen nada nunca.
+- Cada cobro manda un id de intento (`<ticket>:<n°>`, docs/43). Si la app se cierra o pierde la respuesta, al volver a Ventas el ticket que ya es una venta se cierra solo, con aviso, para no cobrarlo dos veces.
 
 | Acción | Admin | Cajero |
 |---|---|---|
@@ -62,6 +71,7 @@ Roles del sistema: **Admin** (Alicia, Ana Julia) y **Cajero** (Jose, Ale, Belu).
 - Aunque el comprobante esté avanzado, se puede cambiar cliente y forma de pago sin arrancar de cero.
 - **Cobrar registra la venta y el pago, y genera un Comprobante X** — no dispara automáticamente la Factura C.
 - El Comprobante X se puede descargar en PDF, o enviar por Gmail y/o WhatsApp (con +54 pre-cargado, pidiendo mail o celular al enviar).
+- Cada ítem vendido guarda el nombre y la marca del producto **como estaban al vender** (también los ítems de una devolución o cambio). Si después se renombra el producto, la venta vieja no cambia. Ver docs/06 sección 27.
 - No se contempla nota de crédito de venta en Fase 1.
 
 **Tickets en espera:**
@@ -123,6 +133,7 @@ Roles del sistema: **Admin** (Alicia, Ana Julia) y **Cajero** (Jose, Ale, Belu).
 
 **Ficha de producto — campos:**
 - Nombre, descripción, proveedor, marca
+  - **Formato fijo** (lo aplica la base, desde cualquier app o pantalla): nombre y marca siempre en MAYÚSCULAS; la descripción con solo la primera letra en mayúscula ("Auto de spiderman"). Se respetan Ñ y acentos. Los códigos se guardan tal cual. Lo mismo vale para los borradores de la carga inicial y para los ítems libres de una factura de compra (en mayúsculas). Ver docs/06 sección 27.
 - Código de barras (si tiene) o código interno generado (en la carga inicial: EAN-13 con prefijo 20, imprimible)
 - Costo (precio de compra, lo carga el cajero/vendedor). Puede faltar en productos de la carga inicial, que tienen precio manual
 - **Margen en dos casilleros** (ej. 100 + 20) — ver regla de precios abajo

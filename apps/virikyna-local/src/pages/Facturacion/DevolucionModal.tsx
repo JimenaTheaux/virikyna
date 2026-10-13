@@ -1,28 +1,29 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { FormaPagoVenta, MotivoDevolucion, Producto } from '@virikyna/shared'
+import type { FormaPagoVenta, MotivoDevolucion } from '@virikyna/shared'
 import {
   MENSAJE_PLAZO_DEVOLUCION,
   MOTIVOS_DEVOLUCION,
   MOTIVO_DEVOLUCION_LABEL,
-  ProductoBuscador,
-  armarFiltroBusquedaProducto,
   crearDevolucion,
   formatCurrency,
   formatFechaHora,
   friendlyError,
+  nombreConMarca,
+  nombreItemVendido,
   precioEfectivoUnitario,
   redondear2,
   totalLineas,
-  useDebouncedValue,
   ventaDentroDePlazoDevolucion,
 } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { showToast } from '../../lib/toast'
 import { Modal } from '../../components/Modal'
+import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { ErrorText, Field, inputClass, selectClass } from '../../components/FormField'
 import { FORMA_PAGO_LABEL } from '../../lib/comprobante'
 import { FormaPagoSelector } from '../Ventas/FormaPagoSelector'
 import { PagoCombinadoModal } from '../Ventas/PagoCombinadoModal'
+import { ProductoBusqueda, type ProductoVenta } from '../Ventas/ProductoBusqueda'
 import type { PagoParcial } from '../Ventas/types'
 import type { VentaConFactura } from './types'
 
@@ -34,7 +35,7 @@ type Props = {
 
 type ItemVendido = {
   productoId: string
-  nombre: string
+  nombre: string // nombre · marca, de lo guardado al vender (docs/42) o del producto actual
   codigo: string
   vendida: number
   yaDevuelta: number
@@ -43,19 +44,19 @@ type ItemVendido = {
 
 type ItemNuevo = {
   productoId: string
-  nombre: string
+  nombre: string // nombre · marca
   codigo: string
   precioUnitario: number // precio de lista actual
   cantidad: string
 }
 
-type ProductoResultado = Pick<Producto, 'id' | 'nombre' | 'codigo_barras' | 'codigo_interno' | 'precio_venta'>
-
 type VentaItemRow = {
   producto_id: string
   cantidad: number
   importe: number
-  producto: { nombre: string; codigo_barras: string | null; codigo_interno: string | null } | null
+  producto_nombre: string | null
+  producto_marca: string | null
+  producto: { nombre: string; marca: string | null; codigo_barras: string | null; codigo_interno: string | null } | null
 }
 
 type DevueltoRow = { producto_id: string; cantidad: number }
@@ -74,9 +75,6 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
   const [observaciones, setObservaciones] = useState('')
 
   const [nuevos, setNuevos] = useState<ItemNuevo[]>([])
-  const [busqueda, setBusqueda] = useState('')
-  const busquedaDebounced = useDebouncedValue(busqueda, 200)
-  const [resultados, setResultados] = useState<ProductoResultado[]>([])
 
   const [formaPago, setFormaPago] = useState<FormaPagoVenta | null>(null)
   const [pagosCombinados, setPagosCombinados] = useState<PagoParcial[] | null>(null)
@@ -84,6 +82,21 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
 
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmCerrar, setConfirmCerrar] = useState(false)
+
+  // Esc / Cancelar / ✕ con algo cargado piden confirmación: un Esc suelto no tira la devolución.
+  const hayCambios =
+    Object.values(cantidades).some((c) => Number(c) > 0) ||
+    motivo !== '' ||
+    motivoDetalle.trim() !== '' ||
+    observaciones.trim() !== '' ||
+    nuevos.length > 0 ||
+    formaPago !== null
+
+  function pedirCierre() {
+    if (hayCambios) setConfirmCerrar(true)
+    else onClose()
+  }
 
   const dentroDePlazo = ventaDentroDePlazoDevolucion(venta.created_at)
 
@@ -94,7 +107,9 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
       const [itemsRes, devueltosRes] = await Promise.all([
         supabase
           .from('venta_items')
-          .select('producto_id, cantidad, importe, producto:productos(nombre, codigo_barras, codigo_interno)')
+          .select(
+            'producto_id, cantidad, importe, producto_nombre, producto_marca, producto:productos(nombre, marca, codigo_barras, codigo_interno)',
+          )
           .eq('venta_id', venta.id),
         supabase
           .from('devolucion_items')
@@ -123,7 +138,7 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
       setItems(
         [...porProducto.entries()].map(([productoId, lineas]) => ({
           productoId,
-          nombre: lineas[0].producto?.nombre ?? 'Producto',
+          nombre: nombreItemVendido(lineas[0], lineas[0].producto),
           codigo: lineas[0].producto?.codigo_barras ?? lineas[0].producto?.codigo_interno ?? '',
           vendida: lineas.reduce((acc, l) => acc + l.cantidad, 0),
           yaDevuelta: yaDevuelta.get(productoId) ?? 0,
@@ -141,29 +156,6 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
     }
   }, [venta])
 
-  // Buscador de producto para el cambio — mismo componente y misma consulta que el buscador de Ventas.
-  useEffect(() => {
-    const q = busquedaDebounced.trim()
-    if (!q) {
-      setResultados([])
-      return
-    }
-    let cancelado = false
-    supabase
-      .from('productos')
-      .select('id, nombre, codigo_barras, codigo_interno, precio_venta')
-      .eq('estado', 'activo')
-      .or(armarFiltroBusquedaProducto(q))
-      .order('nombre')
-      .limit(6)
-      .then(({ data }) => {
-        if (!cancelado) setResultados((data ?? []) as ProductoResultado[])
-      })
-    return () => {
-      cancelado = true
-    }
-  }, [busquedaDebounced])
-
   function disponible(item: ItemVendido): number {
     return redondear2(item.vendida - item.yaDevuelta)
   }
@@ -179,7 +171,7 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
   const totalNuevo = totalLineas(nuevos.map((n) => ({ cantidad: Number(n.cantidad) || 0, precioUnitario: n.precioUnitario })))
   const diferencia = redondear2(totalNuevo - totalDevuelto)
 
-  function agregarNuevo(p: ProductoResultado) {
+  function agregarNuevo(p: ProductoVenta) {
     setNuevos((prev) => {
       const existente = prev.find((n) => n.productoId === p.id)
       if (existente) {
@@ -189,15 +181,13 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
         ...prev,
         {
           productoId: p.id,
-          nombre: p.nombre,
+          nombre: nombreConMarca(p),
           codigo: p.codigo_barras ?? p.codigo_interno ?? '',
           precioUnitario: p.precio_venta,
           cantidad: '1',
         },
       ]
     })
-    setBusqueda('')
-    setResultados([])
   }
 
   async function confirmar() {
@@ -276,7 +266,7 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
       <div className="ml-auto flex gap-3">
         <button
           type="button"
-          onClick={onClose}
+          onClick={pedirCierre}
           className="rounded px-4 py-3 font-sans text-label-bold text-ink-soft hover:bg-bg"
         >
           Cancelar
@@ -294,7 +284,13 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
   )
 
   return (
-    <Modal title={`Devolución / Cambio — Ticket ${venta.numero}`} onClose={onClose} widthClassName="max-w-[960px]" footer={footer}>
+    <Modal
+      title={`Devolución / Cambio — Ticket ${venta.numero}`}
+      onClose={pedirCierre}
+      widthClassName="max-w-[960px]"
+      footer={footer}
+      dialogo={{ onEscape: pedirCierre }}
+    >
       <div className="flex flex-col gap-stack-md">
         <p className="font-sans text-body-md text-ink-soft">
           {formatFechaHora(venta.created_at)} · {clienteNombre} · {FORMA_PAGO_LABEL[venta.forma_pago]} · Total{' '}
@@ -390,29 +386,9 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
 
         <section>
           <p className="font-sans text-label-bold text-ink-soft">Cambio — productos nuevos (opcional)</p>
-          <div className="relative mt-2">
-            <ProductoBuscador value={busqueda} onChange={setBusqueda} autoFocus={false} />
-            {busqueda.trim() && (
-              <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-line bg-surface shadow-sm">
-                {resultados.length === 0 && (
-                  <p className="px-4 py-3 font-sans text-body-md text-ink-soft">Sin resultados.</p>
-                )}
-                {resultados.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => agregarNuevo(p)}
-                    className="flex w-full items-center justify-between px-4 py-2.5 text-left font-sans hover:bg-accent-light"
-                  >
-                    <span>
-                      <span className="block text-body-md text-ink">{p.nombre}</span>
-                      <span className="block text-label-md text-ink-soft">{p.codigo_barras ?? p.codigo_interno ?? '—'}</span>
-                    </span>
-                    <span className="text-label-bold text-accent-darker">{formatCurrency(p.precio_venta)}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+          <div className="mt-2">
+            {/* Mismo buscador que Ventas: misma consulta y mismo renglón (nombre · marca, descripción · código). */}
+            <ProductoBusqueda variante="compacto" onElegir={agregarNuevo} />
           </div>
 
           {nuevos.length > 0 && (
@@ -467,6 +443,7 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
               <FormaPagoSelector
                 value={formaPago}
                 disponibleCuentaCorriente={false}
+                mostrarAtajos={false}
                 onChange={(v) => {
                   setFormaPago(v)
                   setPagosCombinados(null)
@@ -503,6 +480,16 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
             setFormaPago('combinado')
             setPagosCombinados(pagos)
           }}
+        />
+      )}
+
+      {confirmCerrar && (
+        <ConfirmDialog
+          title="Cerrar sin guardar"
+          mensaje="Hay datos cargados en esta devolución. ¿Querés cerrar de todos modos?"
+          confirmLabel="Cerrar sin guardar"
+          onCancel={() => setConfirmCerrar(false)}
+          onConfirm={onClose}
         />
       )}
     </Modal>

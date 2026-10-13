@@ -11,6 +11,7 @@ import { Modal } from './Modal'
 import { ConfirmDialog } from './ConfirmDialog'
 import { ErrorText, inputClass, selectClass } from './FormField'
 import { MostrarMas } from './MostrarMas'
+import { nombreConMarca } from '../../lib/productoTexto'
 import { EstadoBadge } from './EstadoBadge'
 import { ControlSegmentado } from './ControlSegmentado'
 
@@ -202,7 +203,7 @@ export function ActualizarPreciosModal({ supabase, productos, proveedores, selec
                   {/* Toda la fila es clickeable; el nombre accesible es solo el del producto. */}
                   <label htmlFor={`${id}-chk-${p.id}`} className="flex flex-1 cursor-pointer items-center gap-3 py-3">
                     <span id={`${id}-nom-${p.id}`} className="text-ink [overflow-wrap:anywhere]">
-                      {p.nombre}
+                      {nombreConMarca(p)}
                     </span>
                     <span id={`${id}-prv-${p.id}`} className="ml-auto text-ink-soft">
                       {p.proveedor?.razon_social ?? 'Sin proveedor'}

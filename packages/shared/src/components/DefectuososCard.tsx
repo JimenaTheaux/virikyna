@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { nombreConMarca } from '../../lib/productoTexto'
 
-export type DefectuosoPendiente = { productoId: string; nombre: string; cantidad: number }
+export type DefectuosoPendiente = { productoId: string; nombre: string; cantidad: number } // nombre = nombre · marca actuales
 
 // Ítems devueltos como defectuosos (docs/24, reingresa_stock = false) de devoluciones activas:
 // mercadería separada que no volvió al stock y espera revisión.
@@ -11,7 +12,7 @@ export async function fetchDefectuososPendientes(
 ): Promise<{ data: DefectuosoPendiente[]; error: unknown }> {
   const { data, error } = await supabase
     .from('devolucion_items')
-    .select('producto_id, cantidad, producto:productos(nombre), devolucion:devoluciones!inner(estado)')
+    .select('producto_id, cantidad, producto:productos(nombre, marca), devolucion:devoluciones!inner(estado)')
     .eq('tipo', 'devuelto')
     .eq('reingresa_stock', false)
     .eq('devolucion.estado', 'activa')
@@ -19,10 +20,10 @@ export async function fetchDefectuososPendientes(
   if (error || !data) return { data: [], error }
 
   const porProducto = new Map<string, DefectuosoPendiente>()
-  for (const row of data as unknown as { producto_id: string; cantidad: number; producto: { nombre: string } | null }[]) {
+  for (const row of data as unknown as { producto_id: string; cantidad: number; producto: { nombre: string; marca: string | null } | null }[]) {
     const actual = porProducto.get(row.producto_id) ?? {
       productoId: row.producto_id,
-      nombre: row.producto?.nombre ?? 'Producto',
+      nombre: row.producto ? nombreConMarca(row.producto) : 'Producto',
       cantidad: 0,
     }
     actual.cantidad += row.cantidad

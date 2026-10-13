@@ -21,6 +21,8 @@ export function crearTicketVacio(numero: number): Ticket {
     descuentoPorcentaje: 0,
     recargoPorcentaje: 0,
     nota: '',
+    cobroClientId: null,
+    intentosCobro: 0,
   }
 }
 
@@ -32,8 +34,16 @@ export function cargarTicketsGuardados(): TicketsPersistState | null {
     if (!raw) return null
     const parsed = JSON.parse(raw) as Partial<TicketsPersistState>
     if (!Array.isArray(parsed.tickets) || parsed.tickets.length === 0) return null
-    // Compat: tickets guardados antes de pagos combinados (docs/22) no traen pagosCombinados.
-    const tickets = (parsed.tickets as Ticket[]).map((t) => ({ ...t, pagosCombinados: t.pagosCombinados ?? null }))
+    // Compat: tickets guardados antes de pagos combinados (docs/22) no traen pagosCombinados, y los
+    // anteriores a la marca en el carrito (docs/42) traen ítems sin marca ni descripción, y los
+    // anteriores a la idempotencia del cobro (docs/43) no traen cobroClientId ni intentosCobro.
+    const tickets = (parsed.tickets as Ticket[]).map((t) => ({
+      ...t,
+      pagosCombinados: t.pagosCombinados ?? null,
+      cobroClientId: t.cobroClientId ?? null,
+      intentosCobro: t.intentosCobro ?? 0,
+      cart: (t.cart ?? []).map((it) => ({ ...it, marca: it.marca ?? '', descripcion: it.descripcion ?? '' })),
+    }))
     const activeTicketId = tickets.some((t) => t.id === parsed.activeTicketId)
       ? (parsed.activeTicketId as string)
       : tickets[0].id

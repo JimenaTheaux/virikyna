@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { friendlyError } from './supabaseErrors'
 import { coincideBusquedaProducto } from './productoBusqueda'
+import { nombreConMarca } from './productoTexto'
 import { fijadosPrimero } from './listaSeleccion'
 import { calcularPrecio, costoConPorcentaje, precioManualConPorcentaje } from './precios'
 import { PAGINA_LISTA as PAGINA_LISTA_PRECIOS } from '../src/components/MostrarMas'
@@ -131,7 +132,7 @@ export function useActualizarPrecios({ supabase, productos, seleccionInicial = [
         const precioNuevo = precioManualConPorcentaje(p.precio_manual, porcentaje)
         return {
           id: p.id,
-          nombre: p.nombre,
+          nombre: nombreConMarca(p),
           manual: true,
           costoActual: null,
           costoNuevo: null,
@@ -146,7 +147,7 @@ export function useActualizarPrecios({ supabase, productos, seleccionInicial = [
       const nuevo = calcularPrecio({ costo: costoNuevo, margen1: p.margen_1, margen2: p.margen_2, iva: p.iva_porcentaje })
       return {
         id: p.id,
-        nombre: p.nombre,
+        nombre: nombreConMarca(p),
         manual: false,
         costoActual: p.costo,
         costoNuevo,
