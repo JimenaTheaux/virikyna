@@ -1,5 +1,14 @@
 # Novedades de Virikyna Local
 
+## 0.5.1 — octubre 2026
+
+### Ventas
+- **Productos más fáciles de leer en la búsqueda y el carrito:** arriba el NOMBRE con el precio a la derecha; abajo, más chico, la marca, el código y la descripción. Los nombres largos pasan al renglón de abajo en vez de cortarse.
+- En el carrito el precio unitario quedó al lado del nombre; las columnas Cant. e Importe siguen igual.
+
+### Devoluciones y compras
+- Devolución / Cambio y las sugerencias de producto al cargar una factura de compra usan el mismo formato. En la factura se muestra el costo actual en vez del precio de venta.
+
 ## 0.5.0 — octubre 2026
 
 ### Productos
