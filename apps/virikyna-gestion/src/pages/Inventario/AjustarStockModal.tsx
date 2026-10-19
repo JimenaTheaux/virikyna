@@ -69,6 +69,7 @@ export function AjustarStockModal({ productoId, productoNombre, ubicacion, onClo
     <Modal
       title={`Ajustar stock — ${ubicacion === 'local' ? 'Local' : 'Depósito'}`}
       onClose={pedirCierre}
+      cambiosSinGuardar={dirty}
       widthClassName="max-w-[440px]"
     >
       <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">

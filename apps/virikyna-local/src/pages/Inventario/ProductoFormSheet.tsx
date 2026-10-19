@@ -246,6 +246,7 @@ export function ProductoFormSheet({
     <Modal
       title={producto ? 'Editar producto' : 'Nuevo producto'}
       onClose={pedirCierre}
+      cambiosSinGuardar={dirty}
       widthClassName="max-w-[960px]"
       footer={
         tab === 'datos' || !producto || !esAdmin ? (

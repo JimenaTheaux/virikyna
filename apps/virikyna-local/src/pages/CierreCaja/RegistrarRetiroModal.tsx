@@ -84,7 +84,7 @@ export function RegistrarRetiroModal({ onClose, onSaved }: { onClose: () => void
   }
 
   return (
-    <Modal title="Registrar retiro" onClose={pedirCierre} widthClassName="max-w-[460px]">
+    <Modal title="Registrar retiro" onClose={pedirCierre} cambiosSinGuardar={dirty} widthClassName="max-w-[460px]">
       <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
         <Field label="Fecha">
           <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className={inputClass} />

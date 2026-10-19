@@ -215,6 +215,7 @@ export function ProductoFormSheet({
     <BottomSheet
       title={producto ? 'Editar producto' : 'Nuevo producto'}
       onClose={pedirCierre}
+      cambiosSinGuardar={dirty}
       footer={
         <div className="flex flex-col gap-2">
           {error && <ErrorText>{error}</ErrorText>}

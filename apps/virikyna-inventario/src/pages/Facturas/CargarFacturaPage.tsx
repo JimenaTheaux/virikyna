@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { useBlocker } from 'react-router-dom'
 import type {
+  IntentoSalir,
   FormaPagoCompra,
   LetraComprobanteCompra,
   OrigenCopiaFactura,
@@ -24,6 +24,7 @@ import {
   problemasItemsFacturaCompra,
   TIPO_COMPROBANTE_COMPRA_LABEL,
   TIPOS_COMPROBANTE_COMPRA,
+  useCambiosSinGuardar,
   useComprobanteDuplicado,
   useCopiaFacturaCompra,
   valoresFacturaCompraVacios,
@@ -86,20 +87,10 @@ export function CargarFacturaPage() {
   const [focoNumero, setFocoNumero] = useState(0)
 
   // Cambiar de pestaña (o volver atrás) con lo cargado sin guardar pide confirmación antes de
-  // descartarlo. Solo bloquea si de verdad cambia de pantalla.
-  const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) => dirty && currentLocation.pathname !== nextLocation.pathname,
-  )
-
-  useEffect(() => {
-    if (!dirty) return
-    // Recargar o cerrar la app también descartaría lo cargado (el navegador muestra su propio aviso).
-    function avisarAntesDeSalir(e: BeforeUnloadEvent) {
-      e.preventDefault()
-    }
-    window.addEventListener('beforeunload', avisarAntesDeSalir)
-    return () => window.removeEventListener('beforeunload', avisarAntesDeSalir)
-  }, [dirty])
+  // descartarlo; recargar o cerrar la app muestra el aviso del navegador. Lo frena GuardiaNavegacion
+  // (App) mientras esta página esté anotada con cambios; acá solo se decide qué hacer.
+  const [salida, setSalida] = useState<IntentoSalir | null>(null)
+  useCambiosSinGuardar(dirty, setSalida)
 
   useEffect(() => {
     supabase
@@ -505,13 +496,19 @@ export function CargarFacturaPage() {
         />
       )}
 
-      {blocker.state === 'blocked' && (
+      {salida && (
         <ConfirmDialog
           title="¿Salir sin guardar?"
           mensaje="Se perderán los ítems cargados."
           confirmLabel="Salir sin guardar"
-          onCancel={() => blocker.reset()}
-          onConfirm={() => blocker.proceed()}
+          onCancel={() => {
+            salida.cancelar()
+            setSalida(null)
+          }}
+          onConfirm={() => {
+            setSalida(null)
+            salida.continuar()
+          }}
         />
       )}
     </div>

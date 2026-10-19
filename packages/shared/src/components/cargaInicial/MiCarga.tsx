@@ -19,7 +19,7 @@ import { normalizarCodigoBarras } from '../../../lib/productoBusqueda'
 import { formatCurrency } from '../../../lib/format'
 import { ScanButton } from '../ScanButton'
 import { RowActionsMenu, type RowActionsMenuItem } from '../RowActionsMenu'
-import { BotonesDialogo, claseCampoTexto, Dialogo, ResultadoFinalizar, textoAccion } from './comunes'
+import { BotonesDialogo, claseCampoTexto, Dialogo, ResultadoFinalizar, textoAccion, useCierreConCambios } from './comunes'
 
 type Campos = { codigo: string; nombre: string; marca: string; descripcion: string; precio: string; cantidad: string }
 const VACIO: Campos = { codigo: '', nombre: '', marca: '', descripcion: '', precio: '', cantidad: '' }
@@ -1047,6 +1047,7 @@ function EditorBorradorSheet({
   })
   const [errores, setErrores] = useState<ErroresFila>({})
   const soloCantidad = fila.accion === 'sumar'
+  const cierre = useCierreConCambios(onCancelar)
 
   function confirmar() {
     const e = validarFila(c)
@@ -1062,7 +1063,10 @@ function EditorBorradorSheet({
       <input
         id={`editar-${k}`}
         value={c[k]}
-        onChange={(e) => setC({ ...c, [k]: e.target.value })}
+        onChange={(e) => {
+          setC({ ...c, [k]: e.target.value })
+          cierre.marcarCambio()
+        }}
         readOnly={soloCantidad && k !== 'cantidad'}
         aria-invalid={!!errores[k as keyof ErroresFila]}
         className={claseCampoTexto(inputCelular, k)}
@@ -1076,9 +1080,11 @@ function EditorBorradorSheet({
     <Dialogo
       celular
       title="Editar fila"
-      onClose={onCancelar}
-      footer={<BotonesDialogo celular onCancelar={onCancelar} onConfirmar={confirmar} confirmarLabel="Guardar" />}
+      onClose={cierre.pedirCierre}
+      cambiosSinGuardar={cierre.dirty}
+      footer={<BotonesDialogo celular onCancelar={cierre.pedirCierre} onConfirmar={confirmar} confirmarLabel="Guardar" />}
     >
+      {cierre.confirmacion}
       <div className="flex flex-col gap-3">
         <p className="font-sans text-label-md text-ink-soft">Código: {fila.codigo || 'se genera al finalizar'}</p>
         {soloCantidad && (

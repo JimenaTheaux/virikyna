@@ -92,7 +92,8 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [confirmCerrar, setConfirmCerrar] = useState(false)
 
-  // Esc / Cancelar / ✕ con algo cargado piden confirmación: un Esc suelto no tira la devolución.
+  // Cancelar / ✕ con algo cargado piden confirmación (Esc no cierra formularios). Se deriva del
+  // estado, así cubre también lo que cambia sin evento `change` (productos agregados, botones).
   const hayCambios =
     Object.values(cantidades).some((c) => Number(c) > 0) ||
     motivo !== '' ||
@@ -302,7 +303,7 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
       onClose={pedirCierre}
       widthClassName="max-w-[960px]"
       footer={footer}
-      dialogo={{ onEscape: pedirCierre }}
+      cambiosSinGuardar={hayCambios}
     >
       <div className="flex flex-col gap-stack-md">
         <p className="font-sans text-body-md text-ink-soft">

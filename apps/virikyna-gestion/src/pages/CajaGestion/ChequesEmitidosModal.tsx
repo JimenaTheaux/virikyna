@@ -42,7 +42,7 @@ export function ChequesEmitidosModal({ onClose }: Props) {
   }, [])
 
   return (
-    <Modal title="Cheques emitidos" onClose={onClose} widthClassName="max-w-[640px]">
+    <Modal title="Cheques emitidos" onClose={onClose} dialogo={{ onEscape: onClose }} widthClassName="max-w-[640px]">
       <div className="flex flex-col gap-stack-md">
         <p className="font-sans text-body-md text-ink-soft">Cheques y e-cheques entregados a proveedores, por fecha de vencimiento.</p>
 

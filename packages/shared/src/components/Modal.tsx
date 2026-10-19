@@ -1,6 +1,7 @@
 import { useId, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useFocoAtrapado } from '../../lib/useFocoAtrapado'
+import { useCambiosSinGuardar } from '../../lib/cambiosSinGuardar'
 
 type Props = {
   title: string
@@ -10,9 +11,15 @@ type Props = {
   // Pie fijo (fuera del área con scroll) — para formularios largos donde los botones de acción
   // deben quedar siempre accesibles sin scrollear (ej. carga de factura de compra tipo planilla).
   footer?: ReactNode
-  // Opt-in: role="dialog" + aria-modal + aria-labelledby, Esc → onEscape y foco atrapado
-  // (useFocoAtrapado). Sin esta prop el modal se comporta como siempre.
+  // Modales de solo lectura (detalles) y confirmaciones: role="dialog" + aria-modal +
+  // aria-labelledby, Esc → onEscape y foco atrapado (useFocoAtrapado).
   dialogo?: { onEscape: () => void }
+  // Formularios (docs/auditoria-2026-10-19.md, B.2/B.3): pasar siempre, con su estado `dirty`. Con
+  // esta prop el modal es diálogo accesible pero Esc NO cierra (solo ✕ / Cancelar, que ya piden
+  // confirmación si hay cambios), y mientras sea true queda anotado como "cambios sin guardar":
+  // Atrás / cambio de ruta llaman a onClose en vez de desmontarlo (GuardiaNavegacion) y la
+  // actualización de Local pregunta antes de reiniciar.
+  cambiosSinGuardar?: boolean
 }
 
 // Modal centrado de escritorio — lo usan virikyna-local y virikyna-gestion (que lo re-exportan desde
@@ -33,22 +40,30 @@ type Props = {
 // cerrar el subformulario de producto cerraba la factura entera). Cortamos esa propagación acá,
 // en el único punto por el que pasan todos los modales de la app — así ningún formulario futuro
 // que se abra dentro de otro va a heredar este mismo bug.
-export function Modal({ title, onClose, children, widthClassName = 'max-w-[560px]', footer, dialogo }: Props) {
+export function Modal({ title, onClose, children, widthClassName = 'max-w-[560px]', footer, dialogo, cambiosSinGuardar }: Props) {
   const tituloId = useId()
   const panelRef = useRef<HTMLDivElement>(null)
-  useFocoAtrapado(panelRef, dialogo?.onEscape)
+  const esFormulario = cambiosSinGuardar !== undefined
+  useFocoAtrapado(panelRef, esFormulario ? null : dialogo?.onEscape)
+  // Atrás con cambios: el modal se queda donde está (cancelar) y se pide cerrar (onClose del
+  // formulario = su "¿Cerrar sin guardar?").
+  useCambiosSinGuardar(!!cambiosSinGuardar, ({ cancelar }) => {
+    cancelar()
+    onClose()
+  })
+  const esDialogo = esFormulario || !!dialogo
 
   return createPortal(
     // Sin cierre por click afuera a propósito — un clic perdido durante la carga de una factura
-    // (varios ítems, muchos campos) no debe tirar todo lo cargado. Solo cierran el botón ✕ y los
-    // botones explícitos del formulario (Cancelar / Guardar).
+    // (varios ítems, muchos campos) no debe tirar todo lo cargado. Un formulario solo se cierra con
+    // el botón ✕ y los botones explícitos (Cancelar / Guardar); un detalle, también con Esc.
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
       onSubmit={(e) => e.stopPropagation()}
     >
       <div
         ref={panelRef}
-        {...(dialogo ? { role: 'dialog', 'aria-modal': true, 'aria-labelledby': tituloId } : {})}
+        {...(esDialogo ? { role: 'dialog', 'aria-modal': true, 'aria-labelledby': tituloId } : {})}
         className={`flex w-full ${widthClassName} max-h-[90vh] flex-col rounded-lg bg-surface shadow-sm ${
           footer ? '' : 'overflow-y-auto p-card'
         }`}

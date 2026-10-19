@@ -160,7 +160,7 @@ export function PagarProveedorModal({
       title="Registrar pago a proveedor"
       onClose={pedirCierre}
       widthClassName="max-w-[640px]"
-      dialogo={{ onEscape: pedirCierre }}
+      cambiosSinGuardar={dirty}
       footer={
         <div className="flex justify-end gap-3">
           <button

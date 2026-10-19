@@ -68,7 +68,7 @@ export function EditarFacturaCompraModal({ supabase, factura, onClose, onSaved }
       title="Editar factura de compra"
       onClose={pedirCierre}
       widthClassName="max-w-[480px]"
-      dialogo={{ onEscape: pedirCierre }}
+      cambiosSinGuardar={dirty}
     >
       <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
         <p className="font-sans text-body-md text-ink-soft">

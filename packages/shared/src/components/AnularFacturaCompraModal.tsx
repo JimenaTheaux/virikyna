@@ -59,7 +59,7 @@ export function AnularFacturaCompraModal({ supabase, factura, onClose, onAnulada
       title="Anular factura de compra"
       onClose={pedirCierre}
       widthClassName="max-w-[480px]"
-      dialogo={{ onEscape: pedirCierre }}
+      cambiosSinGuardar={dirty}
     >
       <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
         <div className="rounded border border-error/40 bg-error/5 p-4">

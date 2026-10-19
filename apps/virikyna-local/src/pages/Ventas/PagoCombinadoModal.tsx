@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import type { FormaPagoVenta } from '@virikyna/shared'
 import { formatCurrency } from '@virikyna/shared'
 import { Modal } from '../../components/Modal'
+import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field, ErrorText, inputClass, selectClass } from '../../components/FormField'
 import { FORMA_PAGO_LABEL } from '../../lib/comprobante'
 import type { PagoParcial } from './types'
@@ -26,6 +27,14 @@ export function PagoCombinadoModal({ total, valorActual, onClose, onAplicar }: P
   const [monto2, setMonto2] = useState(valorActual?.[1] ? String(valorActual[1].monto) : '')
   const [monto2Tocado, setMonto2Tocado] = useState(Boolean(valorActual?.[1]))
   const [error, setError] = useState<string | null>(null)
+  const [dirty, setDirty] = useState(false)
+  const [confirmCerrar, setConfirmCerrar] = useState(false)
+
+  // Formulario: Esc no cierra; ✕ / Cancelar con cambios piden confirmación (docs/auditoria-2026-10-19.md, B).
+  function pedirCierre() {
+    if (dirty) setConfirmCerrar(true)
+    else onClose()
+  }
 
   const numMonto1 = Number(monto1) || 0
   const numMonto2 = Number(monto2) || 0
@@ -66,8 +75,8 @@ export function PagoCombinadoModal({ total, valorActual, onClose, onAplicar }: P
   }
 
   return (
-    <Modal title="Pago combinado" onClose={onClose} widthClassName="max-w-[400px]" dialogo={{ onEscape: onClose }}>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-stack-md">
+    <Modal title="Pago combinado" onClose={pedirCierre} cambiosSinGuardar={dirty} widthClassName="max-w-[400px]">
+      <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
         <p className="text-center font-sans text-body-md text-ink-soft">
           Total a cubrir: <span className="font-sans text-label-bold text-ink">{formatCurrency(total)}</span>
         </p>
@@ -133,7 +142,7 @@ export function PagoCombinadoModal({ total, valorActual, onClose, onAplicar }: P
         <div className="flex justify-end gap-3">
           <button
             type="button"
-            onClick={onClose}
+            onClick={pedirCierre}
             className="rounded px-4 py-3 font-sans text-label-bold text-ink-soft hover:bg-bg"
           >
             Cancelar
@@ -146,6 +155,15 @@ export function PagoCombinadoModal({ total, valorActual, onClose, onAplicar }: P
           </button>
         </div>
       </form>
+      {confirmCerrar && (
+        <ConfirmDialog
+          title="Cerrar sin guardar"
+          mensaje="Hay cambios en el reparto del pago. ¿Querés cerrar de todos modos?"
+          confirmLabel="Cerrar sin guardar"
+          onCancel={() => setConfirmCerrar(false)}
+          onConfirm={onClose}
+        />
+      )}
     </Modal>
   )
 }

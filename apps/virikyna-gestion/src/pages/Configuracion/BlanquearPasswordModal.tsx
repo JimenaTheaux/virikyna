@@ -47,7 +47,7 @@ export function BlanquearPasswordModal({ usuario, onClose, onDone }: Props) {
   }
 
   return (
-    <Modal title={`Blanquear contraseña — ${usuario.nombre}`} onClose={pedirCierre} widthClassName="max-w-[440px]">
+    <Modal title={`Blanquear contraseña — ${usuario.nombre}`} onClose={pedirCierre} cambiosSinGuardar={dirty} widthClassName="max-w-[440px]">
       <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
         <p className="font-sans text-body-md text-ink-soft">
           Se reemplaza la contraseña actual. Comunicale la nueva a {usuario.nombre} por fuera del sistema.

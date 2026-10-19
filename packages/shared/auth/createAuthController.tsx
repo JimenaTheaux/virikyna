@@ -2,11 +2,12 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
 import { Navigate, Outlet } from 'react-router-dom'
-import type { Session, SupabaseClient, User } from '@supabase/supabase-js'
+import type { AuthChangeEvent, Session, SupabaseClient, User } from '@supabase/supabase-js'
 import type { Perfil } from '../types/database'
 
 type AuthState = {
@@ -19,11 +20,23 @@ type AuthState = {
   signOut: () => Promise<void>
 }
 
-// Fábrica de auth compartida entre las apps de Virikyna (Local, Inventario móvil) — mismo
-// Supabase Auth y misma regla de perfil (docs/04_modulos_y_funciones.md, módulo 1): la sesión
-// se resuelve contra `perfiles`, y un usuario desactivado se desloguea al instante.
+type Opciones = {
+  // Regla extra de la app sobre el perfil (además de existir y estar activo). Devuelve el mensaje
+  // con el que se rechaza la sesión, o null si puede entrar. Gestión: solo admin.
+  validarPerfil?: (perfil: Perfil) => string | null
+}
+
+// Fábrica de auth compartida entre las tres apps de Virikyna — mismo Supabase Auth y misma regla de
+// perfil (docs/04_modulos_y_funciones.md, módulo 1): la sesión se resuelve contra `perfiles`, y un
+// usuario desactivado (o que no pasa `validarPerfil`) se desloguea al instante.
 // Cada app la instancia una sola vez con su propio cliente de Supabase.
-export function createAuthController(supabase: SupabaseClient, loginPath = '/login') {
+//
+// Eventos de Supabase Auth (docs/auditoria-2026-10-19.md, B.3 #1): la sesión se renueva sola cada
+// ~hora (TOKEN_REFRESHED) y al volver a la pestaña puede llegar otra vez SIGNED_IN del mismo usuario.
+// Ninguno de los dos puede volver a "Cargando…": eso desmontaba la pantalla entera y se perdía lo
+// que hubiera en un formulario abierto. Solo la carga inicial o un usuario distinto cargan el perfil
+// con `loading`; USER_UPDATED lo recarga en silencio.
+export function createAuthController(supabase: SupabaseClient, loginPath = '/login', opciones: Opciones = {}) {
   const AuthContext = createContext<AuthState | null>(null)
 
   function AuthProvider({ children }: { children: ReactNode }) {
@@ -31,6 +44,8 @@ export function createAuthController(supabase: SupabaseClient, loginPath = '/log
     const [perfil, setPerfil] = useState<Perfil | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    // Usuario cuyo perfil está cargado (o cargándose): decide si un SIGNED_IN es otro usuario.
+    const usuarioRef = useRef<string | null>(null)
 
     useEffect(() => {
       let active = true
@@ -44,15 +59,15 @@ export function createAuthController(supabase: SupabaseClient, loginPath = '/log
 
         if (!active) return
 
-        if (perfilError || !data) {
-          setError('No se pudo cargar el perfil de este usuario.')
-          setPerfil(null)
-          await supabase.auth.signOut()
-          return
-        }
+        const rechazo =
+          perfilError || !data
+            ? 'No se pudo cargar el perfil de este usuario.'
+            : !data.activo
+              ? 'Este usuario está desactivado. Consultá con un administrador.'
+              : (opciones.validarPerfil?.(data as Perfil) ?? null)
 
-        if (!data.activo) {
-          setError('Este usuario está desactivado. Consultá con un administrador.')
+        if (rechazo) {
+          setError(rechazo)
           setPerfil(null)
           await supabase.auth.signOut()
           return
@@ -61,27 +76,48 @@ export function createAuthController(supabase: SupabaseClient, loginPath = '/log
         setPerfil(data as Perfil)
       }
 
-      supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
-        if (!active) return
-        setSession(initialSession)
-        if (initialSession) {
-          cargarPerfil(initialSession.user.id).finally(() => active && setLoading(false))
-        } else {
-          setLoading(false)
-        }
-      })
+      // Con loading (carga inicial o usuario nuevo) o en silencio (USER_UPDATED). Diferido con
+      // setTimeout: Supabase desaconseja llamar a la API adentro del callback de onAuthStateChange
+      // (puede trabarse esperando el mismo lock de la sesión).
+      function programarPerfil(userId: string, conLoading: boolean) {
+        usuarioRef.current = userId
+        if (conLoading) setLoading(true)
+        setTimeout(() => {
+          if (!active) return
+          cargarPerfil(userId).finally(() => {
+            if (active && conLoading) setLoading(false)
+          })
+        }, 0)
+      }
 
       const {
         data: { subscription },
-      } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, newSession) => {
         if (!active) return
         setSession(newSession)
-        if (newSession) {
-          setLoading(true)
-          cargarPerfil(newSession.user.id).finally(() => active && setLoading(false))
-        } else {
+
+        if (!newSession) {
+          // SIGNED_OUT, o INITIAL_SESSION sin sesión guardada.
+          usuarioRef.current = null
           setPerfil(null)
           setLoading(false)
+          return
+        }
+
+        const userId = newSession.user.id
+        switch (event) {
+          case 'INITIAL_SESSION':
+            programarPerfil(userId, true)
+            break
+          case 'SIGNED_IN':
+            if (userId !== usuarioRef.current) programarPerfil(userId, true)
+            break
+          case 'USER_UPDATED':
+            programarPerfil(userId, false)
+            break
+          default:
+            // TOKEN_REFRESHED, PASSWORD_RECOVERY, MFA_*: solo la sesión nueva, nada más.
+            break
         }
       })
 
@@ -137,23 +173,31 @@ export function createAuthController(supabase: SupabaseClient, loginPath = '/log
     return { perfil, rol: perfil?.rol ?? null, loading }
   }
 
+  // "Cargando…" solo hasta mostrar la app por primera vez. Después, nunca más se reemplaza el
+  // <Outlet/> por un loader (desmontaría formularios abiertos): un cambio de usuario en otra pestaña
+  // actualiza el perfil en el lugar, y cerrar sesión lleva al login.
   function RequireAuth() {
     const { session, loading } = useAuth()
-
-    if (loading) {
-      return (
-        <div className="flex h-screen items-center justify-center bg-bg font-sans text-body-md text-ink-soft">
-          Cargando...
-        </div>
-      )
-    }
+    const mostradaRef = useRef(false)
 
     if (!session) {
+      if (loading && !mostradaRef.current) return <Cargando />
       return <Navigate to={loginPath} replace />
     }
 
+    if (loading && !mostradaRef.current) return <Cargando />
+
+    mostradaRef.current = true
     return <Outlet />
   }
 
   return { AuthProvider, useAuth, usePerfil, RequireAuth }
+}
+
+function Cargando() {
+  return (
+    <div className="flex h-screen items-center justify-center bg-bg font-sans text-body-md text-ink-soft">
+      Cargando...
+    </div>
+  )
 }

@@ -17,6 +17,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { showToast } from '../../lib/toast'
 import { usePerfil } from '../../auth/AuthContext'
 import { Modal } from '../../components/Modal'
+import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { ErrorText, Field, inputClass } from '../../components/FormField'
 import { DevolucionDetalleModal, sentidoDiferencia, type DevolucionConDetalle } from './DevolucionDetalleModal'
 
@@ -37,6 +38,15 @@ export function DevolucionesTab() {
   const [motivoAnulacion, setMotivoAnulacion] = useState('')
   const [anulando, setAnulando] = useState(false)
   const [errorAnulacion, setErrorAnulacion] = useState<string | null>(null)
+  const [confirmCerrarAnulacion, setConfirmCerrarAnulacion] = useState(false)
+
+  // El modal de anulación es un formulario (motivo): ✕ / Cancelar con el motivo escrito piden
+  // confirmación y Esc no cierra.
+  const motivoEscrito = motivoAnulacion.trim() !== ''
+  function pedirCierreAnulacion() {
+    if (motivoEscrito) setConfirmCerrarAnulacion(true)
+    else setAAnular(null)
+  }
 
   async function cargar() {
     setLoading(true)
@@ -211,7 +221,12 @@ export function DevolucionesTab() {
       {verDetalle && <DevolucionDetalleModal devolucion={verDetalle} onClose={() => setVerDetalle(null)} />}
 
       {aAnular && (
-        <Modal title={`Anular devolución ${aAnular.numero}`} onClose={() => setAAnular(null)} widthClassName="max-w-[440px]">
+        <Modal
+          title={`Anular devolución ${aAnular.numero}`}
+          onClose={pedirCierreAnulacion}
+          cambiosSinGuardar={motivoEscrito}
+          widthClassName="max-w-[440px]"
+        >
           <div className="flex flex-col gap-stack-md">
             <p className="font-sans text-body-md text-ink">
               Se revierte el stock movido por esta devolución. La venta original no se modifica. Solo para devoluciones mal cargadas.
@@ -228,7 +243,7 @@ export function DevolucionesTab() {
             <div className="flex justify-end gap-3">
               <button
                 type="button"
-                onClick={() => setAAnular(null)}
+                onClick={pedirCierreAnulacion}
                 className="rounded px-4 py-3 font-sans text-label-bold text-ink-soft hover:bg-bg"
               >
                 Cancelar
@@ -243,6 +258,18 @@ export function DevolucionesTab() {
               </button>
             </div>
           </div>
+          {confirmCerrarAnulacion && (
+            <ConfirmDialog
+              title="Cerrar sin guardar"
+              mensaje="Escribiste un motivo de anulación. ¿Querés cerrar de todos modos?"
+              confirmLabel="Cerrar sin guardar"
+              onCancel={() => setConfirmCerrarAnulacion(false)}
+              onConfirm={() => {
+                setConfirmCerrarAnulacion(false)
+                setAAnular(null)
+              }}
+            />
+          )}
         </Modal>
       )}
     </div>

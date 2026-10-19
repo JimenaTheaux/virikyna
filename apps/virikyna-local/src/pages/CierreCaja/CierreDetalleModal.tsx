@@ -35,6 +35,7 @@ export function CierreDetalleModal({ cierre, onClose }: { cierre: CierreCajaConU
     <Modal
       title={cierre.tipo === 'z' ? 'Cierre Z — Cierre del día' : 'Cierre X — Resumen de turno'}
       onClose={onClose}
+      dialogo={{ onEscape: onClose }}
       widthClassName="max-w-[520px]"
     >
       <div className="flex flex-col">

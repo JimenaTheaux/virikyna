@@ -52,7 +52,7 @@ export function NuevaNotaModal({ autorId, onClose, onSaved }: Props) {
   }
 
   return (
-    <Modal title="Nueva nota" onClose={pedirCierre} widthClassName="max-w-[480px]">
+    <Modal title="Nueva nota" onClose={pedirCierre} cambiosSinGuardar={dirty} widthClassName="max-w-[480px]">
       <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
         <Field label="Mensaje">
           <textarea

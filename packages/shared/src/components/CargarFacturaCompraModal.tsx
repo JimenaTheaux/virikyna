@@ -169,7 +169,10 @@ export function CargarFacturaCompraModal({
       .then(({ data }) => setProveedores((data ?? []) as Proveedor[]))
   }, [])
 
+  // Los ítems también cambian sin evento `change` (producto elegido con clic, código de la cámara,
+  // Enter del lector, agregar/quitar fila): marcan dirty a mano, onChangeCapture no los ve.
   function actualizarItem(key: string, cambios: Partial<ItemFacturaCompraUI>) {
+    setDirty(true)
     setItemsConError((prev) => {
       if (!prev.has(key)) return prev
       const sig = new Set(prev)
@@ -181,6 +184,7 @@ export function CargarFacturaCompraModal({
 
   function agregarItem() {
     const nuevo = nuevoItemFacturaCompraUI()
+    setDirty(true)
     setItems((prev) => [...prev, nuevo])
     setFoco((prev) => ({ key: nuevo.key, n: (prev?.n ?? 0) + 1 }))
   }
@@ -195,6 +199,7 @@ export function CargarFacturaCompraModal({
   }
 
   function eliminarItem(key: string) {
+    setDirty(true)
     setItems((prev) => prev.filter((it) => it.key !== key))
   }
 
@@ -263,6 +268,7 @@ export function CargarFacturaCompraModal({
     <Modal
       title={copiaDe ? 'Copiar factura' : 'Nueva factura de compra'}
       onClose={pedirCierre}
+      cambiosSinGuardar={dirty}
       widthClassName="max-w-[1180px]"
       footer={
         <div className="flex flex-col gap-stack-sm">

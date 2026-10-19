@@ -1,6 +1,7 @@
 import { useId, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useFocoAtrapado } from '../../lib/useFocoAtrapado'
+import { useCambiosSinGuardar } from '../../lib/cambiosSinGuardar'
 
 type Props = {
   title: string
@@ -10,9 +11,10 @@ type Props = {
   // scrollea, respetando el safe-area inferior del celular. El botón de guardar que viva acá
   // apunta a su <form> con el atributo `form="<id>"`.
   footer?: ReactNode
-  // Opt-in, igual que Modal: role="dialog" + aria-modal + aria-labelledby, Esc → onEscape y foco
-  // atrapado (useFocoAtrapado). Sin esta prop el sheet se comporta como siempre.
+  // Igual que Modal: `dialogo` para detalles y confirmaciones (Esc cierra); `cambiosSinGuardar`
+  // para formularios (Esc no cierra; con cambios, Atrás pide cerrar en vez de desmontarlo).
   dialogo?: { onEscape: () => void }
+  cambiosSinGuardar?: boolean
 }
 
 // Equivalente móvil de Modal (apps/virikyna-local y virikyna-gestion): en vez de un modal
@@ -32,15 +34,20 @@ type Props = {
 // también al onSubmit del formulario de afuera (por eso cerrar el subformulario de producto
 // cerraba la factura entera). Cortamos esa propagación acá, en el único punto por el que pasan
 // todos los sheets de la app.
-export function BottomSheet({ title, onClose, children, footer, dialogo }: Props) {
+export function BottomSheet({ title, onClose, children, footer, dialogo, cambiosSinGuardar }: Props) {
   const tituloId = useId()
   const panelRef = useRef<HTMLDivElement>(null)
-  useFocoAtrapado(panelRef, dialogo?.onEscape)
+  const esFormulario = cambiosSinGuardar !== undefined
+  useFocoAtrapado(panelRef, esFormulario ? null : dialogo?.onEscape)
+  useCambiosSinGuardar(!!cambiosSinGuardar, ({ cancelar }) => {
+    cancelar()
+    onClose()
+  })
 
   return createPortal(
     <div
       ref={panelRef}
-      {...(dialogo ? { role: 'dialog', 'aria-modal': true, 'aria-labelledby': tituloId } : {})}
+      {...(esFormulario || dialogo ? { role: 'dialog', 'aria-modal': true, 'aria-labelledby': tituloId } : {})}
       className="fixed inset-0 z-50 flex flex-col bg-bg"
       onSubmit={(e) => e.stopPropagation()}
     >

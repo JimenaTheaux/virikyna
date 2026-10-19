@@ -48,7 +48,7 @@ export function PendientePagoModal({ onClose, onChanged }: Props) {
   }, [])
 
   return (
-    <Modal title="Pendiente de pago" onClose={onClose} widthClassName="max-w-[560px]">
+    <Modal title="Pendiente de pago" onClose={onClose} dialogo={{ onEscape: onClose }} widthClassName="max-w-[560px]">
       <div className="flex flex-col gap-stack-md">
         <p className="font-sans text-body-md text-ink-soft">Proveedores con saldo pendiente, de mayor a menor.</p>
 

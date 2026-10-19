@@ -40,7 +40,7 @@ export function AjustePorcentajeModal({ titulo, etiqueta, valorActual, max, onCl
   }
 
   return (
-    <Modal title={titulo} onClose={pedirCierre} widthClassName="max-w-[360px]" dialogo={{ onEscape: pedirCierre }}>
+    <Modal title={titulo} onClose={pedirCierre} cambiosSinGuardar={dirty} widthClassName="max-w-[360px]">
       <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
         <Field label={etiqueta}>
           <input

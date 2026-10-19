@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { BottomSheet } from '../BottomSheet'
+import { ConfirmDialog } from '../ConfirmDialog'
 import { Modal } from '../Modal'
 import type { CargaInicialFinalizarResultado } from '../../../types/database'
 import { formatCantidad } from '../../../lib/cargaInicial'
@@ -13,29 +14,54 @@ export function claseCampoTexto(base: string, campo: string): string {
 }
 
 // Diálogo según el dispositivo: Modal centrado en escritorio, BottomSheet a pantalla completa en
-// celular. Siempre con role="dialog", Esc y foco atrapado.
+// celular. Siempre con role="dialog" y foco atrapado. Confirmaciones: Esc cierra. Formularios (pasan
+// `cambiosSinGuardar`): Esc no cierra y Atrás con cambios llama a onClose (ver Modal).
 export function Dialogo({
   celular,
   title,
   onClose,
   footer,
+  cambiosSinGuardar,
   children,
 }: {
   celular: boolean
   title: string
   onClose: () => void
   footer?: ReactNode
+  cambiosSinGuardar?: boolean
   children: ReactNode
 }) {
+  const modo = cambiosSinGuardar === undefined ? { dialogo: { onEscape: onClose } } : { cambiosSinGuardar }
   return celular ? (
-    <BottomSheet title={title} onClose={onClose} footer={footer} dialogo={{ onEscape: onClose }}>
+    <BottomSheet title={title} onClose={onClose} footer={footer} {...modo}>
       {children}
     </BottomSheet>
   ) : (
-    <Modal title={title} onClose={onClose} footer={footer} widthClassName="max-w-[520px]" dialogo={{ onEscape: onClose }}>
+    <Modal title={title} onClose={onClose} footer={footer} widthClassName="max-w-[520px]" {...modo}>
       {children}
     </Modal>
   )
+}
+
+// "Cerrar sin guardar" de los editores de la carga inicial: ✕ y Cancelar piden confirmación si hubo
+// cambios (mismo patrón pedirCierre de los formularios de las apps).
+export function useCierreConCambios(onCerrar: () => void) {
+  const [dirty, setDirty] = useState(false)
+  const [confirmando, setConfirmando] = useState(false)
+  function pedirCierre() {
+    if (dirty) setConfirmando(true)
+    else onCerrar()
+  }
+  const confirmacion = confirmando ? (
+    <ConfirmDialog
+      title="Cerrar sin guardar"
+      mensaje="Hay cambios sin guardar. ¿Querés cerrar de todos modos?"
+      confirmLabel="Cerrar sin guardar"
+      onCancel={() => setConfirmando(false)}
+      onConfirm={onCerrar}
+    />
+  ) : null
+  return { dirty, marcarCambio: () => setDirty(true), pedirCierre, confirmacion }
 }
 
 // Pie de diálogo: secundario a la izquierda, primario (o destructivo) a la derecha.

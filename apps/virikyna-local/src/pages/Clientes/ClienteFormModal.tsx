@@ -82,7 +82,7 @@ export function ClienteFormModal({ cliente, onClose, onSaved }: Props) {
   }
 
   return (
-    <Modal title={cliente ? 'Editar cliente' : 'Nuevo cliente'} onClose={pedirCierre} widthClassName="max-w-[560px]">
+    <Modal title={cliente ? 'Editar cliente' : 'Nuevo cliente'} onClose={pedirCierre} cambiosSinGuardar={dirty} widthClassName="max-w-[560px]">
       <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
         <div className="grid grid-cols-2 gap-stack-md">
           <Field label="Razón social">

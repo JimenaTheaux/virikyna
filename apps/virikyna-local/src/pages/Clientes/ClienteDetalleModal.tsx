@@ -86,6 +86,7 @@ export function ClienteDetalleModal({ cliente, onClose, onChanged }: Props) {
     <Modal
       title={cliente.razon_social ?? cliente.nombre_fantasia ?? 'Cliente'}
       onClose={onClose}
+      dialogo={{ onEscape: onClose }}
       widthClassName="max-w-[680px]"
     >
       <div className="flex flex-col gap-stack-md">

@@ -70,7 +70,7 @@ export function EditarMovimientoModal({ movimiento, onClose, onSaved }: Props) {
   }
 
   return (
-    <Modal title={`Editar ${TIPO_MOVIMIENTO_CUENTA_LABEL[movimiento.tipo].toLowerCase()}`} onClose={pedirCierre} widthClassName="max-w-[480px]">
+    <Modal title={`Editar ${TIPO_MOVIMIENTO_CUENTA_LABEL[movimiento.tipo].toLowerCase()}`} onClose={pedirCierre} cambiosSinGuardar={dirty} widthClassName="max-w-[480px]">
       <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
         <p className="font-sans text-body-md text-ink-soft">
           Esto no pisa el movimiento original — genera un contra-asiento y una versión corregida.

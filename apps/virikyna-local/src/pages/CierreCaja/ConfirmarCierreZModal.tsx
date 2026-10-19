@@ -42,7 +42,7 @@ export function ConfirmarCierreZModal({ onClose, onConfirmar }: Props) {
   }
 
   return (
-    <Modal title="Cierre Z — Cierre del día" onClose={pedirCierre} widthClassName="max-w-[460px]">
+    <Modal title="Cierre Z — Cierre del día" onClose={pedirCierre} cambiosSinGuardar={dirty} widthClassName="max-w-[460px]">
       <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
         <p className="rounded bg-accent-light px-4 py-3 font-sans text-body-md text-accent-darker">
           Es el cierre único del día. Una vez validado por un administrador no se puede editar ni revertir —

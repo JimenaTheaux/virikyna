@@ -80,7 +80,7 @@ export function NotaCorreccionModal({ onClose, onSaved }: Props) {
   }
 
   return (
-    <Modal title="Nota de corrección sobre un Cierre Z" onClose={pedirCierre} widthClassName="max-w-[480px]">
+    <Modal title="Nota de corrección sobre un Cierre Z" onClose={pedirCierre} cambiosSinGuardar={dirty} widthClassName="max-w-[480px]">
       <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
         <p className="font-sans text-body-md text-ink-soft">
           No reabre el cierre ni cambia ningún número — solo deja constancia, visible en el Historial.

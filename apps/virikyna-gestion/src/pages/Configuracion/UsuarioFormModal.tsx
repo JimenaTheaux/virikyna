@@ -76,7 +76,7 @@ export function UsuarioFormModal({ usuario, onClose, onSaved }: Props) {
   }
 
   return (
-    <Modal title={usuario ? 'Editar usuario' : 'Nuevo usuario'} onClose={pedirCierre} widthClassName="max-w-[480px]">
+    <Modal title={usuario ? 'Editar usuario' : 'Nuevo usuario'} onClose={pedirCierre} cambiosSinGuardar={dirty} widthClassName="max-w-[480px]">
       <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
         {!usuario && (
           <>

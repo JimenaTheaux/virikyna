@@ -74,7 +74,7 @@ export function ActualizarPreciosSheet({ productos, proveedores, onClose, onSave
     <BottomSheet
       title="Actualizar precios"
       onClose={pedirCierre}
-      dialogo={{ onEscape: pedirCierre }}
+      cambiosSinGuardar={dirty}
       footer={
         <div className="flex flex-col gap-2">
           {a.error && <ErrorText>{a.error}</ErrorText>}

@@ -67,6 +67,7 @@ export function RegistrarPagoClienteModal({ cliente, ventasCuentaCorriente, onCl
     <Modal
       title={`Cobrar — ${cliente.razon_social ?? cliente.nombre_fantasia}`}
       onClose={pedirCierre}
+      cambiosSinGuardar={dirty}
       widthClassName="max-w-[480px]"
     >
       <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">

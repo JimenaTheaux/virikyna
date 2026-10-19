@@ -79,6 +79,7 @@ export function ProveedorFormModal({ proveedor, onClose, onSaved }: Props) {
     <Modal
       title={proveedor ? 'Editar proveedor' : 'Nuevo proveedor'}
       onClose={pedirCierre}
+      cambiosSinGuardar={dirty}
       widthClassName="max-w-[600px]"
     >
       <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">

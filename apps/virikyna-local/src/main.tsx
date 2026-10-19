@@ -6,13 +6,15 @@ import { disableNumberInputScroll } from '@virikyna/shared'
 import App from './App'
 import { AuthProvider } from './auth/AuthContext'
 import { Toaster } from './components/Toaster'
-import { checkForUpdates } from './lib/updater'
+import { AvisoActualizacion } from './components/AvisoActualizacion'
+import { buscarActualizacion } from './lib/updater'
 import { instalarProteccionVentana } from './lib/proteccionVentana'
 import './index.css'
 
 disableNumberInputScroll()
 instalarProteccionVentana()
-void checkForUpdates()
+// Busca y descarga en segundo plano; nunca instala ni reinicia sola (ver lib/updater.ts).
+void buscarActualizacion()
 
 // Mismos defaults que Virikyna Gestión — hoy solo lo usa la card compartida de Stock bajo.
 const queryClient = new QueryClient({
@@ -32,6 +34,7 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
           <App />
         </AuthProvider>
         <Toaster />
+        <AvisoActualizacion />
       </HashRouter>
     </QueryClientProvider>
   </React.StrictMode>,

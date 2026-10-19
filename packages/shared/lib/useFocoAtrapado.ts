@@ -25,7 +25,9 @@ if (typeof document !== 'undefined') {
 
 // Comportamiento de diálogo accesible para Modal / BottomSheet (opt-in con la prop `dialogo`):
 // - Tab / Shift+Tab no salen del diálogo (dan la vuelta).
-// - Esc llama a onEscape (cada pantalla decide: cerrar, o pedir confirmación si hay cambios).
+// - Esc llama a onEscape. Con onEscape = null el diálogo queda activo pero Esc no hace nada (ni
+//   llega a lo de abajo): es el caso de los formularios, que solo se cierran con ✕ / Cancelar.
+//   undefined = sin comportamiento de diálogo.
 // - Al abrir, si nada adentro tiene el foco (ningún autoFocus), va al elemento con
 //   data-autofocus o al primero enfocable; al cerrar vuelve a donde estaba (también con autoFocus).
 //
@@ -33,7 +35,7 @@ if (typeof document !== 'undefined') {
 // React burbujean por el árbol de componentes, y un diálogo abierto encima (ej. ConfirmDialog
 // "¿Cerrar sin guardar?", otro portal) es hijo en React del de abajo — con onKeyDown, un Esc en
 // el de arriba cerraría también el de abajo. En el DOM son nodos hermanos y no se pisan.
-export function useFocoAtrapado(ref: RefObject<HTMLElement>, onEscape: (() => void) | undefined) {
+export function useFocoAtrapado(ref: RefObject<HTMLElement>, onEscape: (() => void) | null | undefined) {
   // Siempre la última versión del callback, sin re-suscribir el listener en cada render.
   const onEscapeRef = useRef(onEscape)
   onEscapeRef.current = onEscape

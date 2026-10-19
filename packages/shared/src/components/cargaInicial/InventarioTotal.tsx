@@ -14,7 +14,7 @@ import { normalizarCodigoBarras } from '../../../lib/productoBusqueda'
 import { formatCurrency } from '../../../lib/format'
 import { MostrarMas } from '../MostrarMas'
 import { ScanButton } from '../ScanButton'
-import { BotonesDialogo, claseCampoTexto, Dialogo } from './comunes'
+import { BotonesDialogo, claseCampoTexto, Dialogo, useCierreConCambios } from './comunes'
 
 // clientId (docs/34c): uno por versión de la edición. Cambiar un campo genera otro; guardar de
 // nuevo sin cambios (reintento tras un error de red) reusa el mismo y la base no lo aplica dos veces.
@@ -400,6 +400,7 @@ function EditorProductoSheet({
   const [errores, setErrores] = useState<ErroresFila>({})
   const [error, setError] = useState<string | null>(null)
   const conCosto = producto.costo !== null
+  const cierre = useCierreConCambios(onCancelar)
 
   async function confirmar() {
     const v = erroresEdicion(e)
@@ -418,7 +419,10 @@ function EditorProductoSheet({
       <input
         id={`total-${k}`}
         value={e[k]}
-        onChange={(ev) => setE({ ...e, [k]: ev.target.value, clientId: crypto.randomUUID() })}
+        onChange={(ev) => {
+          setE({ ...e, [k]: ev.target.value, clientId: crypto.randomUUID() })
+          cierre.marcarCambio()
+        }}
         aria-invalid={!!errores[k as keyof ErroresFila]}
         className={claseCampoTexto(inputCelular, k)}
         {...extra}
@@ -431,11 +435,19 @@ function EditorProductoSheet({
     <Dialogo
       celular
       title="Editar producto"
-      onClose={onCancelar}
+      onClose={cierre.pedirCierre}
+      cambiosSinGuardar={cierre.dirty}
       footer={
-        <BotonesDialogo celular onCancelar={onCancelar} onConfirmar={() => void confirmar()} confirmarLabel="Guardar" confirmando={guardando} />
+        <BotonesDialogo
+          celular
+          onCancelar={cierre.pedirCierre}
+          onConfirmar={() => void confirmar()}
+          confirmarLabel="Guardar"
+          confirmando={guardando}
+        />
       }
     >
+      {cierre.confirmacion}
       <div className="flex flex-col gap-3">
         <p className="font-sans text-label-md text-ink-soft">Código: {producto.codigo_barras ?? producto.codigo_interno ?? '—'}</p>
         {campo('nombre', 'Nombre')}

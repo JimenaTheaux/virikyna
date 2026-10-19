@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getVersion } from '@tauri-apps/api/app'
-import { checkForUpdates, type UpdateStatus } from '../lib/updater'
+import { buscarActualizacion, type UpdateStatus } from '../lib/updater'
 
 function estadoTexto(status: UpdateStatus | null): string {
   if (!status) return ''
@@ -10,9 +10,11 @@ function estadoTexto(status: UpdateStatus | null): string {
     case 'up-to-date':
       return 'Ya tenés la última versión instalada.'
     case 'downloading':
-      return `Actualización ${status.latest} encontrada, descargando e instalando...`
+      return `Actualización ${status.latest} encontrada, descargando...`
+    case 'ready':
+      return `Versión ${status.latest} descargada. Se instala con "Reiniciar ahora" en el aviso de abajo.`
     case 'installing':
-      return `Actualización ${status.latest} instalada. Reiniciando la app...`
+      return `Instalando la versión ${status.latest}...`
     case 'error':
       return `No se pudo buscar la actualización: ${status.message}`
   }
@@ -46,7 +48,7 @@ export function ConfiguracionPage() {
         <button
           type="button"
           disabled={buscando}
-          onClick={() => void checkForUpdates(setStatus)}
+          onClick={() => void buscarActualizacion(setStatus, { manual: true })}
           className="rounded bg-accent px-4 py-2 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-60"
         >
           {buscando ? 'Buscando...' : 'Buscar actualizaciones'}

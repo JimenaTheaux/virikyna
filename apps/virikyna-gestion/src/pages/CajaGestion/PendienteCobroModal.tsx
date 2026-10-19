@@ -46,7 +46,7 @@ export function PendienteCobroModal({ onClose, onChanged }: Props) {
   }, [])
 
   return (
-    <Modal title="Pendiente de cobro" onClose={onClose} widthClassName="max-w-[560px]">
+    <Modal title="Pendiente de cobro" onClose={onClose} dialogo={{ onEscape: onClose }} widthClassName="max-w-[560px]">
       <div className="flex flex-col gap-stack-md">
         <p className="font-sans text-body-md text-ink-soft">Clientes con cuenta corriente pendiente, de mayor a menor.</p>
 

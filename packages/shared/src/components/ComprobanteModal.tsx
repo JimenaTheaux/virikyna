@@ -10,7 +10,8 @@ export type ComprobanteModalProps = {
   datos: DatosComprobante
   onClose: () => void
   footer?: ReactNode
-  // Opt-in: Esc cierra y el foco queda atrapado en el modal (Modal → useFocoAtrapado). Ventas de Local.
+  // Es un detalle (solo lectura + envío): Esc cierra y el foco queda atrapado (Modal → useFocoAtrapado).
+  // Activo por defecto en todas las pantallas (docs/auditoria-2026-10-19.md, B.2).
   dialogo?: boolean
 }
 
@@ -34,7 +35,7 @@ export function ComprobanteModal({
   datos,
   onClose,
   footer,
-  dialogo = false,
+  dialogo = true,
   abrirUrl = abrirEnPestana,
   descargarAlEnviar = false,
   onAviso,

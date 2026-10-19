@@ -96,7 +96,7 @@ export function RegistrarPagoProveedorModal({
   }
 
   return (
-    <Modal title="Registrar pago a proveedor" onClose={pedirCierre} widthClassName="max-w-[460px]">
+    <Modal title="Registrar pago a proveedor" onClose={pedirCierre} cambiosSinGuardar={dirty} widthClassName="max-w-[460px]">
       <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
         <p className="font-sans text-body-md text-ink-soft">
           Proveedor: <span className="text-ink">{proveedorNombre}</span>

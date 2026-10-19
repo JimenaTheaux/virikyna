@@ -109,7 +109,7 @@ export function DetalleAuditoriaModal({ auditoria, ventaEstado, onClose, onRever
   }
 
   return (
-    <Modal title="Detalle de la acción" onClose={onClose} widthClassName="max-w-[640px]">
+    <Modal title="Detalle de la acción" onClose={onClose} dialogo={{ onEscape: onClose }} widthClassName="max-w-[640px]">
       <div className="flex flex-col gap-stack-md">
         <div className="grid grid-cols-2 gap-3 rounded border border-line p-4 font-sans text-body-md">
           <div>

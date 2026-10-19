@@ -66,7 +66,7 @@ export function AjustarStockSheet({ productoId, productoNombre, ubicacion, onClo
   }
 
   return (
-    <BottomSheet title={`Ajustar stock — ${ubicacion === 'local' ? 'Local' : 'Depósito'}`} onClose={pedirCierre}>
+    <BottomSheet title={`Ajustar stock — ${ubicacion === 'local' ? 'Local' : 'Depósito'}`} onClose={pedirCierre} cambiosSinGuardar={dirty}>
       <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
         <p className="font-sans text-body-md text-ink-soft">{productoNombre}</p>
 

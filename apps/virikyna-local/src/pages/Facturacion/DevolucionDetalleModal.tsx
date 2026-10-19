@@ -39,7 +39,7 @@ export function DevolucionDetalleModal({ devolucion: d, onClose }: { devolucion:
   const nuevos = d.items.filter((it) => it.tipo !== 'devuelto')
 
   return (
-    <Modal title={`Devolución ${d.numero}`} onClose={onClose} widthClassName="max-w-[640px]">
+    <Modal title={`Devolución ${d.numero}`} onClose={onClose} dialogo={{ onEscape: onClose }} widthClassName="max-w-[640px]">
       <div className="flex flex-col gap-stack-md font-sans text-body-md text-ink">
         <dl className="grid grid-cols-2 gap-x-stack-md gap-y-2">
           <Dato label="Fecha">{formatFechaHora(d.created_at)}</Dato>

@@ -145,7 +145,7 @@ export function RegistrarEgresoModal({ onClose, onSaved }: { onClose: () => void
   }
 
   return (
-    <Modal title="Registrar egreso" onClose={pedirCierre} widthClassName="max-w-[460px]">
+    <Modal title="Registrar egreso" onClose={pedirCierre} cambiosSinGuardar={dirty} widthClassName="max-w-[460px]">
       <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
         <Field label="Categoría">
           <select

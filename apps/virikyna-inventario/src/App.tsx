@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
+import { GuardiaNavegacion } from '@virikyna/shared'
 import { AppShell } from './layout/AppShell'
 import { RequireAuth } from './auth/AuthContext'
 import { LoginPage } from './pages/LoginPage'
@@ -10,17 +11,21 @@ import { CargaInicialPage } from './pages/CargaInicialPage'
 // no hay pantalla de Ventas ni Dashboard acá, esas siguen siendo exclusivas de la Caja.
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
+    <>
+      {/* Atrás con un formulario con cambios: confirma en vez de desmontarlo. */}
+      <GuardiaNavegacion />
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
 
-      <Route element={<RequireAuth />}>
-        <Route element={<AppShell />}>
-          <Route path="/" element={<Navigate to="/inventario" replace />} />
-          <Route path="/inventario" element={<InventarioPage />} />
-          <Route path="/facturas" element={<CargarFacturaPage />} />
-          <Route path="/carga-inicial" element={<CargaInicialPage />} />
+        <Route element={<RequireAuth />}>
+          <Route element={<AppShell />}>
+            <Route path="/" element={<Navigate to="/inventario" replace />} />
+            <Route path="/inventario" element={<InventarioPage />} />
+            <Route path="/facturas" element={<CargarFacturaPage />} />
+            <Route path="/carga-inicial" element={<CargaInicialPage />} />
+          </Route>
         </Route>
-      </Route>
-    </Routes>
+      </Routes>
+    </>
   )
 }

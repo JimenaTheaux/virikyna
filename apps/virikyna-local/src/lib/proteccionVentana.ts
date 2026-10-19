@@ -16,7 +16,7 @@ export function marcarCobroEnCurso(enCurso: boolean) {
   cobrosEnCurso = Math.max(0, cobrosEnCurso + (enCurso ? 1 : -1))
 }
 
-function hayCobroEnCurso() {
+export function hayCobroEnCurso() {
   return cobrosEnCurso > 0
 }
 
@@ -27,7 +27,7 @@ function esTeclaDeRecargaONavegacion(e: KeyboardEvent) {
   return false
 }
 
-const AVISO_COBRO = 'Se está guardando el cobro. Esperá a que termine.'
+export const AVISO_COBRO = 'Se está guardando el cobro. Esperá a que termine.'
 
 // Se llama una sola vez, en main.tsx.
 export function instalarProteccionVentana() {

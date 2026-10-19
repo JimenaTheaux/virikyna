@@ -69,8 +69,10 @@ export function ActualizarPreciosModal({ supabase, productos, proveedores, selec
     }
   }
 
-  // Todo cambio en los datos invalida la vista previa (y deshabilita "Aplicar").
+  // Todo cambio en los datos invalida la vista previa (y deshabilita "Aplicar"). También marca dirty:
+  // el modo (ControlSegmentado) son botones y onChangeCapture no los ve.
   function cambiar(accion: () => void) {
+    setDirty(true)
     if (vista) a.volver()
     accion()
   }
@@ -86,7 +88,7 @@ export function ActualizarPreciosModal({ supabase, productos, proveedores, selec
     <Modal
       title="Actualizar precios"
       onClose={pedirCierre}
-      dialogo={{ onEscape: pedirCierre }}
+      cambiosSinGuardar={dirty}
       widthClassName="max-w-[820px]"
       footer={
         <div className="flex flex-col gap-stack-sm">
