@@ -1,12 +1,12 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import type { Proveedor } from '@virikyna/shared'
 import {
+  cargarProductosInventario,
   coincideBusquedaProducto,
   EstadoBadge,
   formatCantidad,
   friendlyError,
   ProductoLinea,
-  SELECT_PRODUCTOS_INVENTARIO,
   stockTotal,
 } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
@@ -46,14 +46,14 @@ export function InventarioPage() {
     setError(null)
 
     const [productosRes, proveedoresRes] = await Promise.all([
-      supabase.from('productos').select(SELECT_PRODUCTOS_INVENTARIO).order('nombre'),
+      cargarProductosInventario(supabase),
       supabase.from('proveedores').select('*').order('razon_social'),
     ])
 
     if (productosRes.error) {
       setError(friendlyError(productosRes.error))
     } else {
-      setProductos((productosRes.data ?? []) as unknown as ProductoConRelaciones[])
+      setProductos(productosRes.data as ProductoConRelaciones[])
     }
     setProveedores((proveedoresRes.data ?? []) as Proveedor[])
     setLoading(false)
