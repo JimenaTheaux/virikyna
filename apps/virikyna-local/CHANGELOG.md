@@ -1,5 +1,10 @@
 # Novedades de Virikyna Local
 
+## 0.5.2 — octubre 2026
+
+### Inventario
+- **Ahora se ven todos los productos.** La lista de Inventario mostraba solo los primeros 1000 (hasta la L): los demás no aparecían ni buscándolos, aunque estaban cargados y se podían vender. Ahora carga la lista completa. Lo mismo en Virikyna Gestión y en la app Inventario del celular.
+
 ## 0.5.1 — octubre 2026
 
 ### Ventas
