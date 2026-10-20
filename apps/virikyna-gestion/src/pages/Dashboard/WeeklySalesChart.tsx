@@ -34,10 +34,11 @@ export function WeeklySalesChart({ titulo, dias, serie: datos, hoy }: Props) {
 
   const max = Math.max(...serie.map((d) => d.total), 1)
 
+  // Alto fijo (barras h-36, ~230 px en total): no se estira con la card ni con la ventana.
   return (
-    <div className="flex h-full flex-col">
+    <div>
       <p className="font-sans text-label-bold uppercase text-ink-soft">{titulo}</p>
-      <div className={`mt-stack-md flex flex-1 items-end ${dias.length > MAX_BARRAS_CON_MONTO ? 'gap-1' : 'gap-3'}`}>
+      <div className={`mt-stack-md flex items-end ${dias.length > MAX_BARRAS_CON_MONTO ? 'gap-1' : 'gap-3'}`}>
         {serie.map((dia) => (
           <div
             key={dia.fecha}
@@ -49,7 +50,7 @@ export function WeeklySalesChart({ titulo, dias, serie: datos, hoy }: Props) {
                 {dia.total > 0 ? formatCurrencyCompact(dia.total) : ''}
               </span>
             )}
-            <div className="flex h-32 w-full items-end">
+            <div className="flex h-36 w-full items-end">
               <div
                 className={`w-full rounded-t ${dia.esHoy ? 'bg-accent-darker' : 'bg-accent'}`}
                 style={{ height: `${Math.max((dia.total / max) * 100, dia.total > 0 ? 4 : 1)}%` }}

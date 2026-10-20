@@ -53,7 +53,7 @@ export function AperturasAlerta() {
   if (aperturas.length === 0) return null
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-amarillo bg-amarillo/20 p-card">
+    <div className="flex flex-col gap-2 rounded-lg border border-amarillo bg-amarillo/20 px-card-sm py-stack-sm">
       {marcar.error && (
         <p className="font-sans text-body-md text-error">{friendlyError(marcar.error as never)}</p>
       )}

@@ -77,8 +77,10 @@ export function DashboardPage() {
 
   const actualizando = ventasQuery.isPlaceholderData ? 'opacity-60' : ''
 
+  // Todas las alturas salen del contenido (nada de h-full / flex-1): si no entra, scrollea el
+  // <main> del layout, que deja lugar abajo para el footer fijo.
   return (
-    <div className="flex h-full flex-col gap-stack-md">
+    <div className="flex flex-col gap-stack-md">
       <div className="flex flex-wrap items-end justify-between gap-stack-md">
         <div>
           <h1 className="font-display text-headline-lg text-accent-darker">Dashboard</h1>
@@ -92,7 +94,7 @@ export function DashboardPage() {
       <AperturasAlerta />
 
       <div className={`grid grid-cols-2 gap-gutter-grid transition-opacity xl:grid-cols-4 ${actualizando}`}>
-        <div className="col-span-2 min-w-0 rounded-lg bg-surface p-card shadow-sm">
+        <div className="col-span-2 min-w-0 rounded-lg bg-surface p-card-sm shadow-sm">
           <p className="font-sans text-label-bold uppercase text-ink-soft">Ventas</p>
           <p className="mt-2 font-display text-display-card text-accent-darker">
             {loading ? '—' : formatCurrency(actual.total)}
@@ -104,22 +106,25 @@ export function DashboardPage() {
             </p>
           )}
         </div>
-        <div className="min-w-0 rounded-lg bg-surface p-card shadow-sm">
+        <div className="min-w-0 rounded-lg bg-surface p-card-sm shadow-sm">
           <p className="font-sans text-label-bold uppercase text-ink-soft">Tickets</p>
           <p className="mt-2 font-display text-headline-md text-accent-darker">{loading ? '—' : actual.cantidad}</p>
-          <p className="mt-2 font-sans text-label-md text-ink-soft">{mostrado.descripcion}</p>
+          <p className="mt-1 font-sans text-label-md text-ink-soft">{mostrado.descripcion}</p>
         </div>
-        <div className="min-w-0 rounded-lg bg-surface p-card shadow-sm">
+        <div className="min-w-0 rounded-lg bg-surface p-card-sm shadow-sm">
           <p className="font-sans text-label-bold uppercase text-ink-soft">Ticket promedio</p>
           <p className="mt-2 font-display text-headline-md text-accent-darker">
             {loading ? '—' : formatCurrency(ticketPromedio)}
           </p>
-          <p className="mt-2 font-sans text-label-md text-ink-soft">{mostrado.descripcion}</p>
+          <p className="mt-1 font-sans text-label-md text-ink-soft">{mostrado.descripcion}</p>
         </div>
       </div>
 
-      <div className="grid flex-1 grid-cols-1 gap-gutter-grid lg:grid-cols-3">
-        <div className={`min-w-0 rounded-lg bg-surface p-card shadow-sm transition-opacity lg:col-span-2 ${actualizando}`}>
+      {/* items-start: el gráfico y las alertas de la derecha se alinean arriba y cada uno mide lo
+          que su contenido — ninguno se estira para igualar al otro. Debajo de xl (ventana chica)
+          las alertas pasan abajo del gráfico, una al lado de la otra. */}
+      <div className="grid grid-cols-1 items-start gap-gutter-grid xl:grid-cols-3">
+        <div className={`min-w-0 rounded-lg bg-surface p-card-sm shadow-sm transition-opacity xl:col-span-2 ${actualizando}`}>
           <WeeklySalesChart
             titulo={mostrado.tipo === 'hoy' ? 'Últimos 7 días' : 'Ventas por día'}
             dias={diasDelRango(mostrado.grafico)}
@@ -128,8 +133,8 @@ export function DashboardPage() {
           />
         </div>
 
-        <div className="flex flex-col gap-gutter-grid">
-          <StockBajoCard supabase={supabase} className="flex-1" />
+        <div className="grid min-w-0 grid-cols-1 items-start gap-gutter-grid sm:grid-cols-2 xl:grid-cols-1">
+          <StockBajoCard supabase={supabase} />
           <DefectuososCard supabase={supabase} to="/inventario" />
         </div>
       </div>
@@ -139,7 +144,7 @@ export function DashboardPage() {
           <Link
             key={to}
             to={to}
-            className="flex items-center gap-3 rounded-lg bg-surface p-card shadow-sm transition hover:bg-accent-light"
+            className="flex items-center gap-3 rounded-lg bg-surface px-card-sm py-stack-md shadow-sm transition hover:bg-accent-light"
           >
             <Icon className="h-6 w-6 text-accent-dark" />
             <span className="font-sans text-label-bold text-ink">{label}</span>
