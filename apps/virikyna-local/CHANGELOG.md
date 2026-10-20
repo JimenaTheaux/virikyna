@@ -1,5 +1,29 @@
 # Novedades de Virikyna Local
 
+## 0.6.0 — octubre 2026
+
+### Actualizaciones
+- **La app ya no se reinicia sola para actualizarse.** La versión nueva se descarga en segundo plano y aparece el aviso "Hay una versión nueva" con **Reiniciar ahora** o **Después**. Si hay un formulario con cambios sin guardar, pregunta antes; si se está cobrando, espera a que termine.
+
+### Formularios
+- **Ya no se cierran ni se pierden datos solos.** Antes, más o menos una vez por hora, la pantalla se recargaba y se perdía lo que se estaba cargando. Eso ya no pasa.
+- Esc no cierra un formulario. La ✕ y "Cancelar" preguntan antes de cerrar si hay cambios sin guardar. En las ventanas de solo lectura (detalles), Esc sigue cerrando.
+
+### Facturas de compra
+- **IVA por comprobante: "IVA 21%" o "Exento".** Se elige junto a los totales al cargar la factura. Factura, nota de crédito y nota de débito arrancan con 21%; cupón, remito y presupuesto, exentos. Se puede cambiar a mano, y el total y la deuda con el proveedor salen con el IVA elegido.
+- El detalle de la factura y la cuenta corriente del proveedor muestran si el comprobante es con IVA o exento. Al copiar una factura se copia también su IVA.
+- **El costo del producto tiene en cuenta el descuento de la línea.** Un ítem a $1.000 con 10% de descuento deja el costo en $900 (antes quedaba en $1.000). El aviso de cambio de precio lo muestra igual.
+- En el detalle de una factura los botones quedan siempre a la vista, también en pantallas chicas.
+
+### Productos
+- **"Lleva IVA":** en el formulario de producto hay un interruptor para indicar si el precio de venta lleva IVA. Al cambiarlo se ve el precio nuevo antes de guardar. Un producto con precio manual no cambia de precio hasta que tenga costo cargado. Solo un administrador lo cambia.
+- **IVA de varios productos a la vez:** en Inventario, tildar los productos y tocar **IVA** → "Marcar con IVA" o "Marcar sin IVA", con vista previa de cómo queda cada precio y confirmación. Solo administradores.
+- **Eliminar producto (solo administradores):** botón "Eliminar" en el formulario. Si el producto ya tiene ventas, compras o movimientos de stock, no se puede eliminar y se ofrece **Inactivarlo**.
+- **Producto sin código de barras:** al darlo de alta se le asigna un código numérico de 13 dígitos (empieza con 20), el mismo tipo que usa la carga inicial, que se puede imprimir y escanear.
+
+### Escaneo con cámara
+- La cámara lee solo números: descarta lecturas con letras y saca el prefijo que agregan algunas etiquetas (por ejemplo "]C1"). Escribir el código a mano en el escáner también acepta solo números. El lector de la caja funciona igual que antes.
+
 ## 0.5.2 — octubre 2026
 
 ### Inventario
