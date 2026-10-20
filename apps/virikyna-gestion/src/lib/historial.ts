@@ -55,6 +55,51 @@ export async function etiquetasFacturasCompra(ids: string[]): Promise<Map<string
   return new Map(filas.map((f) => [f.id, etiquetaComprobanteCompra(f)]))
 }
 
+// Tablas cuyas filas de Historial pueden ofrecer "Revertir" o abrir un detalle: si el registro ya no
+// existe (borrado de datos de prueba, docs/46), la fila se marca "Registro eliminado" y no se revierte.
+const TABLAS_CON_REGISTRO = [
+  'productos',
+  'proveedores',
+  'clientes',
+  'ventas',
+  'movimientos_stock',
+  'egresos',
+  'pagos_proveedor',
+  'pagos_cliente',
+  'movimientos_cuenta',
+  'facturas_compra',
+]
+
+export const claveRegistro = (a: Pick<Auditoria, 'tabla_afectada' | 'registro_id'>) => `${a.tabla_afectada}:${a.registro_id}`
+
+// Claves (tabla:id) de los registros que aparecen en el Historial y ya no existen. Una consulta por
+// tabla; si una falla, esa tabla no se marca (mejor ofrecer de más que esconder una reversión válida:
+// el RPC igual valida).
+export async function registrosEliminados(filas: Auditoria[]): Promise<Set<string>> {
+  const porTabla = new Map<string, Set<string>>()
+  for (const f of filas) {
+    if (f.accion === 'eliminacion' || !TABLAS_CON_REGISTRO.includes(f.tabla_afectada)) continue
+    if (!porTabla.has(f.tabla_afectada)) porTabla.set(f.tabla_afectada, new Set())
+    porTabla.get(f.tabla_afectada)!.add(f.registro_id)
+  }
+  // De a 50 ids: 200 UUIDs en un solo `in` arman una URL demasiado larga.
+  const consultas: { tabla: string; ids: string[] }[] = []
+  for (const [tabla, ids] of porTabla) {
+    const lista = [...ids]
+    for (let i = 0; i < lista.length; i += 50) consultas.push({ tabla, ids: lista.slice(i, i + 50) })
+  }
+  const eliminados = new Set<string>()
+  await Promise.all(
+    consultas.map(async ({ tabla, ids }) => {
+      const { data, error } = await supabase.from(tabla).select('id').in('id', ids)
+      if (error) return
+      const existentes = new Set((data ?? []).map((r) => (r as { id: string }).id))
+      for (const id of ids) if (!existentes.has(id)) eliminados.add(`${tabla}:${id}`)
+    }),
+  )
+  return eliminados
+}
+
 export type AccionRevertible = { tipo: 'edicion' | 'alta' | 'movimiento' | 'venta' } | null
 
 // Refleja 1:1 la tabla de reglas de docs/04_modulos_y_funciones.md, módulo 10.

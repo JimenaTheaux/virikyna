@@ -19,6 +19,8 @@ import { FacturaCompraDetallePorId } from '../Proveedores/FacturaCompraDetallePo
 type Props = {
   auditoria: AuditoriaConUsuario
   ventaEstado?: string
+  // El registro de esta acción ya no existe (docs/46): se muestra lo auditado, sin revertir.
+  eliminado?: boolean
   onClose: () => void
   onReverted: () => void
 }
@@ -33,7 +35,7 @@ function valorTexto(v: unknown): string {
   return String(v)
 }
 
-export function DetalleAuditoriaModal({ auditoria, ventaEstado, onClose, onReverted }: Props) {
+export function DetalleAuditoriaModal({ auditoria, ventaEstado, eliminado = false, onClose, onReverted }: Props) {
   const [confirmando, setConfirmando] = useState(false)
   const [motivo, setMotivo] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -45,11 +47,12 @@ export function DetalleAuditoriaModal({ auditoria, ventaEstado, onClose, onRever
     (k) => !['id', 'usuario_id', 'created_at'].includes(k),
   )
 
-  const revertible = accionRevertible(auditoria, ventaEstado)
+  const revertible = eliminado ? null : accionRevertible(auditoria, ventaEstado)
 
   // Campos que apuntan a otra factura de compra (copiada_de_id, docs/33): se muestran con su
   // comprobante y abren su detalle, en vez del UUID.
   const [etiquetasFactura, setEtiquetasFactura] = useState<Map<string, string>>(new Map())
+  const [etiquetasCargadas, setEtiquetasCargadas] = useState(false)
   const [facturaAbierta, setFacturaAbierta] = useState<string | null>(null)
   const idsFactura = todasLasClaves
     .filter((k) => k in CAMPOS_FACTURA_COMPRA_REF)
@@ -59,7 +62,10 @@ export function DetalleAuditoriaModal({ auditoria, ventaEstado, onClose, onRever
   useEffect(() => {
     let cancelado = false
     etiquetasFacturasCompra(idsFactura).then((m) => {
-      if (!cancelado) setEtiquetasFactura(m)
+      if (!cancelado) {
+        setEtiquetasFactura(m)
+        setEtiquetasCargadas(true)
+      }
     })
     return () => {
       cancelado = true
@@ -77,6 +83,7 @@ export function DetalleAuditoriaModal({ auditoria, ventaEstado, onClose, onRever
         className="rounded text-left text-accent-dark underline hover:text-accent-darker focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
       >
         {texto(etiquetasFactura.get(v) ?? 'otra factura')}
+        {etiquetasCargadas && !etiquetasFactura.has(v) && ' (registro eliminado)'}
       </button>
     )
   }
@@ -129,6 +136,13 @@ export function DetalleAuditoriaModal({ auditoria, ventaEstado, onClose, onRever
             <p className="text-ink">{formatFechaHora(auditoria.created_at)}</p>
           </div>
         </div>
+
+        {eliminado && (
+          <div role="status" className="rounded bg-bg px-4 py-3 font-sans text-body-md text-ink-soft">
+            Registro eliminado: ya no existe en el sistema. Se muestra lo que quedó registrado en el
+            momento de esta acción; no se puede revertir.
+          </div>
+        )}
 
         {auditoria.nota && (
           <div className="rounded bg-accent-light px-4 py-3 font-sans text-body-md text-accent-darker">

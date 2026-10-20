@@ -26,7 +26,7 @@ export function FacturaCompraDetallePorId({ facturaId, onClose }: Props) {
   return (
     <Modal title="Factura de compra" onClose={onClose} dialogo={{ onEscape: onClose }}>
       <p role="status" className="font-sans text-body-md text-ink-soft">
-        {cargando ? 'Cargando factura…' : error ? friendlyError(error) : 'No se encontró la factura.'}
+        {cargando ? 'Cargando factura…' : error ? friendlyError(error) : 'Registro eliminado: esta factura ya no existe en el sistema.'}
       </p>
     </Modal>
   )

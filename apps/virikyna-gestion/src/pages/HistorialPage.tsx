@@ -3,7 +3,7 @@ import { Eye } from 'lucide-react'
 import type { Auditoria, PerfilPublico, TipoAccionAuditoria } from '@virikyna/shared'
 import { formatFechaHora, friendlyError, nombresPorId, EstadoBadge, rangoTimestampsAR } from '@virikyna/shared'
 import { supabase } from '../lib/supabaseClient'
-import { ACCION_LABEL, accionRevertible, tablaLabel } from '../lib/historial'
+import { ACCION_LABEL, accionRevertible, claveRegistro, registrosEliminados, tablaLabel } from '../lib/historial'
 import { DetalleAuditoriaModal } from './Historial/DetalleAuditoriaModal'
 import { NotaCorreccionModal } from './Historial/NotaCorreccionModal'
 import type { AuditoriaConUsuario } from './Historial/types'
@@ -18,6 +18,7 @@ export function HistorialPage() {
   const [filas, setFilas] = useState<AuditoriaConUsuario[]>([])
   const [usuarios, setUsuarios] = useState<PerfilPublico[]>([])
   const [ventaEstados, setVentaEstados] = useState<Map<string, string>>(new Map())
+  const [eliminados, setEliminados] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -77,6 +78,9 @@ export function HistorialPage() {
     } else {
       setVentaEstados(new Map())
     }
+
+    // Registros que ya no existen (docs/46): sin "Revertir", con la marca "Registro eliminado".
+    setEliminados(await registrosEliminados(lista))
 
     setLoading(false)
   }
@@ -216,7 +220,8 @@ export function HistorialPage() {
             )}
             {filas.map((fila) => {
               const ventaEstado = fila.tabla_afectada === 'ventas' ? ventaEstados.get(fila.registro_id) : undefined
-              const revertible = accionRevertible(fila, ventaEstado)
+              const eliminado = eliminados.has(claveRegistro(fila))
+              const revertible = eliminado ? null : accionRevertible(fila, ventaEstado)
               return (
                 <tr key={fila.id} className="border-b border-table-divider last:border-0 even:bg-table-row-alt">
                   <td className="whitespace-nowrap px-3 py-3 text-ink-soft">{formatFechaHora(fila.created_at)}</td>
@@ -246,6 +251,7 @@ export function HistorialPage() {
                       <Eye size={18} strokeWidth={1.5} />
                     </button>
                     {revertible && <span className="ml-2 font-sans text-label-md text-error">Revertible</span>}
+                    {eliminado && <span className="ml-2 font-sans text-label-md text-ink-soft">Registro eliminado</span>}
                   </td>
                 </tr>
               )
@@ -264,6 +270,7 @@ export function HistorialPage() {
         <DetalleAuditoriaModal
           auditoria={verDetalle}
           ventaEstado={verDetalle.tabla_afectada === 'ventas' ? ventaEstados.get(verDetalle.registro_id) : undefined}
+          eliminado={eliminados.has(claveRegistro(verDetalle))}
           onClose={() => setVerDetalle(null)}
           onReverted={() => {
             setVerDetalle(null)
