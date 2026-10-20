@@ -23,10 +23,14 @@ import type {
   TipoComprobanteCompra,
   UbicacionStock,
 } from '../types/database'
-import { IVA_DEFAULT } from './inventario'
 import type { ProductoPrecioActual } from './precios'
+import { aAlicuotaIvaCompra, alicuotaDefault, itemsValidosFacturaCompra, type AlicuotaIvaCompra } from './totalesCompra'
 import { fechaHoyISO } from './format'
 import { nombresPorId } from './perfiles'
+
+// Alícuota de IVA, totales y validez de ítems (docs/45): viven en lib/totalesCompra.ts (sin imports,
+// para los tests) y se exportan desde acá como siempre.
+export * from './totalesCompra'
 
 // Etiquetas únicas para tipo de comprobante de compra — todas las pantallas (carga, listados,
 // detalle, cuenta corriente) leen de acá, así un tipo nuevo (ej. presupuesto, docs/31) aparece en
@@ -92,38 +96,6 @@ export function nuevoItemFacturaCompra(): ItemFacturaCompra {
     descuentoPorcentaje: '0',
     ubicacion: 'local',
   }
-}
-
-export function totalItemFacturaCompra(item: ItemFacturaCompra): number {
-  const cantidad = Number(item.cantidad) || 0
-  const precio = Number(item.precioUnitarioSinIva) || 0
-  const descuento = Number(item.descuentoPorcentaje) || 0
-  return Math.round(cantidad * precio * (1 - descuento / 100) * 100) / 100
-}
-
-// Mismo criterio que usa el RPC para descartar filas en blanco: sin descripción o sin
-// cantidad no cuenta como ítem cargado.
-export function itemsValidosFacturaCompra(items: ItemFacturaCompra[]): ItemFacturaCompra[] {
-  return items.filter((it) => it.descripcion.trim() && Number(it.cantidad) > 0)
-}
-
-// `descuento` es informativo: lo que restan los % de descuento por ítem, ya descontado del
-// subtotal (no se resta de nuevo del total). `saldoPendiente`: al cargar la factura todavía no
-// hay pagos (el RPC no registra ninguno, ni siquiera en contado), así que es igual al total.
-export function calcularTotalesFacturaCompra(items: ItemFacturaCompra[]): {
-  subtotalSinIva: number
-  descuento: number
-  iva: number
-  total: number
-  saldoPendiente: number
-} {
-  const validos = itemsValidosFacturaCompra(items)
-  const subtotalSinIva = validos.reduce((acc, it) => acc + totalItemFacturaCompra(it), 0)
-  const bruto = validos.reduce((acc, it) => acc + (Number(it.cantidad) || 0) * (Number(it.precioUnitarioSinIva) || 0), 0)
-  const descuento = Math.max(0, Math.round((bruto - subtotalSinIva) * 100) / 100)
-  const iva = Math.round(subtotalSinIva * (IVA_DEFAULT / 100) * 100) / 100
-  const total = subtotalSinIva + iva
-  return { subtotalSinIva, descuento, iva, total, saldoPendiente: total }
 }
 
 // Extiende el ítem "real" (el que viaja al RPC `cargar_factura_compra`) con campos que
@@ -200,17 +172,19 @@ export type CargarFacturaCompraInput = {
   fechaComprobante: string
   fechaFiscal: string | null
   formaPago: FormaPagoCompra
+  ivaAlicuota: AlicuotaIvaCompra // docs/45
   items: ItemFacturaCompra[]
   copiadaDeId?: string | null // docs/33: factura de la que se copió esta
 }
 
 // Único punto de llamada al RPC `cargar_factura_compra` — arma el payload de ítems, el
 // cálculo de totales y la actualización de stock quedan del lado de la función SQL.
-// p_copiada_de_id solo viaja cuando hay copia: una carga normal manda los mismos 9 parámetros de
-// siempre (el RPC le pone default NULL al décimo, docs/33).
+// p_copiada_de_id solo viaja cuando hay copia (el RPC le pone default NULL, docs/33).
+// p_iva_alicuota viaja siempre (docs/45): el default del RPC (21) es solo para las apps viejas.
 export function cargarFacturaCompra(supabase: SupabaseClient, input: CargarFacturaCompraInput) {
   return supabase.rpc('cargar_factura_compra', {
     ...(input.copiadaDeId ? { p_copiada_de_id: input.copiadaDeId } : {}),
+    p_iva_alicuota: input.ivaAlicuota,
     p_proveedor_id: input.proveedorId,
     p_tipo_comprobante: input.tipoComprobante,
     p_letra: input.letra,
@@ -247,6 +221,7 @@ export type ValoresFacturaCompra = {
   fechaComprobante: string
   fechaFiscal: string
   formaPago: FormaPagoCompra
+  ivaAlicuota: AlicuotaIvaCompra // docs/45
   items: ItemFacturaCompraUI[]
   copiaDe: OrigenCopiaFactura | null
 }
@@ -261,6 +236,7 @@ export function valoresFacturaCompraVacios(): ValoresFacturaCompra {
     fechaComprobante: fechaHoyISO(),
     fechaFiscal: '',
     formaPago: 'contado',
+    ivaAlicuota: alicuotaDefault('factura'),
     items: [nuevoItemFacturaCompraUI()],
     copiaDe: null,
   }
@@ -306,8 +282,9 @@ export async function obtenerFacturaParaCopiar(supabase: SupabaseClient, id: str
   return { ...(facturaRes.data as FacturaCompraSaldo), items: (itemsRes.data ?? []) as FacturaParaCopiar['items'] }
 }
 
-// Valores iniciales de una copia: se copian proveedor, tipo, letra, punto de venta, forma de pago e
-// ítems; número, fecha del comprobante y fecha fiscal quedan vacíos (son de la factura nueva).
+// Valores iniciales de una copia: se copian proveedor, tipo, letra, punto de venta, forma de pago,
+// alícuota de IVA (la del original, no el default del tipo — docs/45) e ítems; número, fecha del
+// comprobante y fecha fiscal quedan vacíos (son de la factura nueva).
 // Cada ítem conserva cantidad, precio, descuento y depósito de la factura original. Un ítem
 // vinculado toma nombre/marca/código actuales del producto; un ítem libre conserva su descripción
 // tal cual (la marca ya viene pegada ahí, ver integrarMarcaEnItemsLibres).
@@ -347,6 +324,7 @@ export function facturaACopia(factura: FacturaParaCopiar): ValoresFacturaCompra 
     fechaComprobante: '',
     fechaFiscal: '',
     formaPago: factura.forma_pago,
+    ivaAlicuota: aAlicuotaIvaCompra(factura.iva_alicuota),
     items: items.length > 0 ? items : [nuevoItemFacturaCompraUI()],
     copiaDe: { id: factura.id, etiqueta: etiquetaComprobanteCompra(factura), anulada: factura.anulada },
   }
@@ -489,12 +467,14 @@ export type EditarFacturaCompraInput = {
   numeroComprobante: string | null
   fechaComprobante: string
   formaPago: FormaPagoCompra
+  ivaAlicuota: AlicuotaIvaCompra // docs/45
 }
 
 // Único punto de llamada al RPC `editar_factura_compra` (docs/06_estructura_de_datos.md, RPC 10)
-// — exclusivo Virikyna Gestión. Solo campos descriptivos: letra y punto de venta quedan sin
-// tocar (el RPC los conserva vía COALESCE al no recibirlos), ítems y montos nunca se editan
-// desde acá — si el error está ahí, se anula la factura y se recarga de nuevo.
+// — exclusivo Virikyna Gestión. Letra y punto de venta quedan sin tocar (el RPC los conserva vía
+// COALESCE al no recibirlos); los ítems nunca se editan desde acá — si el error está ahí, se anula
+// la factura y se recarga de nuevo. Tipo y alícuota sí (docs/45): el RPC recalcula IVA y total
+// sobre el total sin IVA guardado, y lo rechaza si el comprobante tiene pagos o NC aplicados.
 export function editarFacturaCompra(supabase: SupabaseClient, input: EditarFacturaCompraInput) {
   return supabase.rpc('editar_factura_compra', {
     p_factura_id: input.facturaId,
@@ -502,7 +482,14 @@ export function editarFacturaCompra(supabase: SupabaseClient, input: EditarFactu
     p_numero_comprobante: input.numeroComprobante,
     p_fecha_comprobante: input.fechaComprobante,
     p_forma_pago: input.formaPago,
+    p_iva_alicuota: input.ivaAlicuota,
   })
+}
+
+// Mismo criterio que editar_factura_compra para bloquear tipo y alícuota: pagos o NC aplicados
+// vigentes (total_aplicado sale de esas mismas aplicaciones en la vista).
+export function tieneAplicacionesVigentes(factura: Pick<FacturaCompraSaldo, 'total_aplicado'>): boolean {
+  return Number(factura.total_aplicado) > 0
 }
 
 // Único punto de llamada al RPC `anular_factura_compra` (docs/06_estructura_de_datos.md, RPC 11)

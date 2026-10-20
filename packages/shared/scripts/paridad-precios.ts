@@ -7,13 +7,14 @@
 //    bloque que termina en error a propósito (rollback: no queda nada escrito) y compara el costo y
 //    el precio resultantes con lo que muestra la vista previa (costoConPorcentaje + calcularPrecio, o
 //    precioManualConPorcentaje para los de precio manual).
+// 3. Compara costoConDescuento con el ROUND de Postgres que usa cargar_factura_compra (docs/45).
 //
 // Sale con código 1 si hay alguna diferencia.
 import { execSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { calcularPrecio, costoConPorcentaje, precioManualConPorcentaje } from '../lib/precios.ts'
+import { calcularPrecio, costoConDescuento, costoConPorcentaje, precioManualConPorcentaje } from '../lib/precios.ts'
 
 type FilaProducto = {
   id: string
@@ -167,4 +168,24 @@ console.log(
 )
 difMasiva.forEach((d) => console.log(d))
 
-process.exit(difColumnas.length + difMasiva.length > 0 ? 1 : 0)
+// ── 3. Costo con descuento de línea (docs/45) ──────────────────
+// La misma expresión que cargar_factura_compra, con valores sueltos: solo lectura.
+const PRECIOS_LINEA = ['1000', '8182', '333.33', '0.05', '1234.567', '99999.99']
+const DESCUENTOS_LINEA = ['0', '10', '12.5', '33.333', '50', '99.99', '100']
+const pares = PRECIOS_LINEA.flatMap((p) => DESCUENTOS_LINEA.map((d) => [p, d] as const))
+const { rows: filasDescuento } = jsonDeSalida(
+  correrSql(
+    `select p::text as p, d::text as d, ROUND(p * (1 - d / 100.0), 2) as costo from (values ${pares
+      .map(([p, d]) => `(${p}::numeric, ${d}::numeric)`)
+      .join(', ')}) v(p, d);`,
+  ),
+) as { rows: Record<string, unknown>[] }
+const difDescuento = pares.flatMap(([p, d], i) => {
+  const real = n(filasDescuento[i]?.costo)
+  const previa = costoConDescuento(p, d)
+  return real === previa ? [] : [`  ${p} − ${d} %: base ${real} · vista previa ${previa}`]
+})
+console.log(`3. Costo con descuento de línea: ${pares.length} combinaciones, ${difDescuento.length} diferencias`)
+difDescuento.forEach((d) => console.log(d))
+
+process.exit(difColumnas.length + difMasiva.length + difDescuento.length > 0 ? 1 : 0)

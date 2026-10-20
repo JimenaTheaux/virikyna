@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import {
   calcularPrecio,
   cambiosPrecioFactura,
+  costoConDescuento,
   costoConPorcentaje,
   precioManualConPorcentaje,
   redondearPrecioVenta,
@@ -94,10 +95,11 @@ const producto = (extra: Partial<ProductoPrecioActual> = {}): ProductoPrecioActu
   precio_manual: null,
   ...extra,
 })
-const item = (key: string, precio: string, productoId = 'p1', productoPrecio = producto()) => ({
+const item = (key: string, precio: string, productoId = 'p1', productoPrecio = producto(), descuento = '0') => ({
   key,
   productoId,
   precioUnitarioSinIva: precio,
+  descuentoPorcentaje: descuento,
   productoPrecio,
 })
 const proveedores = [
@@ -192,4 +194,28 @@ test('nota de crédito o precio 0 sobre producto manual: el manual sigue', () =>
   // NC de otro proveedor: cambian proveedor y márgenes, pero el precio sigue siendo el manual.
   const nc = cambiosPrecioFactura([item('a', '3000', 'p1', manual)], 'nota_credito', 'prov-b', proveedores)
   assert.deepEqual(nc.get('a'), { tipo: 'sin_cambio_precio', precio: 6300 })
+})
+
+// ── docs/45: el costo que pone la factura lleva el descuento de la línea ──────
+
+test('costoConDescuento = ROUND(precio × (1 − descuento/100), 2)', () => {
+  assert.equal(costoConDescuento(1000, 10), 900)
+  assert.equal(costoConDescuento('1000', '0'), 1000)
+  assert.equal(costoConDescuento('1000', ''), 1000) // descuento vacío del formulario = 0
+  assert.equal(costoConDescuento('8182', '12.5'), 7159.25)
+  assert.equal(costoConDescuento('333.33', '33.333'), 222.22) // 222,221…
+  assert.equal(costoConDescuento('0.05', '50'), 0.03) // 0,025 → la mitad hacia afuera
+  assert.equal(costoConDescuento(1000, 100), 0)
+})
+
+test('factura con descuento: el costo nuevo es el precio con el descuento aplicado', () => {
+  // 2000 − 10 % = 1800 → 1800 × 1,21 = 2178 → resto 178 → 2000
+  const r = cambiosPrecioFactura([item('a', '2000', 'p1', producto(), '10')], 'factura', 'prov-a', proveedores)
+  assert.deepEqual(r.get('a'), { tipo: 'actualiza', antes: 1500, despues: 2000 })
+  // 1250 − 20 % = 1000 = el costo que ya tiene: no cambia nada
+  assert.equal(cambiosPrecioFactura([item('a', '1250', 'p1', producto(), '20')], 'factura', 'prov-a', proveedores).size, 0)
+})
+
+test('descuento 100 %: costo efectivo 0, no toca el costo (como precio 0)', () => {
+  assert.equal(cambiosPrecioFactura([item('a', '5000', 'p1', producto(), '100')], 'factura', 'prov-a', proveedores).size, 0)
 })

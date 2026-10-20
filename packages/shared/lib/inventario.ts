@@ -4,7 +4,9 @@
 import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js'
 import type { Producto, Proveedor, StockUbicacion } from '../types/database'
 
-export const IVA_DEFAULT = 21
+// IVA del producto (productos.iva_porcentaje) para la vista previa del precio de venta. No es el
+// IVA de una factura de compra: ese va por comprobante (alicuotaDefault, lib/facturasCompra.ts).
+export const IVA_PRODUCTO_DEFAULT = 21
 
 // Producto con lo que traen los listados de Inventario de las tres apps (SELECT_PRODUCTOS_INVENTARIO).
 export type ProductoConRelaciones = Producto & {

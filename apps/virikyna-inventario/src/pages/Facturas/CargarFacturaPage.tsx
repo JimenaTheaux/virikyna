@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type {
+  AlicuotaIvaCompra,
   IntentoSalir,
   FormaPagoCompra,
   LetraComprobanteCompra,
@@ -9,12 +10,14 @@ import type {
   ValoresFacturaCompra,
 } from '@virikyna/shared'
 import {
+  alicuotaDefault,
   AvisoComprobanteDuplicado,
   cargarFacturaCompra,
   calcularTotalesFacturaCompra,
   cambiosPrecioFactura,
   errorCabeceraFacturaCompra,
   EstadoBadge,
+  etiquetaAlicuotaIva,
   formatCurrency,
   friendlyError,
   integrarMarcaEnItemsLibres,
@@ -22,6 +25,7 @@ import {
   nuevoItemFacturaCompraUI,
   ObservacionesProveedor,
   problemasItemsFacturaCompra,
+  SelectorAlicuotaIva,
   TIPO_COMPROBANTE_COMPRA_LABEL,
   TIPOS_COMPROBANTE_COMPRA,
   useCambiosSinGuardar,
@@ -70,6 +74,7 @@ export function CargarFacturaPage() {
   const [fechaFiscal, setFechaFiscal] = useState(vacios.fechaFiscal)
   const [mostrarFechaFiscal, setMostrarFechaFiscal] = useState(false)
   const [formaPago, setFormaPago] = useState<FormaPagoCompra>(vacios.formaPago)
+  const [ivaAlicuota, setIvaAlicuota] = useState<AlicuotaIvaCompra>(vacios.ivaAlicuota)
   const [items, setItems] = useState<ItemFacturaCompraUI[]>(vacios.items)
   const [copiaDe, setCopiaDe] = useState<OrigenCopiaFactura | null>(null)
   const [aviso, setAviso] = useState<Aviso | null>(null)
@@ -128,6 +133,7 @@ export function CargarFacturaPage() {
     setFechaFiscal(v.fechaFiscal)
     setMostrarFechaFiscal(Boolean(v.fechaFiscal))
     setFormaPago(v.formaPago)
+    setIvaAlicuota(v.ivaAlicuota)
     setItems(v.items)
     setCopiaDe(v.copiaDe)
     setErroresItems({})
@@ -178,8 +184,14 @@ export function CargarFacturaPage() {
     iva: ivaPreview,
     total: totalPreview,
     saldoPendiente: saldoPendientePreview,
-  } = calcularTotalesFacturaCompra(items)
+  } = calcularTotalesFacturaCompra(items, ivaAlicuota)
   const cambiosPrecio = cambiosPrecioFactura(items, tipoComprobante, proveedorId, proveedores)
+
+  // Cambiar el tipo vuelve la alícuota al default del tipo nuevo (docs/45); después se cambia a mano.
+  function cambiarTipo(tipo: TipoComprobanteCompra) {
+    setTipoComprobante(tipo)
+    setIvaAlicuota(alicuotaDefault(tipo))
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -224,6 +236,7 @@ export function CargarFacturaPage() {
       fechaComprobante,
       fechaFiscal: fechaFiscal || null,
       formaPago,
+      ivaAlicuota,
       items: integrarMarcaEnItemsLibres(items),
       copiadaDeId: copiaDe?.id ?? null,
     })
@@ -325,7 +338,7 @@ export function CargarFacturaPage() {
           <Field label="Tipo de comprobante">
             <select
               value={tipoComprobante}
-              onChange={(e) => setTipoComprobante(e.target.value as TipoComprobanteCompra)}
+              onChange={(e) => cambiarTipo(e.target.value as TipoComprobanteCompra)}
               className={selectClass}
             >
               {TIPOS.map((t) => (
@@ -442,6 +455,10 @@ export function CargarFacturaPage() {
         </button>
 
         <div className="rounded-lg border border-line bg-surface p-4">
+          {/* Dentro del <form>: el cambio lo marca onChangeCapture, como el resto de los campos. */}
+          <div className="mb-stack-sm">
+            <SelectorAlicuotaIva value={ivaAlicuota} onChange={setIvaAlicuota} size="touch" />
+          </div>
           <div className="flex justify-between font-sans text-body-md text-ink-soft">
             <span>Subtotal (sin IVA)</span>
             <span>{formatCurrency(subtotalPreview)}</span>
@@ -451,7 +468,7 @@ export function CargarFacturaPage() {
             <span>{formatCurrency(descuentoPreview)}</span>
           </div>
           <div className="mt-1 flex justify-between font-sans text-body-md text-ink-soft">
-            <span>IVA (21%)</span>
+            <span>{etiquetaAlicuotaIva(ivaAlicuota)}</span>
             <span>{formatCurrency(ivaPreview)}</span>
           </div>
           <div className="mt-1 flex justify-between font-sans text-body-md text-ink-soft">

@@ -131,6 +131,14 @@ export function precioManualConPorcentaje(precio: number | string, porcentaje: n
   return redondeado > 0 ? redondeado : exacto
 }
 
+// Costo que pone una línea de factura de compra (docs/45): ROUND(precio × (1 − descuento/100), 2),
+// igual que cargar_factura_compra, con precio y descuento tal cual viajan (hasta 6 decimales).
+export function costoConDescuento(precio: number | string, descuento: number | string): number {
+  const p = aEscalado(precio, 6)
+  const cien = 100n * 10n ** 6n
+  return aPesos(dividirRedondeando(p * (cien - aEscalado(descuento, 6)), cien * 10n ** 4n))
+}
+
 // Redondeo a 2 decimales con la misma regla que Postgres (para comparar costos).
 export function redondearPesos(valor: number | string): number {
   return aPesos(aEscalado(valor, 2))
@@ -169,13 +177,15 @@ type ItemParaPrecio = {
   key: string
   productoId: string | null
   precioUnitarioSinIva: string
+  descuentoPorcentaje: string
   productoPrecio: ProductoPrecioActual | null
 }
 
 type ProveedorMargenes = { id: string; margen_1_default: number; margen_2_default: number }
 
-// Espejo de cargar_factura_compra (docs/29, docs/34): por producto, la ÚLTIMA línea pisa el costo
-// con su precio unitario sin IVA (salvo nota de crédito/débito o precio 0) y, si le pone costo,
+// Espejo de cargar_factura_compra (docs/29, docs/34, docs/45): por producto, la ÚLTIMA línea pisa el
+// costo con su precio unitario sin IVA menos el descuento % de la línea (salvo nota de crédito/débito
+// o costo 0) y, si le pone costo,
 // borra el precio manual; si el proveedor de la factura es otro (o no tenía), los márgenes pasan a
 // los default de ese proveedor. Devuelve, por key de ítem, qué mostrar; sin entrada = no cambia nada.
 export function cambiosPrecioFactura(
@@ -196,7 +206,7 @@ export function cambiosPrecioFactura(
     if (!it.productoId || !actual) continue
     const esUltima = ultimaPorProducto.get(it.productoId) === it.key
 
-    const precioItem = redondearPesos(it.precioUnitarioSinIva)
+    const precioItem = costoConDescuento(it.precioUnitarioSinIva, it.descuentoPorcentaje)
     const poneCosto = actualizaCosto && precioItem > 0
     const costoNuevo = poneCosto ? precioItem : actual.costo
     const cambiaCosto = !mismoCosto(costoNuevo, actual.costo)

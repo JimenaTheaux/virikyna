@@ -258,6 +258,7 @@ export type FacturaCompra = {
   anulada: boolean // exclusivo Gestión: anular_factura_compra revierte stock y marca esto
   created_at: string
   copiada_de_id: string | null // docs/33: factura de la que se copió esta (cualquier proveedor, también anulada)
+  iva_alicuota: number // docs/45: 21 o 0 (exento), para el comprobante completo
 }
 
 export type FacturaCompraItem = {

@@ -9,7 +9,7 @@ import {
   formatFechaHora,
   generarCodigoInterno,
   historialDeMargen,
-  IVA_DEFAULT,
+  IVA_PRODUCTO_DEFAULT,
   MAYUSCULAS,
   nombreConMarca,
   NotaRedondeoPrecio,
@@ -129,7 +129,7 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, codigo
   const margen1Num = Number(margen1) || 0
   const margen2Num = Number(margen2) || 0
   // IVA del producto (el formulario no lo edita); un producto nuevo toma el default de la columna.
-  const ivaPorcentaje = producto?.iva_porcentaje ?? IVA_DEFAULT
+  const ivaPorcentaje = producto?.iva_porcentaje ?? IVA_PRODUCTO_DEFAULT
   // Precio manual: sigue mientras no se cargue un costo. Cargar uno lo reemplaza por la fórmula.
   const conPrecioManual = manualOriginal !== null
   const costoTocado = costo.trim() !== costoInicial

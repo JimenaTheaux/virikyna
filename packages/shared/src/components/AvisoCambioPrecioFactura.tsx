@@ -2,7 +2,8 @@ import { formatCurrency } from '../../lib/format'
 import type { CambioPrecioFactura } from '../../lib/precios'
 
 // Debajo de un ítem de factura de compra vinculado a un producto: cómo queda su precio de venta al
-// guardar (cargar_factura_compra pisa el costo con el precio unitario — ver cambiosPrecioFactura).
+// guardar (cargar_factura_compra pisa el costo con el precio unitario menos el descuento de la línea
+// — ver cambiosPrecioFactura).
 // Fila de planilla de escritorio (ItemFacturaRow) y tarjeta de celular de Virikyna Inventario.
 export function AvisoCambioPrecioFactura({ cambio, className = '' }: { cambio?: CambioPrecioFactura; className?: string }) {
   if (!cambio) return null

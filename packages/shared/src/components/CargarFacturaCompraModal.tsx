@@ -2,9 +2,11 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { FormaPagoCompra, LetraComprobanteCompra, Proveedor, TipoComprobanteCompra } from '../../types/database'
 import {
+  alicuotaDefault,
   cargarFacturaCompra,
   calcularTotalesFacturaCompra,
   errorCabeceraFacturaCompra,
+  etiquetaAlicuotaIva,
   integrarMarcaEnItemsLibres,
   itemsValidosFacturaCompra,
   nuevoItemFacturaCompraUI,
@@ -12,6 +14,7 @@ import {
   TIPO_COMPROBANTE_COMPRA_LABEL,
   TIPOS_COMPROBANTE_COMPRA,
   valoresFacturaCompraVacios,
+  type AlicuotaIvaCompra,
   type ItemFacturaCompraUI,
   type OrigenCopiaFactura,
   type ValoresFacturaCompra,
@@ -28,6 +31,7 @@ import { ItemFacturaRow, type CrearProductoRender } from './ItemFacturaRow'
 import { AvisoComprobanteDuplicado } from './AvisosCopiaFactura'
 import { SelectorFacturaCopiaModal } from './SelectorFacturaCopiaModal'
 import { ObservacionesProveedor } from './ObservacionesProveedor'
+import { SelectorAlicuotaIva } from './SelectorAlicuotaIva'
 
 // Etiquetas compartidas (TIPO_COMPROBANTE_COMPRA_LABEL); acá se aclara cuáles no son fiscales.
 // Presupuesto (docs/31) se carga igual que un remito: suma stock y deuda, y actualiza costo.
@@ -97,6 +101,7 @@ export function CargarFacturaCompraModal({
   const [fechaFiscal, setFechaFiscal] = useState(inicial.fechaFiscal)
   const [mostrarFechaFiscal, setMostrarFechaFiscal] = useState(Boolean(inicial.fechaFiscal))
   const [formaPago, setFormaPago] = useState<FormaPagoCompra>(inicial.formaPago)
+  const [ivaAlicuota, setIvaAlicuota] = useState<AlicuotaIvaCompra>(inicial.ivaAlicuota)
   const [items, setItems] = useState<ItemFacturaCompraUI[]>(inicial.items)
   const [copiaDe, setCopiaDe] = useState<OrigenCopiaFactura | null>(inicial.copiaDe)
   const [error, setError] = useState<string | null>(null)
@@ -123,6 +128,7 @@ export function CargarFacturaCompraModal({
     setFechaFiscal(v.fechaFiscal)
     setMostrarFechaFiscal(Boolean(v.fechaFiscal))
     setFormaPago(v.formaPago)
+    setIvaAlicuota(v.ivaAlicuota)
     setItems(v.items)
     setCopiaDe(v.copiaDe)
     setItemsConError(new Set())
@@ -209,8 +215,14 @@ export function CargarFacturaCompraModal({
     iva: ivaPreview,
     total: totalPreview,
     saldoPendiente: saldoPendientePreview,
-  } = calcularTotalesFacturaCompra(items)
+  } = calcularTotalesFacturaCompra(items, ivaAlicuota)
   const cambiosPrecio = cambiosPrecioFactura(items, tipoComprobante, proveedorId, proveedores)
+
+  // Cambiar el tipo vuelve la alícuota al default del tipo nuevo (docs/45); después se cambia a mano.
+  function cambiarTipo(tipo: TipoComprobanteCompra) {
+    setTipoComprobante(tipo)
+    setIvaAlicuota(alicuotaDefault(tipo))
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -249,6 +261,7 @@ export function CargarFacturaCompraModal({
       fechaComprobante,
       fechaFiscal: fechaFiscal || null,
       formaPago,
+      ivaAlicuota,
       items: integrarMarcaEnItemsLibres(items),
       copiadaDeId: copiaDe?.id ?? null,
     })
@@ -272,8 +285,16 @@ export function CargarFacturaCompraModal({
       widthClassName="max-w-[1180px]"
       footer={
         <div className="flex flex-col gap-stack-sm">
-          <div className="flex items-center justify-between gap-stack-md">
-            <div className="flex gap-stack-lg">
+          <div className="flex items-end justify-between gap-stack-md">
+            <div className="flex items-end gap-stack-lg">
+              {/* Fuera del <form>: onChangeCapture no lo ve, marca "hay cambios" a mano. */}
+              <SelectorAlicuotaIva
+                value={ivaAlicuota}
+                onChange={(a) => {
+                  setDirty(true)
+                  setIvaAlicuota(a)
+                }}
+              />
               <div>
                 <p className="font-sans text-label-md text-ink-soft">Subtotal</p>
                 <p className="font-sans text-body-md text-ink">{formatCurrency(subtotalPreview)}</p>
@@ -283,7 +304,7 @@ export function CargarFacturaCompraModal({
                 <p className="font-sans text-body-md text-ink">{formatCurrency(descuentoPreview)}</p>
               </div>
               <div>
-                <p className="font-sans text-label-md text-ink-soft">IVA (21%)</p>
+                <p className="font-sans text-label-md text-ink-soft">{etiquetaAlicuotaIva(ivaAlicuota)}</p>
                 <p className="font-sans text-body-md text-ink">{formatCurrency(ivaPreview)}</p>
               </div>
               <div>
@@ -396,7 +417,7 @@ export function CargarFacturaCompraModal({
               <Field label="Tipo de comprobante">
                 <select
                   value={tipoComprobante}
-                  onChange={(e) => setTipoComprobante(e.target.value as TipoComprobanteCompra)}
+                  onChange={(e) => cambiarTipo(e.target.value as TipoComprobanteCompra)}
                   className={selectClass}
                 >
                   {TIPOS.map((t) => (

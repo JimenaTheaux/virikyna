@@ -5,6 +5,7 @@ import {
   EditarFacturaCompraModal,
   EstadoBadge,
   esNotaCredito,
+  etiquetaAlicuotaIva,
   etiquetaComprobanteCompra,
   formatCurrency,
   formatFechaCorta,
@@ -146,6 +147,17 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
             <span className="text-ink">
               {facturaActual.forma_pago === 'contado' ? 'Contado' : 'Cuenta corriente'}
             </span>
+          </p>
+          <p className="text-ink-soft">
+            Subtotal sin IVA: <span className="tabular-nums text-ink">{formatCurrency(facturaActual.total_sin_iva)}</span>
+          </p>
+          <p className="text-ink-soft">
+            {etiquetaAlicuotaIva(facturaActual.iva_alicuota)}
+            {Number(facturaActual.iva_alicuota) > 0 && (
+              <>
+                : <span className="tabular-nums text-ink">{formatCurrency(facturaActual.iva)}</span>
+              </>
+            )}
           </p>
           <p className="text-ink-soft">
             Total:{' '}

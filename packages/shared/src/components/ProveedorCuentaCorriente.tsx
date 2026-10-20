@@ -6,6 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { EstadoFacturaCompra, FacturaCompraSaldo, OrigenEgreso, TipoComprobanteCompra } from '../../types/database'
 import {
   etiquetaComprobanteCompra,
+  etiquetaCortaAlicuotaIva,
   FORMA_PAGO_EGRESO_LABEL,
   invalidarCuentaProveedor,
   TIPO_COMPROBANTE_COMPRA_LABEL,
@@ -569,6 +570,9 @@ export function ProveedorCuentaCorriente({
                     </td>
                     <td className={`px-3 py-3 text-right font-semibold tabular-nums ${nc ? 'text-success' : 'text-ink'}`}>
                       {nc ? negativo(Number(c.total)) : formatCurrency(Number(c.total))}
+                      <span className="block text-label-md font-normal text-ink-soft">
+                        {etiquetaCortaAlicuotaIva(c.iva_alicuota)}
+                      </span>
                     </td>
                     <td className="px-3 py-3 text-right tabular-nums text-ink-soft max-xl:hidden">
                       {formatCurrency(Number(c.total_aplicado))}

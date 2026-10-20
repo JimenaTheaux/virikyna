@@ -55,6 +55,7 @@ export * from './lib/listaSeleccion'
 export { ActualizarPreciosModal, MODOS_ACTUALIZAR_PRECIOS } from './src/components/ActualizarPreciosModal'
 export * from './src/components/NotaRedondeoPrecio'
 export * from './src/components/ControlSegmentado'
+export * from './src/components/SelectorAlicuotaIva'
 export * from './src/components/AvisoCambioPrecioFactura'
 // Copiar factura de compra (docs/33): avisos compartidos (escritorio y celular) y selector de escritorio.
 export * from './src/components/AvisosCopiaFactura'
