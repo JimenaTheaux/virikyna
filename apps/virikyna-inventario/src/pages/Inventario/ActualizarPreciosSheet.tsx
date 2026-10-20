@@ -7,9 +7,9 @@ import {
   EstadoBadge,
   formatAjuste,
   formatCurrency,
+  ListaSeleccionProductos,
   MODOS_ACTUALIZAR_PRECIOS,
   MostrarMas,
-  nombreConMarca,
   resumenVistaPreviaPrecios,
   useActualizarPrecios,
 } from '@virikyna/shared'
@@ -150,53 +150,12 @@ export function ActualizarPreciosSheet({ productos, proveedores, onClose, onSave
         )}
 
         {a.modo === 'seleccion' && (
-          <div className="flex flex-col gap-2">
-            <label htmlFor={`${id}-buscar`} className="font-sans text-label-md text-ink">
-              Buscar producto
-            </label>
-            <input
-              id={`${id}-buscar`}
-              type="search"
-              value={a.busqueda}
-              onChange={(e) => a.buscar(e.target.value)}
-              placeholder="Nombre, marca, código o proveedor"
-              className={inputAccesible}
-            />
-            <p aria-live="polite" className="font-sans text-label-bold text-ink">
-              {a.seleccion.size} seleccionado{a.seleccion.size === 1 ? '' : 's'}
-            </p>
-            <ul className="overflow-hidden rounded-lg border border-line bg-surface" aria-label="Productos">
-              {a.productosVisibles.map((p) => (
-                <li key={p.id} className="flex items-center gap-3 border-b border-line px-3 last:border-0">
-                  <input
-                    id={`${id}-chk-${p.id}`}
-                    type="checkbox"
-                    checked={a.seleccion.has(p.id)}
-                    onChange={() => cambiar(() => a.toggle(p.id))}
-                    aria-labelledby={`${id}-nom-${p.id}`}
-                    aria-describedby={`${id}-prv-${p.id}`}
-                    className={`h-5 w-5 flex-shrink-0 accent-accent-dark ${FOCO}`}
-                  />
-                  {/* Toda la fila (48px) es tocable; el nombre accesible es solo el del producto. */}
-                  <label
-                    htmlFor={`${id}-chk-${p.id}`}
-                    className="flex min-h-12 flex-1 cursor-pointer flex-col justify-center py-2 active:bg-bg"
-                  >
-                    <span id={`${id}-nom-${p.id}`} className="font-sans text-body-md text-ink [overflow-wrap:anywhere]">
-                      {nombreConMarca(p)}
-                    </span>
-                    <span id={`${id}-prv-${p.id}`} className="font-sans text-label-md text-ink-soft">
-                      {p.proveedor?.razon_social ?? 'Sin proveedor'}
-                    </span>
-                  </label>
-                </li>
-              ))}
-              {a.sinResultados && (
-                <li className="px-3 py-4 text-center font-sans text-body-md text-ink-soft">Sin resultados.</li>
-              )}
-            </ul>
-            <MostrarMas restantes={a.restantes} onClick={a.verMas} size="touch" />
-          </div>
+          <ListaSeleccionProductos
+            sel={a}
+            onToggle={(pid) => cambiar(() => a.toggle(pid))}
+            inputClassName={inputAccesible}
+            size="touch"
+          />
         )}
 
         <section aria-labelledby={`${id}-vp`} className="flex flex-col gap-2 border-t border-line pt-stack-md">

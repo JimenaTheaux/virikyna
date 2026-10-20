@@ -14,6 +14,7 @@ import { usePerfil } from '../../auth/AuthContext'
 import { IconBuscar, IconCamara, IconMas, IconPorcentaje } from '../../components/icons'
 import { ProductoFormSheet } from './ProductoFormSheet'
 import { ActualizarPreciosSheet } from './ActualizarPreciosSheet'
+import { MarcarIvaSheet } from './MarcarIvaSheet'
 import type { ProductoConRelaciones } from './types'
 
 const BarcodeScanner = lazy(() => import('../../components/BarcodeScanner'))
@@ -39,6 +40,7 @@ export function InventarioPage() {
   const [modal, setModal] = useState<Modal>(null)
   const [escaneando, setEscaneando] = useState(false)
   const [actualizandoPrecios, setActualizandoPrecios] = useState(false)
+  const [marcandoIva, setMarcandoIva] = useState(false)
   const [resultadoPrecios, setResultadoPrecios] = useState<string | null>(null)
 
   async function cargar() {
@@ -94,14 +96,27 @@ export function InventarioPage() {
           <h1 className="font-display text-headline-lg text-accent-darker">Inventario</h1>
           <p className="mt-1 font-sans text-body-md text-ink-soft">Catálogo, precios y stock por ubicación.</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setActualizandoPrecios(true)}
-          aria-label="Actualización masiva de precios"
-          className="flex flex-shrink-0 items-center justify-center rounded border border-line bg-surface px-4 py-3.5 text-accent-dark hover:bg-accent-light"
-        >
-          <IconPorcentaje className="h-6 w-6" />
-        </button>
+        <div className="flex flex-shrink-0 gap-2">
+          {/* IVA de productos (docs/47): solo admin, igual que los márgenes. */}
+          {rol === 'admin' && (
+            <button
+              type="button"
+              onClick={() => setMarcandoIva(true)}
+              aria-label="Marcar productos con o sin IVA"
+              className="flex min-w-12 items-center justify-center rounded border border-line bg-surface px-3 py-3.5 font-sans text-label-bold text-accent-dark hover:bg-accent-light"
+            >
+              IVA
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setActualizandoPrecios(true)}
+            aria-label="Actualización masiva de precios"
+            className="flex flex-shrink-0 items-center justify-center rounded border border-line bg-surface px-4 py-3.5 text-accent-dark hover:bg-accent-light"
+          >
+            <IconPorcentaje className="h-6 w-6" />
+          </button>
+        </div>
       </div>
 
       <div className="sticky -top-stack-md z-10 -mx-stack-md flex gap-2 bg-bg px-stack-md py-2">
@@ -227,6 +242,18 @@ export function InventarioPage() {
             setResultadoPrecios(
               `${cantidad} producto${cantidad === 1 ? '' : 's'} actualizado${cantidad === 1 ? '' : 's'}.`,
             )
+            cargar()
+          }}
+        />
+      )}
+
+      {marcandoIva && rol === 'admin' && (
+        <MarcarIvaSheet
+          productos={productos}
+          onClose={() => setMarcandoIva(false)}
+          onSaved={(cantidad) => {
+            setMarcandoIva(false)
+            setResultadoPrecios(`IVA cambiado en ${cantidad} producto${cantidad === 1 ? '' : 's'}.`)
             cargar()
           }}
         />

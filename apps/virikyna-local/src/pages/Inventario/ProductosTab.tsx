@@ -1,4 +1,4 @@
-import { ProductosTab as ProductosTabCompartida } from '@virikyna/shared'
+import { MarcarIvaModal, ProductosTab as ProductosTabCompartida } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { usePerfil } from '../../auth/AuthContext'
 import { ProductoFormSheet } from './ProductoFormSheet'
@@ -17,6 +17,8 @@ export function ProductosTab() {
         <ProductoFormSheet key={producto?.id ?? 'nuevo'} producto={producto} rol={rol} {...resto} />
       )}
       renderActualizarPrecios={(args) => <ActualizarPreciosSheet {...args} />}
+      // IVA de productos (docs/47): solo admin, igual que los márgenes.
+      renderMarcarIva={rol === 'admin' ? (args) => <MarcarIvaModal supabase={supabase} {...args} /> : undefined}
     />
   )
 }

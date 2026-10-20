@@ -188,4 +188,48 @@ const difDescuento = pares.flatMap(([p, d], i) => {
 console.log(`3. Costo con descuento de línea: ${pares.length} combinaciones, ${difDescuento.length} diferencias`)
 difDescuento.forEach((d) => console.log(d))
 
-process.exit(difColumnas.length + difMasiva.length + difDescuento.length > 0 ? 1 : 0)
+// ── 4. Productos sin IVA (docs/47), rollback ──────────────────
+// Hoy casi todos tienen precio manual e IVA 21: para ejercitar la fórmula sin IVA, dentro de un
+// bloque que termina en error (no queda nada) se les pone un costo derivado del precio, sin precio
+// manual e IVA 0, y se compara la columna generada con calcularPrecio(iva 0).
+const bloqueSinIva = `
+DO $$
+DECLARE v_res JSONB;
+BEGIN
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', (SELECT id FROM perfiles WHERE activo AND rol = 'admin' LIMIT 1), 'role', 'authenticated')::text, true);
+  PERFORM set_config('virikyna.suppress_audit', 'true', true);
+  UPDATE productos SET costo = COALESCE(costo, ROUND(precio_manual / 2.9, 2)), precio_manual = NULL, iva_porcentaje = 0
+  WHERE id IS NOT NULL;
+  SELECT jsonb_agg(jsonb_build_array(id, costo, margen_1, margen_2, precio_calculado, precio_venta)) INTO v_res FROM productos;
+  RAISE EXCEPTION 'PARIDAD<<%>>PARIDAD', v_res;
+END;
+$$;`
+const salidaSinIva = correrSql(bloqueSinIva)
+const mensajeSinIva = (() => {
+  try {
+    return String((jsonDeSalida(salidaSinIva) as { error?: { message?: string } }).error?.message ?? salidaSinIva)
+  } catch {
+    return salidaSinIva
+  }
+})()
+const mSinIva = /PARIDAD<<([\s\S]*)>>PARIDAD/.exec(mensajeSinIva)
+const difSinIva: string[] = []
+let filasSinIva: [string, number, number, number, number, number][] = []
+if (!mSinIva) {
+  difSinIva.push(`  No se pudo leer el resultado: ${mensajeSinIva.slice(0, 300)}`)
+} else {
+  const crudoSinIva = mSinIva[1].includes('\\"') ? mSinIva[1].replace(/\\"/g, '"') : mSinIva[1]
+  filasSinIva = JSON.parse(crudoSinIva)
+  const nombrePorId = new Map(productos.map((p) => [p.id, p.nombre]))
+  for (const [pid, costo, m1, m2, calc, venta] of filasSinIva) {
+    const c = calcularPrecio({ costo: n(costo), margen1: n(m1), margen2: n(m2), iva: 0 })
+    if (c.calculado !== nn(calc) || c.venta !== n(venta)) {
+      difSinIva.push(`  ${nombrePorId.get(pid) ?? pid}: base calc=${calc} venta=${venta} · cliente calc=${c.calculado} venta=${c.venta}`)
+    }
+  }
+}
+console.log(`4. Sin IVA: ${filasSinIva.length} productos, ${difSinIva.length} diferencias (rollback, la base no cambió)`)
+difSinIva.forEach((d) => console.log(d))
+
+process.exit(difColumnas.length + difMasiva.length + difDescuento.length + difSinIva.length > 0 ? 1 : 0)

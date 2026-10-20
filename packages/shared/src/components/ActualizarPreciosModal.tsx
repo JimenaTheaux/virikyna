@@ -11,9 +11,9 @@ import { Modal } from './Modal'
 import { ConfirmDialog } from './ConfirmDialog'
 import { ErrorText, inputClass, selectClass } from './FormField'
 import { MostrarMas } from './MostrarMas'
-import { nombreConMarca } from '../../lib/productoTexto'
 import { EstadoBadge } from './EstadoBadge'
 import { ControlSegmentado } from './ControlSegmentado'
+import { ListaSeleccionProductos } from './ListaSeleccionProductos'
 
 export type { ProductoParaPrecios } from '../../lib/useActualizarPrecios'
 
@@ -168,55 +168,7 @@ export function ActualizarPreciosModal({ supabase, productos, proveedores, selec
         )}
 
         {a.modo === 'seleccion' && (
-          <div className="flex flex-col gap-2">
-            <div className="flex items-end justify-between gap-3">
-              <div className="flex flex-col gap-2">
-                <label htmlFor={`${id}-buscar`} className="font-sans text-label-md text-ink">
-                  Buscar producto
-                </label>
-                <input
-                  id={`${id}-buscar`}
-                  type="search"
-                  value={a.busqueda}
-                  onChange={(e) => a.buscar(e.target.value)}
-                  placeholder="Nombre, marca, código o proveedor"
-                  className={`${inputAccesible} w-72 py-2`}
-                />
-              </div>
-              <p aria-live="polite" className="pb-2 font-sans text-label-bold text-ink">
-                {a.seleccion.size} seleccionado{a.seleccion.size === 1 ? '' : 's'}
-              </p>
-            </div>
-            <ul className="overflow-hidden rounded-xl font-sans text-table-row shadow-sm" aria-label="Productos">
-              {a.productosVisibles.map((p) => (
-                <li
-                  key={p.id}
-                  className="flex items-center gap-3 border-b border-table-divider px-3 last:border-0 even:bg-table-row-alt"
-                >
-                  <input
-                    id={`${id}-chk-${p.id}`}
-                    type="checkbox"
-                    checked={a.seleccion.has(p.id)}
-                    onChange={() => cambiar(() => a.toggle(p.id))}
-                    aria-labelledby={`${id}-nom-${p.id}`}
-                    aria-describedby={`${id}-prv-${p.id}`}
-                    className={`h-4 w-4 flex-shrink-0 accent-accent-dark ${FOCO}`}
-                  />
-                  {/* Toda la fila es clickeable; el nombre accesible es solo el del producto. */}
-                  <label htmlFor={`${id}-chk-${p.id}`} className="flex flex-1 cursor-pointer items-center gap-3 py-3">
-                    <span id={`${id}-nom-${p.id}`} className="text-ink [overflow-wrap:anywhere]">
-                      {nombreConMarca(p)}
-                    </span>
-                    <span id={`${id}-prv-${p.id}`} className="ml-auto text-ink-soft">
-                      {p.proveedor?.razon_social ?? 'Sin proveedor'}
-                    </span>
-                  </label>
-                </li>
-              ))}
-              {a.sinResultados && <li className="px-3 py-4 text-center text-ink-soft">Sin resultados.</li>}
-            </ul>
-            <MostrarMas restantes={a.restantes} onClick={a.verMas} />
-          </div>
+          <ListaSeleccionProductos sel={a} onToggle={(pid) => cambiar(() => a.toggle(pid))} inputClassName={inputAccesible} />
         )}
 
         <button

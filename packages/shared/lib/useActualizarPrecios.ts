@@ -1,11 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { friendlyError } from './supabaseErrors'
-import { coincideBusquedaProducto } from './productoBusqueda'
 import { nombreConMarca } from './productoTexto'
-import { fijadosPrimero } from './listaSeleccion'
 import { calcularPrecio, costoConPorcentaje, precioManualConPorcentaje } from './precios'
-import { PAGINA_LISTA as PAGINA_LISTA_PRECIOS } from '../src/components/MostrarMas'
+import { useSeleccionProductos } from './useSeleccionProductos'
 
 // Actualización masiva de precios — toda la lógica en un solo lugar para las dos presentaciones:
 // el modal de escritorio (ActualizarPreciosModal, Local y Gestión) y el bottom sheet de Virikyna
@@ -63,42 +61,13 @@ type Opciones = {
 export function useActualizarPrecios({ supabase, productos, seleccionInicial = [], onSaved }: Opciones) {
   const [modo, setModo] = useState<ModoActualizarPrecios>(seleccionInicial.length > 0 ? 'seleccion' : 'proveedor')
   const [proveedorId, setProveedorId] = useState('')
-  const [seleccion, setSeleccion] = useState<Set<string>>(new Set(seleccionInicial))
-  const [busqueda, setBusqueda] = useState('')
-  const [visibles, setVisibles] = useState(PAGINA_LISTA_PRECIOS)
-  // Ids que se muestran primero: la selección con la que se abrió y, cada vez que cambia la
-  // búsqueda, lo que estaba tildado hasta ese momento (ver fijadosPrimero).
-  const [fijados, setFijados] = useState<Set<string>>(new Set(seleccionInicial))
+  const sel = useSeleccionProductos(productos, seleccionInicial)
+  const { seleccion } = sel
   const [porcentaje, setPorcentaje] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [vistaPrevia, setVistaPrevia] = useState<VistaPreviaPrecios | null>(null)
   const [filasVisibles, setFilasVisibles] = useState(PAGINA_VISTA_PREVIA)
-
-  const productosFiltrados = useMemo(() => {
-    const q = busqueda.trim().toLowerCase()
-    const filtrados = !q
-      ? productos
-      : productos.filter(
-          (p) => coincideBusquedaProducto(p, q) || (p.proveedor?.razon_social ?? '').toLowerCase().includes(q),
-        )
-    return fijadosPrimero(filtrados, fijados)
-  }, [productos, busqueda, fijados])
-
-  function buscar(texto: string) {
-    setBusqueda(texto)
-    setFijados(new Set(seleccion))
-    setVisibles(PAGINA_LISTA_PRECIOS)
-  }
-
-  function toggle(id: string) {
-    setSeleccion((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
 
   // Valida y arma la vista previa con los mismos productos que va a tocar el RPC: todos los del
   // proveedor (activos o no, igual que el RPC) o los tildados.
@@ -188,14 +157,7 @@ export function useActualizarPrecios({ supabase, productos, seleccionInicial = [
     setModo,
     proveedorId,
     setProveedorId,
-    seleccion,
-    toggle,
-    busqueda,
-    buscar,
-    productosVisibles: productosFiltrados.slice(0, visibles),
-    sinResultados: productosFiltrados.length === 0,
-    restantes: productosFiltrados.length - visibles,
-    verMas: () => setVisibles((n) => n + PAGINA_LISTA_PRECIOS),
+    ...sel,
     porcentaje,
     setPorcentaje,
     error,

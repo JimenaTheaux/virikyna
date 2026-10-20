@@ -26,18 +26,27 @@ export type ActualizarPreciosRender = (args: {
   onSaved: (cantidad: number) => void
 }) => ReactNode
 
+export type MarcarIvaRender = (args: {
+  productos: ProductoConRelaciones[]
+  seleccionInicial: string[]
+  onClose: () => void
+  onSaved: (cantidad: number) => void
+}) => ReactNode
+
 type Props = {
   supabase: SupabaseClient
   // Cada app monta su formulario (Local: ProductoFormSheet con rol; Gestión: ProductoFormModal) y
   // su actualización masiva. Acá vive la lista: carga, búsqueda, selección y tabla.
   renderFormulario: FormularioProductoRender
   renderActualizarPrecios: ActualizarPreciosRender
+  // Acción masiva "Lleva IVA" (docs/47), solo admin: sin esta prop el botón no aparece.
+  renderMarcarIva?: MarcarIvaRender
 }
 
 // Pestaña "Productos" de Inventario en escritorio (Virikyna Local y Virikyna Gestión). Tabla estilo G
 // (docs/08 §5.2): Nombre | Marca | Descripción | Precio de venta | Stock | Estado. Proveedor, costo,
 // márgenes, códigos y stock por ubicación están en el formulario, que se abre con un clic en la fila.
-export function ProductosTab({ supabase, renderFormulario, renderActualizarPrecios }: Props) {
+export function ProductosTab({ supabase, renderFormulario, renderActualizarPrecios, renderMarcarIva }: Props) {
   const [productos, setProductos] = useState<ProductoConRelaciones[]>([])
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [loading, setLoading] = useState(true)
@@ -46,6 +55,7 @@ export function ProductosTab({ supabase, renderFormulario, renderActualizarPreci
   const [busqueda, setBusqueda] = useState('')
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
   const [actualizandoPrecios, setActualizandoPrecios] = useState(false)
+  const [marcandoIva, setMarcandoIva] = useState(false)
   const [resultadoPrecios, setResultadoPrecios] = useState<string | null>(null)
 
   // La columna Proveedor ya no está, pero se sigue pudiendo buscar por proveedor.
@@ -110,6 +120,15 @@ export function ProductosTab({ supabase, renderFormulario, renderActualizarPreci
           >
             Actualizar precios{seleccion.size > 0 ? ` (${seleccion.size})` : ''}
           </button>
+          {renderMarcarIva && (
+            <button
+              type="button"
+              onClick={() => setMarcandoIva(true)}
+              className="h-10 whitespace-nowrap rounded border border-line bg-surface px-4 font-sans text-label-bold text-ink-soft transition hover:border-accent hover:text-accent-darker"
+            >
+              IVA{seleccion.size > 0 ? ` (${seleccion.size})` : ''}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setModal('nuevo')}
@@ -169,7 +188,7 @@ export function ProductosTab({ supabase, renderFormulario, renderActualizarPreci
                 onClick={() => setModal(producto)}
                 className="cursor-pointer border-b border-table-divider last:border-0 even:bg-table-row-alt hover:bg-accent-light/40"
               >
-                {/* El checkbox (Actualizar precios) no abre el formulario. */}
+                {/* El checkbox (Actualizar precios, IVA) no abre el formulario. */}
                 <td className={celda} onClick={(e) => e.stopPropagation()}>
                   <input
                     type="checkbox"
@@ -236,6 +255,19 @@ export function ProductosTab({ supabase, renderFormulario, renderActualizarPreci
             setActualizandoPrecios(false)
             setSeleccion(new Set())
             setResultadoPrecios(`${cantidad} producto${cantidad === 1 ? '' : 's'} actualizado${cantidad === 1 ? '' : 's'}.`)
+            cargar()
+          },
+        })}
+
+      {marcandoIva &&
+        renderMarcarIva?.({
+          productos,
+          seleccionInicial: Array.from(seleccion),
+          onClose: () => setMarcandoIva(false),
+          onSaved: (cantidad) => {
+            setMarcandoIva(false)
+            setSeleccion(new Set())
+            setResultadoPrecios(`IVA cambiado en ${cantidad} producto${cantidad === 1 ? '' : 's'}.`)
             cargar()
           },
         })}

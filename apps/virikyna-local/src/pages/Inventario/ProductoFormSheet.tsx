@@ -11,6 +11,8 @@ import type {
 import { supabase } from '../../lib/supabaseClient'
 import {
   calcularPrecio,
+  formulaPrecioVenta,
+  InterruptorLlevaIva,
   formatCurrency,
   formatFechaHora,
   friendlyError,
@@ -149,8 +151,10 @@ export function ProductoFormSheet({
   const costoNum = Number(costo) || 0
   const margen1Num = Number(margen1) || 0
   const margen2Num = Number(margen2) || 0
-  // IVA del producto (el formulario no lo edita); un producto nuevo toma el default de la columna.
-  const ivaPorcentaje = producto?.iva_porcentaje ?? IVA_PRODUCTO_DEFAULT
+  // "Lleva IVA" (docs/47): 21 % o sin IVA. Un producto nuevo arranca con IVA.
+  const ivaOriginal = Number(producto?.iva_porcentaje ?? IVA_PRODUCTO_DEFAULT)
+  const [llevaIva, setLlevaIva] = useState(ivaOriginal > 0)
+  const ivaPorcentaje = llevaIva ? IVA_PRODUCTO_DEFAULT : 0
   // Precio manual: sigue mientras no se cargue un costo. Cargar uno lo reemplaza por la fórmula.
   const conPrecioManual = manualOriginal !== null
   const costoTocado = costo.trim() !== costoInicial
@@ -164,6 +168,11 @@ export function ProductoFormSheet({
     precioManual: sigueManual ? precioManual : null,
   })
   const precioVenta = precio.venta
+  // Vista previa del switch: cómo queda el precio respecto del IVA guardado (con precio manual no cambia).
+  const cambioPrecioIva =
+    ivaPorcentaje !== ivaOriginal && !sigueManual
+      ? { antes: calcularPrecio({ costo, margen1, margen2, iva: ivaOriginal }).venta, despues: precioVenta }
+      : null
 
   async function recargarStock() {
     if (!producto) return
@@ -204,6 +213,7 @@ export function ProductoFormSheet({
       costo: sigueManual ? (costoTocado || !producto?.costo ? null : producto.costo) : costoNum,
       margen_1: margen1Num,
       margen_2: margen2Num,
+      iva_porcentaje: ivaPorcentaje,
       stock_minimo: Number(stockMinimo) || 0,
       estado,
       // Alta: la columna no se toca (sin cambios). Edición de un producto manual: el precio editado,
@@ -421,9 +431,18 @@ export function ProductoFormSheet({
                 />
               </Field>
             </div>
+            <div className="mt-2">
+              <InterruptorLlevaIva
+                checked={llevaIva}
+                onChange={setLlevaIva}
+                disabled={!esAdmin}
+                conPrecioManual={sigueManual}
+                cambioPrecio={cambioPrecioIva}
+              />
+            </div>
             {!esAdmin && (
               <p className="mt-2 font-sans text-label-md text-ink-soft">
-                El margen lo define un administrador. Como cajero, solo cargás el costo.
+                El margen y el IVA los define un administrador. Como cajero, solo cargás el costo.
               </p>
             )}
             {sigueManual && (
@@ -456,7 +475,7 @@ export function ProductoFormSheet({
                 ) : (
                   <>
                     Precio de venta{' '}
-                    <span className="text-ink-soft/80">· Costo × margen 1 × margen 2 × IVA {ivaPorcentaje}%</span>
+                    <span className="text-ink-soft/80">· {formulaPrecioVenta(ivaPorcentaje)}</span>
                   </>
                 )}
               </p>

@@ -113,6 +113,11 @@ export function calcularPrecio({ costo, margen1, margen2, iva, precioManual }: D
   return { calculado: calculadoPesos, venta, ajuste: aPesos(aEscalado(venta, 2) - calculado), manual: false }
 }
 
+// Leyenda de la fórmula debajo del precio de venta (docs/47): con o sin IVA según el producto.
+export function formulaPrecioVenta(iva: number | string): string {
+  return Number(iva) > 0 ? `Costo × margen 1 × margen 2 × IVA ${Number(iva)}%` : 'Costo × margen 1 × margen 2 sin IVA'
+}
+
 // Costo tras la actualización masiva: ROUND(costo × (1 + porcentaje/100), 2), igual que el RPC
 // actualizar_precios_masivo. El porcentaje entra tal cual se tipeó (el RPC no lo redondea).
 export function costoConPorcentaje(costo: number | string, porcentaje: number | string): number {

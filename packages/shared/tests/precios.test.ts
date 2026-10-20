@@ -6,6 +6,7 @@ import {
   cambiosPrecioFactura,
   costoConDescuento,
   costoConPorcentaje,
+  formulaPrecioVenta,
   precioManualConPorcentaje,
   redondearPrecioVenta,
   type ProductoPrecioActual,
@@ -218,4 +219,26 @@ test('factura con descuento: el costo nuevo es el precio con el descuento aplica
 
 test('descuento 100 %: costo efectivo 0, no toca el costo (como precio 0)', () => {
   assert.equal(cambiosPrecioFactura([item('a', '5000', 'p1', producto(), '100')], 'factura', 'prov-a', proveedores).size, 0)
+})
+
+// ── docs/47: producto con / sin IVA ──────────────────────────────
+
+test('calcularPrecio con IVA 21 y sin IVA (0)', () => {
+  // 1000 × 2 × 1,21 = 2420 → resto 420 → 2500; sin IVA 2000 exacto
+  assert.deepEqual(calcularPrecio({ costo: 1000, margen1: 100, margen2: 0, iva: 21 }), { calculado: 2420, venta: 2500, ajuste: 80, manual: false })
+  assert.deepEqual(calcularPrecio({ costo: 1000, margen1: 100, margen2: 0, iva: 0 }), { calculado: 2000, venta: 2000, ajuste: 0, manual: false })
+  // Con margen 2: 9900 × 2 × 1,2 = 23.760 sin IVA → 24.000; con IVA 28.749,60 → 29.000
+  assert.equal(calcularPrecio({ costo: 9900, margen1: 100, margen2: 20, iva: 0 }).venta, 24000)
+  assert.equal(calcularPrecio({ costo: 9900, margen1: 100, margen2: 20, iva: 21 }).venta, 29000)
+})
+
+test('precio manual: el IVA no cambia el precio', () => {
+  assert.equal(calcularPrecio({ costo: null, margen1: 0, margen2: 0, iva: 0, precioManual: 22000 }).venta, 22000)
+  assert.equal(calcularPrecio({ costo: null, margen1: 0, margen2: 0, iva: 21, precioManual: 22000 }).venta, 22000)
+})
+
+test('formulaPrecioVenta: con o sin IVA', () => {
+  assert.equal(formulaPrecioVenta(21), 'Costo × margen 1 × margen 2 × IVA 21%')
+  assert.equal(formulaPrecioVenta('21.00'), 'Costo × margen 1 × margen 2 × IVA 21%')
+  assert.equal(formulaPrecioVenta(0), 'Costo × margen 1 × margen 2 sin IVA')
 })
