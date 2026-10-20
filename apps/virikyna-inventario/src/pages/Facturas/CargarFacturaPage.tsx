@@ -21,7 +21,9 @@ import {
   formatCurrency,
   friendlyError,
   integrarMarcaEnItemsLibres,
+  itemsLibresFacturaCompra,
   itemsValidosFacturaCompra,
+  mensajeItemsLibresFacturaCompra,
   nuevoItemFacturaCompraUI,
   ObservacionesProveedor,
   problemasItemsFacturaCompra,
@@ -81,6 +83,7 @@ export function CargarFacturaPage() {
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [selectorAbierto, setSelectorAbierto] = useState(false)
+  const [confirmLibres, setConfirmLibres] = useState(false)
   // Errores por ítem de la última validación de "Guardar factura" (key → mensaje).
   const [erroresItems, setErroresItems] = useState<Record<string, string>>({})
   // Ítem que tiene que tomar el foco en "Cód. barras"; `n` cambia en cada pedido para que se
@@ -225,7 +228,29 @@ export function CargarFacturaPage() {
       setAviso({ tipo: 'error', texto: 'Agregá al menos un ítem con descripción y cantidad mayor a cero.' })
       return
     }
+    // Ítems sin producto del inventario: no suman stock. Se confirman antes de guardar (docs/50).
+    if (itemsLibresFacturaCompra(items).length > 0) {
+      setConfirmLibres(true)
+      return
+    }
+    await guardar()
+  }
 
+  // "Volver y vincular": marca cada ítem libre en su tarjeta y lleva la vista al primero.
+  function volverAVincular() {
+    setConfirmLibres(false)
+    const libres = itemsLibresFacturaCompra(items)
+    setErroresItems(
+      Object.fromEntries(libres.map((it) => [it.key, 'Sin producto del inventario: elegilo de la lista o creálo para que sume stock.'])),
+    )
+    if (libres[0]) {
+      document.querySelector(`[data-item-key="${libres[0].key}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }
+
+  async function guardar() {
+    setConfirmLibres(false)
+    const sumaTodo = itemsLibresFacturaCompra(items).length === 0
     setSaving(true)
     const { error: dbError } = await cargarFacturaCompra(supabase, {
       proveedorId,
@@ -249,9 +274,11 @@ export function CargarFacturaPage() {
 
     // Formulario vacío para la próxima, sin copia.
     aplicarValores(valoresFacturaCompraVacios())
+    // Con ítems libres confirmados el stock no se actualizó entero: el mensaje no lo afirma.
+    const cargada = copiaDe ? 'Copia cargada' : 'Factura cargada'
     setAviso({
       tipo: 'exito',
-      texto: copiaDe ? 'Copia cargada y stock actualizado correctamente.' : 'Factura cargada y stock actualizado correctamente.',
+      texto: sumaTodo ? `${cargada} y stock actualizado correctamente.` : `${cargada}. Los ítems sin producto no sumaron stock.`,
     })
   }
 
@@ -510,6 +537,17 @@ export function CargarFacturaPage() {
           confirmLabel="Reemplazar"
           onCancel={copia.cancelarReemplazo}
           onConfirm={copia.confirmarReemplazo}
+        />
+      )}
+
+      {confirmLibres && (
+        <ConfirmDialog
+          title="Ítems que no suman stock"
+          mensaje={mensajeItemsLibresFacturaCompra(itemsLibresFacturaCompra(items))}
+          confirmLabel="Guardar sin sumar stock"
+          cancelLabel="Volver y vincular"
+          onCancel={volverAVincular}
+          onConfirm={() => void guardar()}
         />
       )}
 

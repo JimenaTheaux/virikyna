@@ -3,6 +3,7 @@ import type { Proveedor, RolUsuario, UbicacionStock } from '@virikyna/shared'
 import {
   AvisoCambioPrecioFactura,
   AvisoCodigoFactura,
+  AvisoItemLibreFactura,
   AvisoProductoInactivoFactura,
   formatCurrency,
   MAYUSCULAS,
@@ -148,6 +149,7 @@ export function ItemFacturaRow({
         {busqueda.mostrarDropdownProducto && (
           <SugerenciasProductoFactura busqueda={busqueda} campo="producto" anchorRef={productoRef} size="touch" />
         )}
+        <AvisoItemLibreFactura busqueda={busqueda} size="touch" />
 
         <Field label="Marca">
           <input

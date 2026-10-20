@@ -8,7 +8,12 @@ import type { CambioPrecioFactura } from '../../lib/precios'
 import { selectClass } from './FormField'
 import { AvisoCambioPrecioFactura } from './AvisoCambioPrecioFactura'
 import { AvisoProductoInactivoFactura } from './AvisosCopiaFactura'
-import { AvisoCodigoFactura, SugerenciasProductoFactura, useItemFacturaBusqueda } from './ItemFacturaBusqueda'
+import {
+  AvisoCodigoFactura,
+  AvisoItemLibreFactura,
+  SugerenciasProductoFactura,
+  useItemFacturaBusqueda,
+} from './ItemFacturaBusqueda'
 
 // Lo que necesita la planilla de un producto recién creado para dejar el ítem vinculado.
 export type ProductoCreadoFactura = {
@@ -79,9 +84,9 @@ export function ItemFacturaRow({
   const { codigoRef, productoRef } = busqueda
   const hayAvisoCodigo = busqueda.buscandoCodigo || busqueda.avisoCodigo !== null
   const inactivo = Boolean(item.productoId && item.productoInactivo)
-  // Segunda fila debajo del ítem: producto inactivo (copia, docs/33), código no encontrado y/o
-  // cambio de precio de venta.
-  const hayAviso = inactivo || hayAvisoCodigo || cambioPrecio !== undefined
+  // Segunda fila debajo del ítem: producto inactivo (copia, docs/33), código no encontrado, ítem
+  // sin producto (docs/50) y/o cambio de precio de venta.
+  const hayAviso = inactivo || hayAvisoCodigo || busqueda.itemLibre || cambioPrecio !== undefined
   const fondoError = conError ? 'bg-error/10' : ''
 
   return (
@@ -220,6 +225,7 @@ export function ItemFacturaRow({
               />
             )}
             {hayAvisoCodigo && <AvisoCodigoFactura busqueda={busqueda} />}
+            <AvisoItemLibreFactura busqueda={busqueda} />
             <AvisoCambioPrecioFactura cambio={cambioPrecio} className="px-2" />
           </td>
         </tr>

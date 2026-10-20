@@ -8,7 +8,9 @@ import {
   errorCabeceraFacturaCompra,
   etiquetaAlicuotaIva,
   integrarMarcaEnItemsLibres,
+  itemsLibresFacturaCompra,
   itemsValidosFacturaCompra,
+  mensajeItemsLibresFacturaCompra,
   nuevoItemFacturaCompraUI,
   problemasItemsFacturaCompra,
   TIPO_COMPROBANTE_COMPRA_LABEL,
@@ -108,6 +110,7 @@ export function CargarFacturaCompraModal({
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [confirmCerrar, setConfirmCerrar] = useState(false)
+  const [confirmLibres, setConfirmLibres] = useState(false)
   const [selectorAbierto, setSelectorAbierto] = useState(false)
   // Ítems marcados por la última validación de "Guardar factura"; se desmarcan al editarlos.
   const [itemsConError, setItemsConError] = useState<Set<string>>(new Set())
@@ -250,7 +253,26 @@ export function CargarFacturaCompraModal({
       setError('Agregá al menos un ítem con descripción y cantidad mayor a cero.')
       return
     }
+    // Ítems sin producto del inventario: no suman stock. Se confirman antes de guardar (docs/50).
+    if (itemsLibresFacturaCompra(items).length > 0) {
+      setConfirmLibres(true)
+      return
+    }
+    await guardar()
+  }
 
+  // "Volver y vincular": marca los ítems libres y lleva la vista al primero.
+  function volverAVincular() {
+    setConfirmLibres(false)
+    const libres = itemsLibresFacturaCompra(items)
+    setItemsConError(new Set(libres.map((it) => it.key)))
+    if (libres[0]) {
+      document.querySelector(`[data-item-key="${libres[0].key}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }
+
+  async function guardar() {
+    setConfirmLibres(false)
     setSaving(true)
     const { error: dbError, status } = await cargarFacturaCompra(supabase, {
       proveedorId,
@@ -594,6 +616,18 @@ export function CargarFacturaCompraModal({
           confirmLabel="Reemplazar"
           onCancel={copia.cancelarReemplazo}
           onConfirm={copia.confirmarReemplazo}
+        />
+      )}
+
+      {confirmLibres && (
+        <ConfirmDialog
+          title="Ítems que no suman stock"
+          mensaje={mensajeItemsLibresFacturaCompra(itemsLibresFacturaCompra(items))}
+          confirmLabel="Guardar sin sumar stock"
+          cancelLabel="Volver y vincular"
+          confirmando={saving}
+          onCancel={volverAVincular}
+          onConfirm={() => void guardar()}
         />
       )}
 

@@ -5,6 +5,7 @@ type Props = {
   title: string
   mensaje: string
   confirmLabel?: string
+  cancelLabel?: string
   onCancel: () => void
   onConfirm: () => void
 }
@@ -15,7 +16,7 @@ type Props = {
 // confirmación. z-[70] para quedar por encima tanto de BottomSheet (z-50) como de BarcodeScanner
 // (z-[60]), que puede estar montado debajo cuando se pide cerrar un formulario con el escáner abierto.
 // Diálogo accesible: Esc = Cancelar, foco atrapado y arranca en Cancelar (useFocoAtrapado).
-export function ConfirmDialog({ title, mensaje, confirmLabel = 'Confirmar', onCancel, onConfirm }: Props) {
+export function ConfirmDialog({ title, mensaje, confirmLabel = 'Confirmar', cancelLabel = 'Cancelar', onCancel, onConfirm }: Props) {
   const tituloId = useId()
   const panelRef = useRef<HTMLDivElement>(null)
   useFocoAtrapado(panelRef, onCancel)
@@ -40,7 +41,7 @@ export function ConfirmDialog({ title, mensaje, confirmLabel = 'Confirmar', onCa
             onClick={onCancel}
             className="rounded px-4 py-3 font-sans text-label-bold text-ink-soft hover:bg-bg"
           >
-            Cancelar
+            {cancelLabel}
           </button>
           <button
             type="button"

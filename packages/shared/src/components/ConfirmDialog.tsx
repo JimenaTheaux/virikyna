@@ -4,6 +4,7 @@ type Props = {
   title: string
   mensaje: string
   confirmLabel?: string
+  cancelLabel?: string
   confirmando?: boolean
   onCancel: () => void
   onConfirm: () => void
@@ -12,7 +13,15 @@ type Props = {
 // Mismo patrón en toda la app para cualquier acción destructiva (docs/08_estilos_y_diseno.md,
 // sección 5): cancelar a la izquierda, acción destructiva a la derecha en `error`, siempre en
 // esa posición — evita que un click apurado confirme algo pensando que era el botón de siempre.
-export function ConfirmDialog({ title, mensaje, confirmLabel = 'Eliminar', confirmando, onCancel, onConfirm }: Props) {
+export function ConfirmDialog({
+  title,
+  mensaje,
+  confirmLabel = 'Eliminar',
+  cancelLabel = 'Cancelar',
+  confirmando,
+  onCancel,
+  onConfirm,
+}: Props) {
   return (
     // Siempre como diálogo accesible: Esc = Cancelar (nunca confirma) y el foco arranca en
     // Cancelar — un Enter apurado no ejecuta la acción destructiva.
@@ -26,7 +35,7 @@ export function ConfirmDialog({ title, mensaje, confirmLabel = 'Eliminar', confi
             onClick={onCancel}
             className="rounded px-4 py-3 font-sans text-label-bold text-ink-soft hover:bg-bg"
           >
-            Cancelar
+            {cancelLabel}
           </button>
           <button
             type="button"

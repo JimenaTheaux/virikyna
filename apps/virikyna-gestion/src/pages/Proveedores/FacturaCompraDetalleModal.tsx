@@ -11,6 +11,7 @@ import {
   formatFechaCorta,
   friendlyError,
   nombresPorId,
+  VincularItemFacturaModal,
 } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { FORMA_PAGO_EGRESO_LABEL } from '../../lib/caja'
@@ -66,6 +67,8 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
   const [modalEditar, setModalEditar] = useState(false)
   const [modalAnular, setModalAnular] = useState(false)
   const [modalPago, setModalPago] = useState(false)
+  // Ítem libre a vincular a un producto (docs/50). Gestión es solo admin: siempre se ofrece.
+  const [itemAVincular, setItemAVincular] = useState<FacturaCompraItem | null>(null)
 
   const nc = esNotaCredito(facturaActual)
 
@@ -227,7 +230,12 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
                 {!loading &&
                   items.map((it) => (
                     <tr key={it.id} className="border-b border-line last:border-0">
-                      <td className="px-4 py-2 text-ink">{it.descripcion}</td>
+                      <td className="px-4 py-2 text-ink">
+                        {it.descripcion}
+                        {!it.producto_id && !facturaActual.anulada && (
+                          <ItemSinProducto onVincular={() => setItemAVincular(it)} />
+                        )}
+                      </td>
                       <td className="px-4 py-2 text-right text-ink-soft">{it.cantidad}</td>
                       <td className="px-4 py-2 text-right tabular-nums text-ink-soft">
                         {formatCurrency(it.precio_unitario_sin_iva)}
@@ -336,6 +344,18 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
         />
       )}
 
+      {itemAVincular && (
+        <VincularItemFacturaModal
+          supabase={supabase}
+          item={itemAVincular}
+          onClose={() => setItemAVincular(null)}
+          onVinculado={() => {
+            setItemAVincular(null)
+            cargar()
+          }}
+        />
+      )}
+
       {modalPago && (
         <RegistrarPagoProveedorModal
           proveedorId={facturaActual.proveedor_id}
@@ -351,5 +371,23 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
         />
       )}
     </Modal>
+  )
+}
+
+// Ítem libre (docs/50): no sumó stock al cargar el comprobante. Si es mercadería, se vincula.
+function ItemSinProducto({ onVincular }: { onVincular?: () => void }) {
+  return (
+    <span className="mt-1 flex flex-wrap items-center gap-2 text-label-md text-ink-soft">
+      Sin producto: no sumó stock
+      {onVincular && (
+        <button
+          type="button"
+          onClick={onVincular}
+          className="rounded border border-accent/60 px-2 py-0.5 font-sans text-label-bold text-accent-dark hover:bg-accent-light"
+        >
+          Vincular a producto
+        </button>
+      )}
+    </span>
   )
 }

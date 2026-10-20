@@ -206,6 +206,13 @@ export function useItemFacturaBusqueda({ supabase, item, onChange, onAvanzar, fo
     productoRef.current?.focus()
   }
 
+  // "Buscar en el inventario" desde el aviso de ítem libre: vuelve a buscar lo que ya está escrito
+  // (el foco solo no alcanza: el desplegable necesita la consulta).
+  function buscarDescripcion() {
+    buscarPorProducto(item.descripcion)
+    productoRef.current?.focus()
+  }
+
   function cerrarCrear() {
     setCreandoProducto(false)
   }
@@ -243,6 +250,10 @@ export function useItemFacturaBusqueda({ supabase, item, onChange, onAvanzar, fo
   }
 
   const hayTexto = query.trim().length >= 2
+  // Nombre escrito sin elegir un producto (docs/50): se avisa en el ítem apenas se sale del campo,
+  // no recién al guardar. No mientras se busca, con el alta abierta o con el aviso de código.
+  const itemLibre =
+    !item.productoId && item.descripcion.trim() !== '' && campoActivo === null && !creandoProducto && !buscandoCodigo && avisoCodigo === null
   return {
     codigoRef,
     productoRef,
@@ -254,6 +265,7 @@ export function useItemFacturaBusqueda({ supabase, item, onChange, onAvanzar, fo
     mostrarDropdownProducto: campoActivo === 'producto' && (resultados.length > 0 || hayTexto),
     avisoCodigo,
     buscandoCodigo,
+    itemLibre,
     creandoProducto,
     crearInicial,
     seleccionarProducto,
@@ -264,6 +276,7 @@ export function useItemFacturaBusqueda({ supabase, item, onChange, onAvanzar, fo
     crearDesdeCampo,
     crearDesdeAviso,
     buscarPorNombre,
+    buscarDescripcion,
     cerrarCrear,
     alCrear,
     usarExistente,
@@ -320,6 +333,30 @@ export function SugerenciasProductoFactura({
         + Crear producto nuevo{textoCrear ? ` ${campo === 'codigo' ? 'con código ' : ''}"${textoCrear}"` : ''}
       </button>
     </DropdownFlotante>
+  )
+}
+
+// Aviso de ítem libre (docs/50): el nombre quedó escrito pero no se eligió ningún producto, así que
+// al guardar no va a sumar stock. Es lo correcto para un flete o un "varios", no para mercadería.
+export function AvisoItemLibreFactura({ busqueda, size = 'compact' }: { busqueda: ItemFacturaBusqueda; size?: Tamano }) {
+  if (!busqueda.itemLibre) return null
+  const touch = size === 'touch'
+  const boton = `${touch ? 'min-h-11 px-3' : 'px-2.5 py-1'} rounded border border-accent/60 font-sans text-label-bold text-accent-dark hover:bg-accent-light active:opacity-80`
+
+  return (
+    <div role="status" className={`rounded border border-accent/50 bg-accent-light/40 font-sans text-body-md ${touch ? 'px-3 py-3' : 'px-3 py-2'}`}>
+      <p className="text-ink">
+        <strong>No está vinculado a un producto del inventario:</strong> este ítem no va a sumar stock.
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button type="button" onClick={busqueda.buscarDescripcion} className={boton}>
+          Buscar en el inventario
+        </button>
+        <button type="button" onClick={() => busqueda.crearDesdeCampo('producto')} className={boton}>
+          Crear producto nuevo
+        </button>
+      </div>
+    </div>
   )
 }
 

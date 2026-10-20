@@ -154,6 +154,20 @@ export function problemasItemsFacturaCompra(items: ItemFacturaCompraUI[]): Probl
   return problemas
 }
 
+// Ítems que se van a guardar sin producto del inventario: no suman stock ni actualizan costo.
+// Antes pasaban sin aviso — un nombre tipeado sin elegirlo del desplegable quedaba libre y la
+// mercadería no entraba al stock (docs/50). Al guardar se pide confirmarlos (escritorio y celular).
+export function itemsLibresFacturaCompra<T extends ItemFacturaCompra>(items: T[]): T[] {
+  return itemsValidosFacturaCompra(items).filter((it) => !it.productoId)
+}
+
+export function mensajeItemsLibresFacturaCompra(libres: Pick<ItemFacturaCompra, 'descripcion'>[]): string {
+  const nombres = libres.map((it) => it.descripcion.trim().toUpperCase()).join(', ')
+  return libres.length === 1
+    ? `"${nombres}" no está vinculado a ningún producto del inventario: no va a sumar stock. Si es mercadería, volvé, elegila de la lista o tocá "Crear producto nuevo". Guardá igual solo si es un concepto sin stock (flete, ajuste, varios).`
+    : `${libres.length} ítems no están vinculados a ningún producto del inventario y no van a sumar stock: ${nombres}. Si son mercadería, volvé, elegilos de la lista o tocá "Crear producto nuevo". Guardá igual solo si son conceptos sin stock (flete, ajuste, varios).`
+}
+
 // Un ítem libre (sin producto_id) no tiene columna propia de marca en la factura — la pegamos
 // dentro de la descripción para no perderla. Un ítem vinculado al catálogo no la necesita ahí:
 // ya se recupera vía producto_id → producto.marca.
@@ -498,6 +512,13 @@ export function tieneAplicacionesVigentes(factura: Pick<FacturaCompraSaldo, 'tot
 // muestra tal cual en el cliente (ver friendlyError).
 export function anularFacturaCompra(supabase: SupabaseClient, facturaId: string, motivo: string) {
   return supabase.rpc('anular_factura_compra', { p_factura_id: facturaId, p_motivo: motivo })
+}
+
+// Único punto de llamada al RPC `vincular_item_factura_compra` (docs/50) — solo admin. Vincula un
+// ítem libre de una factura ya cargada a un producto y suma su stock una vez (movimiento atado a
+// la factura: anularla también lo revierte). No toca costo ni proveedor.
+export function vincularItemFacturaCompra(supabase: SupabaseClient, itemId: string, productoId: string) {
+  return supabase.rpc('vincular_item_factura_compra', { p_item_id: itemId, p_producto_id: productoId })
 }
 
 export type RegistrarPagoProveedorInput = {
