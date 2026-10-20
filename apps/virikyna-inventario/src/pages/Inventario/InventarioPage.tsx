@@ -219,6 +219,11 @@ export function InventarioPage() {
             cargar()
           }}
           onStockChanged={cargar}
+          onEliminado={(nombre) => {
+            setModal(null)
+            setResultadoPrecios(`Se eliminó ${nombre}.`)
+            cargar()
+          }}
           onEditarExistente={(id) => {
             const existente = productos.find((p) => p.id === id)
             if (existente) setModal({ tipo: 'editar', producto: existente })

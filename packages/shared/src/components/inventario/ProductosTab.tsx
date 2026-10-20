@@ -16,6 +16,7 @@ export type FormularioProductoRender = (args: {
   onSaved: () => void
   onStockChanged: () => void
   onEditarExistente: (id: string) => void
+  onEliminado: (nombre: string) => void // docs/48: solo lo usa el formulario de un admin
 }) => ReactNode
 
 export type ActualizarPreciosRender = (args: {
@@ -239,6 +240,11 @@ export function ProductosTab({ supabase, renderFormulario, renderActualizarPreci
             cargar()
           },
           onStockChanged: cargar,
+          onEliminado: (nombre) => {
+            setModal(null)
+            setResultadoPrecios(`Se eliminó ${nombre}.`)
+            cargar()
+          },
           onEditarExistente: (id) => {
             const existente = productos.find((p) => p.id === id)
             if (existente) setModal(existente)

@@ -11,6 +11,7 @@ import type {
 import { supabase } from '../../lib/supabaseClient'
 import {
   calcularPrecio,
+  useEliminarProducto,
   formulaPrecioVenta,
   InterruptorLlevaIva,
   formatCurrency,
@@ -51,6 +52,8 @@ type Props = {
   // 'usar' desde la carga de factura: el aviso de duplicado ofrece usar el existente en el ítem.
   accionExistente?: 'editar' | 'usar'
   onStockChanged: () => void
+  // Admin: tras eliminar el producto (docs/48) el listado cierra, recarga y avisa.
+  onEliminado?: (nombre: string) => void
 }
 
 export function ProductoFormSheet({
@@ -63,6 +66,7 @@ export function ProductoFormSheet({
   onSaved,
   onStockChanged,
   onEditarExistente,
+  onEliminado,
   accionExistente,
 }: Props) {
   const esAdmin = rol === 'admin'
@@ -88,6 +92,16 @@ export function ProductoFormSheet({
   const [stock, setStock] = useState(producto?.stock_ubicaciones ?? [])
   const [ajusteUbicacion, setAjusteUbicacion] = useState<UbicacionStock | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Eliminar (docs/48): solo admin y solo un producto ya guardado. Inactivar (si tiene historial)
+  // cierra el formulario y recarga, igual que guardar.
+  const eliminacion = useEliminarProducto({
+    supabase,
+    producto,
+    onEliminado: (n) => onEliminado?.(n),
+    onInactivado: () => onSaved(),
+    onError: setError,
+  })
+  const puedeEliminar = Boolean(producto && esAdmin && onEliminado)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [confirmCerrar, setConfirmCerrar] = useState(false)
@@ -262,7 +276,16 @@ export function ProductoFormSheet({
         tab === 'datos' || !producto || !esAdmin ? (
           <div className="flex flex-col gap-1.5">
             {error && <ErrorText>{error}</ErrorText>}
-            <div className="flex justify-end gap-2">
+            <div className="flex items-center justify-end gap-2">
+              {puedeEliminar && (
+                <button
+                  type="button"
+                  onClick={eliminacion.pedir}
+                  className="mr-auto rounded border border-error px-5 py-2.5 font-sans text-label-bold text-error transition hover:bg-error/10"
+                >
+                  Eliminar
+                </button>
+              )}
               <button
                 type="button"
                 onClick={pedirCierre}
@@ -553,6 +576,17 @@ export function ProductoFormSheet({
           )}
         </aside>
       </form>
+      )}
+
+      {eliminacion.paso && (
+        <ConfirmDialog
+          title={eliminacion.textos[eliminacion.paso].title}
+          mensaje={eliminacion.textos[eliminacion.paso].mensaje}
+          confirmLabel={eliminacion.textos[eliminacion.paso].confirmLabel}
+          confirmando={eliminacion.procesando}
+          onCancel={eliminacion.cancelar}
+          onConfirm={eliminacion.paso === 'confirmar' ? eliminacion.eliminar : eliminacion.inactivar}
+        />
       )}
 
       {confirmCerrar && (

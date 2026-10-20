@@ -4,6 +4,7 @@ import type { EstadoProducto, Proveedor, RolUsuario, UbicacionStock } from '@vir
 import {
   BottomSheet,
   calcularPrecio,
+  useEliminarProducto,
   formulaPrecioVenta,
   InterruptorLlevaIva,
   formatCurrency,
@@ -37,6 +38,8 @@ type Props = {
   onEditarExistente?: (id: string) => void
   accionExistente?: 'editar' | 'usar'
   onStockChanged: () => void
+  // Admin: tras eliminar el producto (docs/48) el listado cierra, recarga y avisa.
+  onEliminado?: (nombre: string) => void
 }
 
 // Mismas reglas que apps/virikyna-local/src/pages/Inventario/ProductoFormModal.tsx (alta, edición,
@@ -53,6 +56,7 @@ export function ProductoFormSheet({
   onSaved,
   onStockChanged,
   onEditarExistente,
+  onEliminado,
   accionExistente = 'editar',
 }: Props) {
   const esAdmin = rol === 'admin'
@@ -77,6 +81,16 @@ export function ProductoFormSheet({
   const [stock, setStock] = useState(producto?.stock_ubicaciones ?? [])
   const [ajusteUbicacion, setAjusteUbicacion] = useState<UbicacionStock | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Eliminar (docs/48): solo admin y solo un producto ya guardado. Inactivar (si tiene historial)
+  // cierra el formulario y recarga, igual que guardar.
+  const eliminacion = useEliminarProducto({
+    supabase,
+    producto,
+    onEliminado: (n) => onEliminado?.(n),
+    onInactivado: () => onSaved(),
+    onError: setError,
+  })
+  const puedeEliminar = Boolean(producto && esAdmin && onEliminado)
   // Errores de un campo puntual: se muestran debajo de ese campo y se lleva la vista hasta él
   // (antes el mensaje aparecía solo abajo, junto a los botones, lejos del campo que falló).
   const [errorNombre, setErrorNombre] = useState<string | null>(null)
@@ -454,6 +468,15 @@ export function ProductoFormSheet({
           </div>
         )}
 
+        {puedeEliminar && (
+          <button
+            type="button"
+            onClick={eliminacion.pedir}
+            className="min-h-12 rounded border border-error px-4 font-sans text-label-bold text-error active:bg-error/10"
+          >
+            Eliminar producto
+          </button>
+        )}
       </form>
 
       {producto && ajusteUbicacion && (
@@ -467,6 +490,16 @@ export function ProductoFormSheet({
             await recargarStock()
             onStockChanged()
           }}
+        />
+      )}
+
+      {eliminacion.paso && (
+        <ConfirmDialog
+          title={eliminacion.textos[eliminacion.paso].title}
+          mensaje={eliminacion.textos[eliminacion.paso].mensaje}
+          confirmLabel={eliminacion.textos[eliminacion.paso].confirmLabel}
+          onCancel={eliminacion.cancelar}
+          onConfirm={eliminacion.paso === 'confirmar' ? eliminacion.eliminar : eliminacion.inactivar}
         />
       )}
 

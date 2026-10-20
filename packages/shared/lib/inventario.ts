@@ -8,6 +8,15 @@ import type { Producto, Proveedor, StockUbicacion } from '../types/database'
 // IVA de una factura de compra: ese va por comprobante (alicuotaDefault, lib/facturasCompra.ts).
 export const IVA_PRODUCTO_DEFAULT = 21
 
+// SQLSTATE con el que eliminar_producto (docs/48) avisa que el producto tiene ventas, devoluciones,
+// compras o movimientos de stock: no se borra, se ofrece inactivarlo.
+export const ERROR_PRODUCTO_CON_HISTORIAL = 'VKH01'
+
+// Único punto de llamada a `eliminar_producto` (solo admin; el DELETE directo está revocado).
+export function eliminarProducto(supabase: SupabaseClient, productoId: string) {
+  return supabase.rpc('eliminar_producto', { p_producto_id: productoId })
+}
+
 // Producto con lo que traen los listados de Inventario de las tres apps (SELECT_PRODUCTOS_INVENTARIO).
 export type ProductoConRelaciones = Producto & {
   proveedor: Pick<Proveedor, 'razon_social' | 'margen_1_default' | 'margen_2_default'> | null
