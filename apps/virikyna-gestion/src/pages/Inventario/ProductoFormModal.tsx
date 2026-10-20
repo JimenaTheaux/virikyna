@@ -360,7 +360,7 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, codigo
             <input value={descripcion} onChange={(e) => setDescripcion(e.target.value)} className={inputCompacto} />
           </Field>
 
-          <div className={`grid gap-2 ${producto ? 'grid-cols-[2fr_1fr_1fr]' : 'grid-cols-[2fr_1fr]'}`}>
+          <div className={`grid gap-2 ${producto ? 'grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]' : 'grid-cols-[minmax(0,2fr)_minmax(0,1fr)]'}`}>
             <Field compact label="Proveedor">
               <select value={proveedorId} onChange={(e) => setProveedorId(e.target.value)} className={inputCompacto}>
                 <option value="">Sin proveedor</option>

@@ -127,6 +127,40 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
       onClose={onClose}
       widthClassName="max-w-[680px]"
       dialogo={{ onEscape: onClose }}
+      // Acciones en el pie fijo: con subtotal e IVA (docs/45) el detalle ya no entra en 720 px.
+      footer={
+        (onCopiar || !facturaActual.anulada) ? (
+          <div className="flex justify-end gap-3">
+            {!facturaActual.anulada && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setModalAnular(true)}
+                  className="rounded border border-error px-4 py-3 font-sans text-label-bold text-error transition hover:bg-error/10"
+                >
+                  Anular
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalEditar(true)}
+                  className="rounded border border-accent px-4 py-3 font-sans text-label-bold text-accent-darker transition hover:bg-accent-light"
+                >
+                  Editar
+                </button>
+              </>
+            )}
+            {onCopiar && (
+              <button
+                type="button"
+                onClick={onCopiar}
+                className="rounded border border-accent px-4 py-3 font-sans text-label-bold text-accent-darker transition hover:bg-accent-light"
+              >
+                Copiar
+              </button>
+            )}
+          </div>
+        ) : undefined
+      }
     >
       <div className="flex flex-col gap-stack-md">
         {facturaActual.anulada && (
@@ -274,38 +308,6 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
             </table>
           </div>
         </div>
-
-        {(onCopiar || !facturaActual.anulada) && (
-          <div className="flex justify-end gap-3 border-t border-line pt-stack-md">
-            {!facturaActual.anulada && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setModalAnular(true)}
-                  className="rounded border border-error px-4 py-3 font-sans text-label-bold text-error transition hover:bg-error/10"
-                >
-                  Anular
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setModalEditar(true)}
-                  className="rounded border border-accent px-4 py-3 font-sans text-label-bold text-accent-darker transition hover:bg-accent-light"
-                >
-                  Editar
-                </button>
-              </>
-            )}
-            {onCopiar && (
-              <button
-                type="button"
-                onClick={onCopiar}
-                className="rounded border border-accent px-4 py-3 font-sans text-label-bold text-accent-darker transition hover:bg-accent-light"
-              >
-                Copiar
-              </button>
-            )}
-          </div>
-        )}
       </div>
 
       {modalEditar && (

@@ -123,6 +123,20 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
       onClose={onClose}
       widthClassName="max-w-[680px]"
       dialogo={{ onEscape: onClose }}
+      // Acciones en el pie fijo: con subtotal e IVA (docs/45) el detalle ya no entra en 720 px.
+      footer={
+        onCopiar ? (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={onCopiar}
+              className="rounded border border-accent px-4 py-3 font-sans text-label-bold text-accent-darker transition hover:bg-accent-light"
+            >
+              Copiar
+            </button>
+          </div>
+        ) : undefined
+      }
     >
       <div className="flex flex-col gap-stack-md">
         {facturaActual.anulada && (
@@ -270,18 +284,6 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
             </table>
           </div>
         </div>
-
-        {onCopiar && (
-          <div className="flex justify-end border-t border-line pt-stack-md">
-            <button
-              type="button"
-              onClick={onCopiar}
-              className="rounded border border-accent px-4 py-3 font-sans text-label-bold text-accent-darker transition hover:bg-accent-light"
-            >
-              Copiar
-            </button>
-          </div>
-        )}
       </div>
 
       {modalPago && (

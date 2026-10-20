@@ -89,8 +89,37 @@ export function EditarFacturaCompraModal({ supabase, factura, onClose, onSaved }
       onClose={pedirCierre}
       widthClassName="max-w-[480px]"
       cambiosSinGuardar={dirty}
+      // Pie fijo: con el selector de IVA el formulario ya no entra en 720 px de alto y los botones
+      // quedaban abajo del scroll.
+      footer={
+        <div className="flex flex-col gap-stack-sm">
+          {error && <ErrorText>{error}</ErrorText>}
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={pedirCierre}
+              className="rounded px-4 py-3 font-sans text-label-bold text-ink-soft hover:bg-bg"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              form="form-editar-factura-compra"
+              disabled={saving}
+              className="rounded bg-accent px-4 py-3 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-60"
+            >
+              {saving ? 'Guardando...' : 'Guardar cambios'}
+            </button>
+          </div>
+        </div>
+      }
     >
-      <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
+      <form
+        id="form-editar-factura-compra"
+        onSubmit={handleSubmit}
+        onChangeCapture={() => setDirty(true)}
+        className="flex flex-col gap-stack-md"
+      >
         <p className="font-sans text-body-md text-ink-soft">
           Los ítems no se editan acá. Queda registrado en el Historial con el antes y el después.
         </p>
@@ -159,24 +188,6 @@ export function EditarFacturaCompraModal({ supabase, factura, onClose, onSaved }
           </select>
         </Field>
 
-        {error && <ErrorText>{error}</ErrorText>}
-
-        <div className="flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={pedirCierre}
-            className="rounded px-4 py-3 font-sans text-label-bold text-ink-soft hover:bg-bg"
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded bg-accent px-4 py-3 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-60"
-          >
-            {saving ? 'Guardando...' : 'Guardar cambios'}
-          </button>
-        </div>
       </form>
 
       {confirmCerrar && (
