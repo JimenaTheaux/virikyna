@@ -1,5 +1,12 @@
 # Novedades de Virikyna Local
 
+## 0.6.1 — octubre 2026
+
+### Facturas de compra
+- **Aviso cuando un ítem no va a sumar stock.** Si se escribe el nombre de un producto pero no se elige de la lista, el ítem queda sin vincular al inventario y no suma stock. Ahora se avisa en el mismo renglón, con **Buscar en el inventario** y **Crear producto nuevo**.
+- **Confirmación al guardar.** Si la factura tiene ítems sin producto, antes de guardar se listan y hay que elegir **Volver y vincular** o **Guardar sin sumar stock** (para fletes, ajustes o "varios").
+- **Vincular a producto (solo administradores):** en el detalle de la factura, un ítem sin producto muestra "Sin producto: no sumó stock" y el botón **Vincular a producto**. Se elige el producto y se suma la cantidad del ítem al stock, una sola vez. Si después se anula la factura, ese stock también se descuenta.
+
 ## 0.6.0 — octubre 2026
 
 ### Actualizaciones
