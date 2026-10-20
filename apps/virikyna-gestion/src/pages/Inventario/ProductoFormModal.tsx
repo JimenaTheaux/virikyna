@@ -221,16 +221,20 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, codigo
       const { error } = await supabase.from('productos').update(payload).eq('id', producto.id)
       dbError = error
     } else {
-      const { data, error } = await supabase
-        .from('productos')
-        .insert({
-          ...payload,
-          codigo_interno: codigoBarrasLimpio ? null : generarCodigoInterno(),
-        })
-        .select('id, nombre, costo, marca, codigo_barras')
-        .single()
-      dbError = error
-      creado = data ?? undefined
+      // Alta sin código: el generador numérico de la base (20… + dígito EAN-13, docs/49), el mismo
+      // de la carga inicial, guardado en codigo_barras (antes: INT-… alfanumérico en codigo_interno).
+      const codigo = codigoBarrasLimpio ? { data: codigoBarrasLimpio, error: null } : await generarCodigoInterno(supabase)
+      if (codigo.error) {
+        dbError = codigo.error
+      } else {
+        const { data, error } = await supabase
+          .from('productos')
+          .insert({ ...payload, codigo_barras: codigo.data as string })
+          .select('id, nombre, costo, marca, codigo_barras')
+          .single()
+        dbError = error
+        creado = data ?? undefined
+      }
     }
     setSaving(false)
 

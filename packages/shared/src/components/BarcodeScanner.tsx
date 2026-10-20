@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { digitoVerificadorEanValido, normalizarCodigoBarras } from '../../lib/productoBusqueda'
+import { digitoVerificadorEanValido } from '../../lib/productoBusqueda'
+import { limpiarLecturaCamara, soloDigitos } from '../../lib/lecturaCamara'
 
 const svgProps = {
   viewBox: '0 0 24 24',
@@ -191,7 +192,10 @@ export default function BarcodeScanner({ onDetect, onClose }: Props) {
           try {
             const resultados = await detector.detect(videoEl)
             const lectura = resultados[0]
-            const codigo = lectura ? normalizarCodigoBarras(lectura.rawValue) : ''
+            // Sin prefijo AIM y solo dígitos (lecturaCamara.ts): una lectura con letras se descarta
+            // ('' no es válida) y se sigue escaneando. Cubre Code 128 y QR, que no tienen
+            // dígito verificador.
+            const codigo = lectura ? (limpiarLecturaCamara(lectura.rawValue) ?? '') : ''
             if (!cancelled && lectura && lecturaValida(codigo, lectura.format)) {
               repeticiones = codigo === candidato ? repeticiones + 1 : 1
               candidato = codigo
@@ -250,7 +254,7 @@ export default function BarcodeScanner({ onDetect, onClose }: Props) {
 
   function handleManualSubmit(e: FormEvent) {
     e.preventDefault()
-    const codigo = codigoManual.trim()
+    const codigo = soloDigitos(codigoManual)
     if (!codigo) return
     onDetectRef.current(codigo)
   }
@@ -356,9 +360,12 @@ export default function BarcodeScanner({ onDetect, onClose }: Props) {
             <input
               autoFocus
               inputMode="numeric"
+              pattern="[0-9]*"
               value={codigoManual}
-              onChange={(e) => setCodigoManual(e.target.value)}
-              placeholder="Código de barras"
+              // Solo dígitos, igual que las lecturas de cámara.
+              onChange={(e) => setCodigoManual(soloDigitos(e.target.value))}
+              placeholder="Código de barras (solo números)"
+              aria-label="Código de barras (solo números)"
               className="flex-1 rounded border border-white/20 bg-white/10 px-4 py-3 font-sans text-body-lg text-white outline-none placeholder:text-white/50 focus:border-white"
             />
             <button

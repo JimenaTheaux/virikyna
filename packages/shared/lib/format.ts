@@ -32,12 +32,6 @@ export function resumenVistaPreviaPrecios(productos: number, sinCambio: number, 
   return partes.join(' · ')
 }
 
-export function generarCodigoInterno(): string {
-  const timestamp = Date.now().toString(36).toUpperCase()
-  const random = Math.random().toString(36).slice(2, 5).toUpperCase()
-  return `INT-${timestamp}${random}`
-}
-
 const dos = (n: number) => String(n).padStart(2, '0')
 
 // Formato único de fecha con hora en toda la app: DD/MM/AAAA HH:mm (24 hs), en la hora local del

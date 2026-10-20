@@ -17,6 +17,13 @@ export function eliminarProducto(supabase: SupabaseClient, productoId: string) {
   return supabase.rpc('eliminar_producto', { p_producto_id: productoId })
 }
 
+// Código para un alta sin código (docs/49): '20' + secuencia + dígito verificador EAN-13, numérico de
+// 13 dígitos, el mismo generador SQL que usa la carga inicial. Se guarda en codigo_barras. Reemplaza
+// al generador JS INT-… (alfanumérico), que chocaba con la regla de solo dígitos de la cámara.
+export function generarCodigoInterno(supabase: SupabaseClient) {
+  return supabase.rpc('generar_codigo_interno')
+}
+
 // Producto con lo que traen los listados de Inventario de las tres apps (SELECT_PRODUCTOS_INVENTARIO).
 export type ProductoConRelaciones = Producto & {
   proveedor: Pick<Proveedor, 'razon_social' | 'margen_1_default' | 'margen_2_default'> | null
