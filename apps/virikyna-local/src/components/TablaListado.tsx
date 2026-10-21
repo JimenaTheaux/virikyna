@@ -39,14 +39,14 @@ export function Td({
   align?: Align
   className?: string
 }) {
-  return <td className={`px-3 py-2 ${align === 'right' ? 'whitespace-nowrap text-right' : ''} ${className}`}>{children}</td>
+  return <td className={`px-3 py-3 ${align === 'right' ? 'whitespace-nowrap text-right' : ''} ${className}`}>{children}</td>
 }
 
-// Estado vacío / cargando: una sola celda gris, más chica que las filas con datos.
+// Estado vacío / cargando: una sola celda gris, con el mismo texto que las filas (como en Gestión).
 export function FilaMensaje({ colSpan, children }: { colSpan: number; children: ReactNode }) {
   return (
     <tr>
-      <td className="px-3 py-3 font-sans text-[12px] leading-4 text-ink-soft" colSpan={colSpan}>
+      <td className="px-3 py-3 font-sans text-table-row text-ink-soft" colSpan={colSpan}>
         {children}
       </td>
     </tr>

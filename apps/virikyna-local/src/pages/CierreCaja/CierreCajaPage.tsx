@@ -299,7 +299,9 @@ export function CierreCajaPage() {
             <Th>Hora</Th>
             <Th>Usuario</Th>
             <Th align="right">Efectivo esperado</Th>
-            <Th />
+            <Th>
+              <span className="sr-only">Acciones</span>
+            </Th>
           </TablaHead>
           <tbody>
             {loading && <FilaMensaje colSpan={4}>Cargando...</FilaMensaje>}
@@ -318,7 +320,7 @@ export function CierreCajaPage() {
                     type="button"
                     onClick={() => setVerDetalle(cierre)}
                     title="Ver detalle"
-                    aria-label="Ver detalle"
+                    aria-label={`Ver detalle cierre X ${formatHora(cierre.created_at)}`}
                     className="-my-1 rounded p-1 align-middle text-accent-dark hover:bg-accent-light"
                   >
                     <Eye size={18} strokeWidth={1.5} />
