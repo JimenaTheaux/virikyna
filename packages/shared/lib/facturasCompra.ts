@@ -614,9 +614,33 @@ export function anularFacturaCompra(supabase: SupabaseClient, facturaId: string,
 
 // Único punto de llamada al RPC `vincular_item_factura_compra` (docs/50) — solo admin. Vincula un
 // ítem libre de una factura ya cargada a un producto y suma su stock una vez (movimiento atado a
-// la factura: anularla también lo revierte). No toca costo ni proveedor.
+// la factura: anularla también lo revierte). Desde docs/56, si el comprobante es la compra más
+// nueva del producto, también le pone costo / proveedor / márgenes como al cargar la factura.
 export function vincularItemFacturaCompra(supabase: SupabaseClient, itemId: string, productoId: string) {
   return supabase.rpc('vincular_item_factura_compra', { p_item_id: itemId, p_producto_id: productoId })
+}
+
+// Lo que devuelve `vista_previa_vincular_item_factura_compra` (docs/56): cómo queda el producto si
+// se le vincula el ítem. aplica = false → solo suma stock (hay una compra posterior, o no cambia nada).
+export type VistaPreviaVinculoItem = {
+  aplica: boolean
+  compra_posterior: Pick<
+    FacturaCompraSaldo,
+    'fecha_comprobante' | 'tipo_comprobante' | 'letra' | 'punto_venta' | 'numero_comprobante'
+  > | null
+  pone_costo: boolean
+  costo_antes: number | null
+  costo_nuevo: number | null
+  precio_antes: number
+  precio_manual_antes: number | null
+  precio_nuevo: number | null
+  cambia_proveedor: boolean
+  proveedor_nuevo: string
+}
+
+// Único punto de llamada a `vista_previa_vincular_item_factura_compra` (docs/56) — solo admin, solo lectura.
+export function vistaPreviaVincularItemFacturaCompra(supabase: SupabaseClient, itemId: string, productoId: string) {
+  return supabase.rpc('vista_previa_vincular_item_factura_compra', { p_item_id: itemId, p_producto_id: productoId })
 }
 
 export type RegistrarPagoProveedorInput = {
