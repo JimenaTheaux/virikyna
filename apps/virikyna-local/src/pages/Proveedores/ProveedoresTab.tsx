@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Pencil } from 'lucide-react'
 import type { ProveedorSaldo } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
-import { formatCurrency, friendlyError } from '@virikyna/shared'
+import { formatCurrency, friendlyError, textoParaBuscar } from '@virikyna/shared'
 import { SearchInput } from '../../components/SearchInput'
 import { ProveedorFormModal } from './ProveedorFormModal'
 
@@ -19,10 +19,10 @@ export function ProveedoresTab() {
   const [busqueda, setBusqueda] = useState('')
 
   const proveedoresFiltrados = useMemo(() => {
-    const q = busqueda.trim().toLowerCase()
+    const q = textoParaBuscar(busqueda)
     if (!q) return proveedores
     return proveedores.filter(
-      (p) => p.razon_social.toLowerCase().includes(q) || (p.cuit ?? '').toLowerCase().includes(q),
+      (p) => textoParaBuscar(p.razon_social).includes(q) || textoParaBuscar(p.cuit).includes(q),
     )
   }, [proveedores, busqueda])
 

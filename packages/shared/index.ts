@@ -3,6 +3,7 @@
 
 export * from './types/database'
 export * from './lib/format'
+export * from './lib/texto'
 export * from './lib/precios'
 export * from './lib/useActualizarPrecios'
 export * from './lib/useFocoAtrapado'

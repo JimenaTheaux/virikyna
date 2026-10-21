@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Eye, ArrowLeftRight } from 'lucide-react'
 import type { EstadoComprobante, FormaPagoVenta } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
-import { friendlyError, emitirFacturaCReal } from '@virikyna/shared'
+import { friendlyError, emitirFacturaCReal, textoParaBuscar } from '@virikyna/shared'
 import { formatCurrency, formatFechaCortaLocal, formatHora, rangoTimestampsAR } from '@virikyna/shared'
 import { EstadoBadge, RowActionsMenu } from '@virikyna/shared'
 import {
@@ -81,10 +81,10 @@ export function FacturacionTab() {
     })
   }
 
-  const textoCliente = /^\d+$/.test(busqueda.trim()) ? '' : busqueda.trim().toLowerCase()
+  const textoCliente = /^\d+$/.test(busqueda.trim()) ? '' : textoParaBuscar(busqueda)
   const ventasVisibles = textoCliente
     ? ventas.filter((v) =>
-        `${v.cliente?.razon_social ?? ''} ${v.cliente?.nombre_fantasia ?? ''}`.toLowerCase().includes(textoCliente),
+        textoParaBuscar(`${v.cliente?.razon_social ?? ''} ${v.cliente?.nombre_fantasia ?? ''}`).includes(textoCliente),
       )
     : ventas
 

@@ -5,6 +5,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Producto } from '../types/database'
 import { friendlyError, isNetworkError } from './supabaseErrors'
+import { quitarAcentos, textoParaBuscar } from './texto'
 
 export type ProductoBuscable = {
   nombre: string
@@ -13,16 +14,15 @@ export type ProductoBuscable = {
   codigo_interno?: string | null
 }
 
-function normalizar(texto: string): string {
-  return texto.trim().toLowerCase()
-}
+// Sin acentos (docs/51): "línea" encuentra "LINEA" y al revés.
+const normalizar = textoParaBuscar
 
 export function coincideBusquedaProducto(producto: ProductoBuscable, query: string): boolean {
   const q = normalizar(query)
   if (!q) return true
   return (
     [producto.nombre, producto.marca, producto.codigo_barras, producto.codigo_interno].some((campo) =>
-      campo?.toLowerCase().includes(q),
+      normalizar(campo).includes(q),
     ) || codigoBarrasCoincide(producto.codigo_barras, q)
   )
 }
@@ -117,6 +117,7 @@ export function armarFiltroBusquedaProducto(
   query: string,
   campos: readonly string[] = CAMPOS_BUSQUEDA_PRODUCTO_SERVIDOR,
 ): string {
-  const qEscaped = query.trim().replace(/[%,]/g, '')
+  // La base no tiene acentos (docs/51): lo tipeado tampoco, si no "línea" no encuentra "LINEA".
+  const qEscaped = quitarAcentos(query.trim()).replace(/[%,]/g, '')
   return campos.map((campo) => `${campo}.ilike.%${qEscaped}%`).join(',')
 }

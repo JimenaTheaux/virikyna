@@ -72,6 +72,7 @@ export function stockEnUbicacion(p: Pick<ProductoConRelaciones, 'stock_ubicacion
 
 // Lista cerrada + "Otro" con detalle libre — ver skill pos-inventory-architecture,
 // sección "Ajustes manuales: siempre con motivo y siempre auditados".
-export const MOTIVOS_AJUSTE_STOCK = ['Rotura', 'Pérdida', 'Corrección de conteo físico', 'Otro'] as const
+// Sin acentos (docs/51): es el texto que se guarda en movimientos_stock.motivo.
+export const MOTIVOS_AJUSTE_STOCK = ['Rotura', 'Perdida', 'Correccion de conteo fisico', 'Otro'] as const
 
 export type MotivoAjusteStock = (typeof MOTIVOS_AJUSTE_STOCK)[number]

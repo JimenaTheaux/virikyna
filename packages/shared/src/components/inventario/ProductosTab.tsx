@@ -5,6 +5,7 @@ import { friendlyError } from '../../../lib/supabaseErrors'
 import { formatCurrency } from '../../../lib/format'
 import { formatCantidad } from '../../../lib/cargaInicial'
 import { coincideBusquedaProducto } from '../../../lib/productoBusqueda'
+import { textoParaBuscar } from '../../../lib/texto'
 import { cargarProductosInventario, stockTotal, type ProductoConRelaciones } from '../../../lib/inventario'
 import { ProductoBuscador } from '../ProductoBuscador'
 import { EstadoBadge } from '../EstadoBadge'
@@ -61,10 +62,10 @@ export function ProductosTab({ supabase, renderFormulario, renderActualizarPreci
 
   // La columna Proveedor ya no está, pero se sigue pudiendo buscar por proveedor.
   const productosFiltrados = useMemo(() => {
-    const q = busqueda.trim().toLowerCase()
+    const q = textoParaBuscar(busqueda)
     if (!q) return productos
     return productos.filter(
-      (p) => coincideBusquedaProducto(p, q) || (p.proveedor?.razon_social ?? '').toLowerCase().includes(q),
+      (p) => coincideBusquedaProducto(p, q) || textoParaBuscar(p.proveedor?.razon_social).includes(q),
     )
   }, [productos, busqueda])
 

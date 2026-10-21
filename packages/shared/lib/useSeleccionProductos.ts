@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { coincideBusquedaProducto } from './productoBusqueda'
+import { textoParaBuscar } from './texto'
 import { fijadosPrimero } from './listaSeleccion'
 import { PAGINA_LISTA } from '../src/components/MostrarMas'
 
@@ -24,11 +25,11 @@ export function useSeleccionProductos<P extends ProductoSeleccionable>(productos
   const [fijados, setFijados] = useState<Set<string>>(new Set(seleccionInicial))
 
   const productosFiltrados = useMemo(() => {
-    const q = busqueda.trim().toLowerCase()
+    const q = textoParaBuscar(busqueda)
     const filtrados = !q
       ? productos
       : productos.filter(
-          (p) => coincideBusquedaProducto(p, q) || (p.proveedor?.razon_social ?? '').toLowerCase().includes(q),
+          (p) => coincideBusquedaProducto(p, q) || textoParaBuscar(p.proveedor?.razon_social).includes(q),
         )
     return fijadosPrimero(filtrados, fijados)
   }, [productos, busqueda, fijados])

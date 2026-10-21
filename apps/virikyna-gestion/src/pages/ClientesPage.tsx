@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Eye, Pencil, Trash2 } from 'lucide-react'
 import type { ClienteSaldo } from '@virikyna/shared'
 import { supabase } from '../lib/supabaseClient'
-import { formatCurrency, friendlyError, EstadoBadge, RowActionsMenu, type RowActionsMenuItem } from '@virikyna/shared'
+import { formatCurrency, friendlyError, EstadoBadge, RowActionsMenu, textoParaBuscar, type RowActionsMenuItem } from '@virikyna/shared'
 import { SearchInput } from '../components/SearchInput'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { ClienteFormModal } from './Clientes/ClienteFormModal'
@@ -21,10 +21,10 @@ export function ClientesPage() {
   const [procesandoEliminar, setProcesandoEliminar] = useState(false)
 
   const clientesFiltrados = useMemo(() => {
-    const q = busqueda.trim().toLowerCase()
+    const q = textoParaBuscar(busqueda)
     if (!q) return clientes
     return clientes.filter((c) =>
-      [c.razon_social, c.nombre_fantasia, c.cuit, c.mail].some((campo) => (campo ?? '').toLowerCase().includes(q)),
+      [c.razon_social, c.nombre_fantasia, c.cuit, c.mail].some((campo) => textoParaBuscar(campo).includes(q)),
     )
   }, [clientes, busqueda])
 

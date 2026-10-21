@@ -133,7 +133,7 @@ Roles del sistema: **Admin** (Alicia, Ana Julia) y **Cajero** (Jose, Ale, Belu).
 
 **Ficha de producto — campos:**
 - Nombre, descripción, proveedor, marca
-  - **Formato fijo** (lo aplica la base, desde cualquier app o pantalla): nombre y marca siempre en MAYÚSCULAS; la descripción con solo la primera letra en mayúscula ("Auto de spiderman"). Se respetan Ñ y acentos. Los códigos se guardan tal cual. Lo mismo vale para los borradores de la carga inicial y para los ítems libres de una factura de compra (en mayúsculas). Ver docs/06 sección 27.
+  - **Formato fijo** (lo aplica la base, desde cualquier app o pantalla): nombre y marca siempre en MAYÚSCULAS; la descripción con solo la primera letra en mayúscula ("Auto de spiderman"). **Sin acentos** (desde docs/51, en todos los textos del sistema: productos, proveedores, clientes, notas, motivos, etc.): "Árbol" se guarda "Arbol"; la Ñ se conserva. Los buscadores ignoran acentos, así que "línea" encuentra "LINEA". Los códigos se guardan tal cual. Lo mismo vale para los borradores de la carga inicial y para los ítems libres de una factura de compra (en mayúsculas). Ver docs/06 sección 27.
 - Código de barras (si tiene) o código interno generado (en la carga inicial: EAN-13 con prefijo 20, imprimible)
 - Costo (precio de compra, lo carga el cajero/vendedor). Puede faltar en productos de la carga inicial, que tienen precio manual
 - **Margen en dos casilleros** (ej. 100 + 20) — ver regla de precios abajo

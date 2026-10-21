@@ -9,6 +9,7 @@ import {
   friendlyError,
   proveedorQueryKeys,
   RowActionsMenu,
+  textoParaBuscar,
   useProveedoresSaldo,
   type RowActionsMenuItem,
 } from '@virikyna/shared'
@@ -74,10 +75,10 @@ function ProveedoresTab() {
   const [busqueda, setBusqueda] = useState('')
 
   const proveedoresFiltrados = useMemo(() => {
-    const q = busqueda.trim().toLowerCase()
+    const q = textoParaBuscar(busqueda)
     if (!q) return proveedores
     return proveedores.filter(
-      (p) => p.razon_social.toLowerCase().includes(q) || (p.cuit ?? '').toLowerCase().includes(q),
+      (p) => textoParaBuscar(p.razon_social).includes(q) || textoParaBuscar(p.cuit).includes(q),
     )
   }, [proveedores, busqueda])
 

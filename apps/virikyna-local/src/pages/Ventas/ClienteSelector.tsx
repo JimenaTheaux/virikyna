@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Cliente } from '@virikyna/shared'
+import { textoParaBuscar } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import type { ClienteSeleccionado } from './types'
 
@@ -33,7 +34,7 @@ export function ClienteSelector({ cliente, onChange }: Props) {
   }, [])
 
   const filtrados = clientes.filter((c) =>
-    (c.razon_social ?? c.nombre_fantasia ?? '').toLowerCase().includes(filtro.toLowerCase()),
+    textoParaBuscar(c.razon_social ?? c.nombre_fantasia).includes(textoParaBuscar(filtro)),
   )
 
   function elegir(c: Cliente | null) {
