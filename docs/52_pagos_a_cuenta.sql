@@ -1,7 +1,13 @@
 -- 52 — Pagos "a cuenta" de proveedores: aplicarlos después a comprobantes, y quitar una aplicación
 --
--- ⏳ NO APLICADO todavía. Probado entero en BEGIN … ROLLBACK contra la base real (PARTE A + PARTE C,
--- ver el pie del archivo).
+-- ✅ APLICADO el 2026-10-21 (archivo completo), con backup previo virikyna_2026-10-21_pre-pagos-a-cuenta.
+-- La primera corrida commiteó la PARTE A y falló en la PARTE C (T3): el detalle que devuelve
+-- aplicar_pagos_a_cuenta se ordenaba por created_at, que es el mismo para toda la transacción, y
+-- quedaba al azar. El reparto en sí estaba bien. Se corrigió el ORDER BY (orden de aplicación), la
+-- PARTE A pasó a CREATE OR REPLACE y se volvió a correr el archivo entero: PARTE C sin errores. Las
+-- vistas nacieron con todos los privilegios para authenticated (default privileges de Supabase): se
+-- revocó a mano y el REVOKE de abajo ya lo incluye. Verificación PARTE B: identidad de saldo 0 filas,
+-- 0 pagos sobreaplicados, EXPRESO JESUS MARIA $ 256.900 a cuenta en 2 pagos.
 --
 -- Contexto (relevado contra la base real el 2026-10-20):
 --   - Un pago solo se reparte al registrarlo (registrar_pago_proveedor_v2, docs/31). Si en ese
@@ -39,7 +45,7 @@ BEGIN;
 -- Pago vigente = monto > 0, no es una reversión y no fue revertido. Lo de un pago revertido no
 -- está a cuenta: su reversión ya lo descontó del saldo del proveedor.
 -- ============================================================
-CREATE VIEW pagos_proveedor_a_cuenta WITH (security_invoker = on) AS
+CREATE OR REPLACE VIEW pagos_proveedor_a_cuenta WITH (security_invoker = on) AS
 SELECT
   pp.id,
   pp.proveedor_id,
@@ -64,7 +70,7 @@ CROSS JOIN LATERAL (
 COMMENT ON VIEW pagos_proveedor_a_cuenta IS
   'docs/52: por pago, lo aplicado vigente y lo que queda a cuenta (0 en reversiones, revertidos y operaciones solo de NC).';
 
-CREATE VIEW proveedores_a_cuenta WITH (security_invoker = on) AS
+CREATE OR REPLACE VIEW proveedores_a_cuenta WITH (security_invoker = on) AS
 SELECT proveedor_id,
        SUM(a_cuenta) AS a_cuenta,
        count(*) FILTER (WHERE a_cuenta > 0) AS pagos_con_saldo
@@ -74,14 +80,15 @@ GROUP BY proveedor_id;
 COMMENT ON VIEW proveedores_a_cuenta IS 'docs/52: total a cuenta (pagos sin aplicar) por proveedor.';
 
 -- Mismo criterio que docs/38: sin anon; authenticated solo lee (la RLS de pagos_proveedor aplica
--- por security_invoker).
-REVOKE ALL ON pagos_proveedor_a_cuenta, proveedores_a_cuenta FROM PUBLIC, anon;
+-- por security_invoker). Se revoca también authenticated: los default privileges de Supabase le
+-- dan todo (arwdDxtm) a cada objeto nuevo.
+REVOKE ALL ON pagos_proveedor_a_cuenta, proveedores_a_cuenta FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON pagos_proveedor_a_cuenta, proveedores_a_cuenta TO authenticated, service_role;
 
 -- ============================================================
 -- 2. aplicar_pagos_a_cuenta
 -- ============================================================
-CREATE FUNCTION aplicar_pagos_a_cuenta(
+CREATE OR REPLACE FUNCTION aplicar_pagos_a_cuenta(
   p_proveedor_id UUID,
   p_factura_ids UUID[] DEFAULT NULL,   -- NULL/vacío = todos los pendientes, más viejos primero
   p_pago_ids UUID[] DEFAULT NULL       -- NULL/vacío = todos los pagos con saldo a cuenta, más viejos primero
@@ -213,7 +220,8 @@ BEGIN
                'pago_proveedor_id', a.pago_proveedor_id,
                'factura_compra_id', a.factura_compra_id,
                'monto', a.monto
-             ) ORDER BY a.created_at, a.id)
+             -- En el orden en que se aplicaron: created_at es el mismo para toda la transacción.
+             ) ORDER BY array_position(v_ids, a.id))
       FROM pagos_proveedor_aplicaciones a
       WHERE a.id = ANY(v_ids)
     ), '[]'::jsonb)
@@ -229,7 +237,7 @@ GRANT EXECUTE ON FUNCTION aplicar_pagos_a_cuenta(UUID, UUID[], UUID[]) TO authen
 -- Sirve para una aplicación de plata (vuelve a cuenta del pago) o de NC (la NC recupera crédito).
 -- No toca egresos, cuentas ni pagos_proveedor: el saldo del proveedor no cambia.
 -- ============================================================
-CREATE FUNCTION desaplicar_pago(p_aplicacion_id UUID) RETURNS JSONB
+CREATE OR REPLACE FUNCTION desaplicar_pago(p_aplicacion_id UUID) RETURNS JSONB
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
 DECLARE
@@ -677,7 +685,9 @@ BEGIN
   SELECT saldo_actual INTO v_saldo_antes FROM proveedores_saldo WHERE id = pC;
   v_res := aplicar_pagos_a_cuenta(pC, ARRAY[fC1]);
   ASSERT jsonb_array_length(v_res->'aplicaciones') = 2, 'T3: dos aplicaciones (una por pago)';
-  ASSERT (v_res->'aplicaciones'->0->>'pago_proveedor_id')::UUID = pagoC, 'T3: primero el pago más viejo';
+  ASSERT (v_res->'aplicaciones'->0->>'pago_proveedor_id')::UUID = pagoC, 'T3: el detalle viene en orden de aplicación';
+  ASSERT (SELECT monto FROM pagos_proveedor_aplicaciones WHERE pago_proveedor_id = pagoC AND factura_compra_id = fC1) = 195600,
+    'T3: el pago más viejo (195.600) se aplica entero';
   ASSERT (SELECT estado FROM facturas_compra_saldo WHERE id = fC1) = 'pagada', 'T3: factura pagada con los dos pagos';
   ASSERT (SELECT saldo_actual FROM proveedores_saldo WHERE id = pC) = v_saldo_antes, 'T3: saldo del proveedor sin cambios';
   ASSERT (SELECT credito_disponible FROM facturas_compra_saldo WHERE id = ncC) = 1000, 'T3: la NC no se toca';
