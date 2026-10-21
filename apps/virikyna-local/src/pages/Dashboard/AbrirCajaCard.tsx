@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { formatCurrency, formatFechaHora, friendlyError, mensajeErrorGuardado, nombresPorId } from '@virikyna/shared'
 import type { AperturaCaja, CierreCaja } from '@virikyna/shared'
 import { Field, ErrorText, inputClass } from '../../components/FormField'
+import { MontoLeido } from '../../components/MontoLeido'
 import { IconAbrirCaja } from '../../components/icons'
 
 // Recuadro de apertura de caja (docs/21_apertura_caja.sql, punto 8 del roadmap). Vive en el
@@ -124,36 +125,41 @@ export function AbrirCajaCard() {
           </button>
         </div>
       ) : (
-        <div className="mt-stack-md flex flex-wrap items-end gap-3">
-          <Field label="Monto real en caja">
-            <input
-              type="number"
-              step="0.01"
-              autoFocus
-              value={montoInput}
-              onChange={(e) => setMontoInput(e.target.value)}
-              className={inputClass}
-            />
-          </Field>
-          <button
-            type="button"
-            disabled={saving || montoInput.trim() === '' || Number.isNaN(Number(montoInput))}
-            onClick={() => abrir(Number(montoInput))}
-            className="rounded-lg bg-accent px-4 py-3 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-60"
-          >
-            {saving ? 'Abriendo...' : 'Abrir con este monto'}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setModificar(false)
-              setMontoInput(String(montoEsperado))
-            }}
-            className="rounded-lg px-4 py-3 font-sans text-label-bold text-ink-soft hover:bg-white"
-          >
-            Cancelar
-          </button>
-        </div>
+        <>
+          <div className="mt-stack-md flex flex-wrap items-end gap-3">
+            <Field label="Monto real en caja">
+              <input
+                type="number"
+                step="0.01"
+                autoFocus
+                value={montoInput}
+                onChange={(e) => setMontoInput(e.target.value)}
+                className={inputClass}
+              />
+            </Field>
+            <button
+              type="button"
+              disabled={saving || montoInput.trim() === '' || Number.isNaN(Number(montoInput))}
+              onClick={() => abrir(Number(montoInput))}
+              className="rounded-lg bg-accent px-4 py-3 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-60"
+            >
+              {saving ? 'Abriendo...' : 'Abrir con este monto'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setModificar(false)
+                setMontoInput(String(montoEsperado))
+              }}
+              className="rounded-lg px-4 py-3 font-sans text-label-bold text-ink-soft hover:bg-white"
+            >
+              Cancelar
+            </button>
+          </div>
+          <div className="mt-2">
+            <MontoLeido valor={montoInput} />
+          </div>
+        </>
       )}
     </section>
   )

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field, ErrorText, inputClass } from '../../components/FormField'
+import { MontoLeido } from '../../components/MontoLeido'
 
 type Props = {
   onClose: () => void
@@ -59,6 +60,7 @@ export function ConfirmarCierreZModal({ onClose, onConfirmar }: Props) {
             className={inputClass}
           />
         </Field>
+        <MontoLeido valor={efectivoContado} />
 
         {error && <ErrorText>{error}</ErrorText>}
 
