@@ -1,6 +1,12 @@
 -- 55 — Nota de crédito y stock: no suma; "Devolución de mercadería" opcional resta
 --
--- ⏳ NO APLICADO todavía. Correr desde la raíz del repo con
+-- ✅ APLICADO en producción el 2026-10-21 (archivo completo), con backup previo
+-- virikyna_2026-10-21_pre-docs55. Antes se verificó que cargar_factura_compra (docs/54),
+-- vincular_item_factura_compra (docs/53), anular_factura_compra y facturas_compra_saldo eran las
+-- versiones de base. PARTE B ok (firma única con boolean al final, vista con security_invoker y la
+-- columna); PARTE C 11/11, sin residuos. La API resuelve la firma nueva.
+--
+-- Correr desde la raíz del repo con
 -- `npx supabase db query --linked -f docs/55_nc_stock.sql` (o en el SQL Editor del proyecto
 -- ccpinvtleqlsukcqnili), después de 54. La PARTE A va una sola vez; la PARTE B (verificación) y la
 -- PARTE C (test, BEGIN … ROLLBACK) se pueden repetir.
