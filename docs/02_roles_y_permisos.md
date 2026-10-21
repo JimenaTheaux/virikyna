@@ -33,7 +33,8 @@ Fuente de verdad detallada en `04_modulos_y_funciones.md` — esta tabla es el r
 | Inventario y Stock | Ver, alta, editar, eliminar, inactivar/reactivar, actualización masiva de precios | ✅ | ✅ |
 | Inventario y Stock | **Ajustar stock manualmente** | ✅ | ❌ |
 | Inventario desde celular (5.1) | Mismas acciones que Inventario, mismas excepciones | ✅ | ✅ |
-| Proveedores | Todas las acciones (alta, editar, asociar productos, cargar factura, registrar pago, ver cta. cte., eliminar) | ✅ | ✅ |
+| Proveedores | Alta, editar, asociar productos, cargar factura, registrar pago, ver cta. cte. | ✅ | ✅ |
+| Proveedores | **Eliminar proveedor** (solo sin historial) | ✅ | ❌ |
 | Inicio de Caja (6.5) | Abrir caja (confirmar o modificar el monto de apertura) | ✅ | ✅ |
 | Cierre de Caja | Cierre X, Cierre Z, registrar egreso, ingresar efectivo contado, ver historial | ✅ | ✅ |
 | Caja Gestión (7.1) | Validar Cierre Z, registrar egresos generales, carga inicial, movimientos manuales de caja | ✅ | ❌ (módulo exclusivo de Virikyna Gestión) |
@@ -43,7 +44,7 @@ Fuente de verdad detallada en `04_modulos_y_funciones.md` — esta tabla es el r
 
 ## Excepciones puntuales a memorizar (las que rompen el patrón "ambos roles")
 
-Todo el sistema sigue el mismo patrón por defecto — **Admin y Cajero acceden igual** — salvo estas seis excepciones, todas del lado de restringir al Cajero:
+Todo el sistema sigue el mismo patrón por defecto — **Admin y Cajero acceden igual** — salvo estas siete excepciones, todas del lado de restringir al Cajero:
 
 1. **Ajuste manual de stock** — exclusivo Admin (para que quien se equivocó cargando no pueda "corregirlo" sin trazabilidad).
 2. **Configuración de usuarios** — exclusivo Admin.
@@ -51,6 +52,12 @@ Todo el sistema sigue el mismo patrón por defecto — **Admin y Cajero acceden 
 4. **Historial y Auditoría completo** (ver, revertir) — exclusivo Admin, y solo existe en Virikyna Gestión.
 5. **Blanquear contraseña / crear usuario** — exclusivo Admin.
 6. **Marcar como revisada una apertura de caja con diferencia** — exclusivo Admin, desde el Dashboard de Virikyna Gestión. Validado en la RPC `marcar_apertura_revisada` (docs/27): un cajero que la llame directo recibe "Solo un administrador puede marcar una apertura como revisada". La tabla `aperturas_caja` no tiene policy de UPDATE, así que no hay otro camino para escribir.
+7. **Eliminar un proveedor** — exclusivo Admin, y solo si no tiene facturas ni pagos. Validado en la policy `proveedores_delete_solo_admin` y en la RPC `eliminar_proveedor`; el trigger `trg_proteger_eliminacion_proveedor` frena el borrado si tiene historial.
+
+## Lo que ningún rol puede hacer desde la API
+
+- **Sin login (rol `anon`)**: nada del schema `public` — ni tablas, ni vistas, ni funciones (docs/38). Solo el login en sí, que vive en el schema `auth`.
+- **Escribir directo en tablas operativas**: `ventas`, `venta_items`, `venta_pagos`, `stock_ubicaciones`, `facturas_c`, `facturas_compra`, `facturas_compra_items`, `pagos_cliente`, `pagos_proveedor`, `pagos_proveedor_aplicaciones`, `egresos` y `retiros_caja` solo tienen policy de lectura (docs/38). Toda escritura pasa por su RPC, que valida rol, deja auditoría y mantiene stock y cuentas coherentes. Las únicas tablas que las apps escriben directo son `clientes`, `productos`, `proveedores` y `notas_internas`.
 
 ## Regla de implementación (ver `06_estructura_de_datos.md`)
 

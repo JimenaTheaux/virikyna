@@ -432,6 +432,8 @@ SELECT id, nombre FROM perfiles WHERE activo = true;
 GRANT SELECT ON perfiles_publico TO authenticated;
 
 -- Tablas operativas: admin y cajero acceden por igual salvo excepciones puntuales
+-- ⚠ Sección 25 (docs/38): ventas_todos y venta_pagos_todos (y las demás _todos de tablas que se
+-- escriben por RPC) ya no existen; quedaron como <tabla>_select, FOR SELECT, con este mismo filtro.
 ALTER TABLE ventas ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "ventas_todos" ON ventas FOR ALL USING (
   EXISTS (SELECT 1 FROM perfiles WHERE id = auth.uid() AND activo = true)
@@ -495,6 +497,8 @@ CREATE POLICY "movimientos_cuenta_select_admin" ON movimientos_cuenta FOR SELECT
 ```
 
 Repetir el patrón `_todos` (ambos roles) en: `proveedores`, `productos`, `stock_ubicaciones`, `clientes`, `facturas_compra`, `facturas_compra_items`, `pagos_proveedor`, `pagos_cliente`, `facturas_c`, `egresos`, `notas_internas` (sección 14).
+
+⚠ **Vigente desde la sección 25 (docs/38):** `_todos` (FOR ALL) solo queda en `productos`, `clientes` y `notas_internas`, las únicas tablas que las apps escriben directo. `proveedores` tiene policies separadas (`proveedores_select`, `proveedores_insert`, `proveedores_update` y `proveedores_delete_solo_admin`, esta última solo admin). Las 12 tablas que se escriben por RPC tienen solo `<tabla>_select`: `ventas`, `venta_items`, `venta_pagos`, `stock_ubicaciones`, `facturas_c`, `facturas_compra`, `facturas_compra_items`, `pagos_cliente`, `pagos_proveedor`, `pagos_proveedor_aplicaciones`, `egresos` y `retiros_caja`. **Regla para tablas nuevas:** si se escribe por RPC, la policy es solo SELECT.
 
 ---
 
@@ -2434,6 +2438,33 @@ SQL y test en `docs/34d_carga_inicial_safeupdate.sql` (después de 34c). Las con
 - **Historial de precio**: cuenta también los cambios de `precio_manual`; costo null se muestra "—" (antes `Number(null)` daba $0).
 - **Paridad** (`npm run paridad-precios`): incluye `precio_manual` en las columnas y en la actualización masiva. 2026-10-08: 79 productos (3 manuales), 0 diferencias; 395 comparaciones de actualización masiva, 0 diferencias.
 - Pendiente: Historial muestra `configuracion` y `carga_inicial_items` con el nombre de tabla crudo.
+
+---
+
+## 25. Seguridad pre-lanzamiento: sin acceso anónimo, escrituras solo por RPC
+
+SQL, verificaciones y orden de ejecución en `docs/38_seguridad_prelanzamiento.sql`. Aplicado el 2026-10-08, después de la auditoría pre-lanzamiento (chequeos de invariantes en `docs/37_chequeos_salud.sql`).
+
+**Vistas.** Eran del dueño `postgres` sin `security_invoker`: salteaban RLS y **cualquiera sin login** las leía por REST con la key publicable (`cuentas_saldo` devolvía nombres y saldos de las cuentas). `perfiles_publico` además era auto-actualizable: `anon` podía renombrar o borrar perfiles a través de ella.
+- `cuentas_saldo`, `clientes_saldo`, `proveedores_saldo` y `facturas_compra_saldo` → `security_invoker = on`: devuelven lo que la RLS de las tablas base deja ver. Un cajero ve 0 filas en `cuentas_saldo` (`cuentas` es solo admin; esa vista la usa solo Gestión).
+- `perfiles_publico` y `notas_internas_con_autor` siguen definer **a propósito**: la RLS de `perfiles` (solo el propio) dejaría sin nombre a los demás usuarios.
+- Las 6 vistas: solo `SELECT` para `authenticated`, nada para `anon`.
+
+**Policies.** Las 12 tablas que se escriben por RPC pasaron de `FOR ALL` a `FOR SELECT` (ver sección 5). Antes un cajero podía, con su token, editar `venta_pagos`/`venta_items` sin dejar rastro, borrar ventas (la cascada se llevaba ítems y pagos y el movimiento de stock quedaba huérfano), o registrar una Factura C con un CAE inventado. Las RPCs no se ven afectadas: son `SECURITY DEFINER` con dueño `postgres` (BYPASSRLS).
+
+**Rol `anon`.** Sin ningún privilegio en `public`: tablas, vistas, secuencias y funciones. Las funciones tenían `EXECUTE` para `PUBLIC` (default de Postgres) y `anon` lo heredaba, por eso también se revocó `PUBLIC`. `authenticated` y `service_role` tienen grant propio y conservan todo. Los default privileges de `postgres` (en public y el global de funciones) ya no dan nada a `anon` ni a `PUBLIC` en objetos nuevos. Los de `supabase_admin` no se pueden cambiar desde `postgres`. El login no usa `public`. Por REST sin sesión, toda consulta responde **401**.
+
+**`listar_admins`.** Exige perfil activo (`'Usuario no autorizado'`). Antes era `SECURITY DEFINER` sin validación y `anon` la ejecutaba.
+
+**`search_path`.** `fn_auditoria_generica` y `redondear_precio_venta` tienen ahora `SET search_path = public`; eran las dos únicas sin él.
+
+**`revertir_movimiento`, rama `egresos`.** Revertir un egreso en efectivo o transferencia ahora genera también el contra-movimiento en `movimientos_cuenta`; antes la cuenta quedaba con el descuento aplicado. Espeja lo que el egreso original movió de verdad (`movimientos_cuenta` con su id como `referencia_id`), con `referencia_id` = el egreso de reversión. Cheque y echeq no mueven nada, ni al registrarse ni al revertirse. Las otras ramas no cambian.
+
+**Numeración.** Las secuencias no se revierten con `ROLLBACK`: una prueba que llama a `confirmar_venta` consume números aunque se deshaga. El bloque 7 de docs/38 reinicia `ventas_numero_seq` y `devoluciones_numero_seq` a 1 solo si la tabla está vacía. **Regla:** con datos reales, no probar `confirmar_venta` ni `crear_devolucion` contra producción ni siquiera con `ROLLBACK`, o se pierden números.
+
+### 39 — Security Advisor: funciones internas fuera de la API
+
+SQL y verificación en `docs/39_advisor_funciones_internas.sql` (después de 38). Los 5 triggers (`fn_auditoria_generica` y los 4 `fn_proteger_*`) y los 2 helpers internos (`carga_inicial_verificar_acceso`, `generar_codigo_interno`) ya no tienen `EXECUTE` para `authenticated`. Ninguna app los llama. Los triggers se disparan igual, porque Postgres chequea el permiso solo al crear el trigger, y los helpers los llaman RPCs `SECURITY DEFINER`, que corren como `postgres`. Lo que sigue en el Advisor es intencional: el ERROR `security_definer_view` en `perfiles_publico` y `notas_internas_con_autor`, y el WARN 0029 en las RPCs que usan las apps, que validan perfil y rol adentro. **Regla para funciones nuevas:** si es trigger o helper interno, `REVOKE EXECUTE … FROM authenticated` al crearla (el default de public se lo da).
 
 ---
 
