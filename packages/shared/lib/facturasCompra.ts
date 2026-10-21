@@ -593,6 +593,20 @@ export function registrarPagoProveedorV2(supabase: SupabaseClient, input: Regist
   })
 }
 
+// Razón social del proveedor de cada pago, para mostrarla en egresos de categoría 'pago_proveedor'
+// (egresos no guarda proveedor_id: se llega por egresos.pago_proveedor_id → pagos_proveedor).
+// Pagos sin proveedor visible quedan fuera del Map; si la consulta falla, Map vacío.
+export async function proveedoresPorPago(
+  supabase: SupabaseClient,
+  pagoIds: (string | null | undefined)[],
+): Promise<Map<string, string>> {
+  const ids = Array.from(new Set(pagoIds.filter((id): id is string => Boolean(id))))
+  if (ids.length === 0) return new Map()
+  const { data } = await supabase.from('pagos_proveedor').select('id, proveedor:proveedores(razon_social)').in('id', ids)
+  const filas = (data ?? []) as unknown as { id: string; proveedor: { razon_social: string } | null }[]
+  return new Map(filas.filter((p) => p.proveedor).map((p) => [p.id, p.proveedor!.razon_social]))
+}
+
 // Validaciones de formulario de un pago a proveedor — las mismas en el modal de pago de una
 // factura y en el de la cuenta corriente. El RPC vuelve a validar todo; esto evita el viaje.
 export function validarPagoProveedor(input: {

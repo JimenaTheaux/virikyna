@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react'
 import type { Egreso, OrigenEgreso } from '@virikyna/shared'
-import { formatCurrency, formatFechaCorta, friendlyError, nombresPorId } from '@virikyna/shared'
+import {
+  descripcionSinCategoria,
+  formatCurrency,
+  formatFechaCorta,
+  friendlyError,
+  nombresPorId,
+  proveedoresPorPago,
+} from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { CATEGORIA_EGRESO_LABEL, FORMA_PAGO_EGRESO_LABEL, ORIGEN_EGRESO_LABEL } from '../../lib/caja'
 import type { EgresoConUsuario } from './types'
@@ -46,14 +53,22 @@ export function HistorialEgresosTab() {
     }
 
     const filasSinUsuario = (data ?? []) as unknown as Egreso[]
-    const nombrePorUsuario = await nombresPorId(
-      supabase,
-      filasSinUsuario.map((f) => f.usuario_id),
-    )
+    const [nombrePorUsuario, proveedorPorPago] = await Promise.all([
+      nombresPorId(
+        supabase,
+        filasSinUsuario.map((f) => f.usuario_id),
+      ),
+      proveedoresPorPago(
+        supabase,
+        filasSinUsuario.filter((f) => f.categoria === 'pago_proveedor').map((f) => f.pago_proveedor_id),
+      ),
+    ])
     setFilas(
       filasSinUsuario.map((f) => ({
         ...f,
         usuario: nombrePorUsuario.has(f.usuario_id) ? { nombre: nombrePorUsuario.get(f.usuario_id)! } : null,
+        proveedorNombre:
+          f.categoria === 'pago_proveedor' && f.pago_proveedor_id ? proveedorPorPago.get(f.pago_proveedor_id) ?? null : null,
       })),
     )
     setLoading(false)
@@ -109,22 +124,23 @@ export function HistorialEgresosTab() {
               <th className="whitespace-nowrap px-3 py-2.5">Categoría</th>
               <th className="whitespace-nowrap px-3 py-2.5 text-right">Monto</th>
               <th className="whitespace-nowrap px-3 py-2.5">Forma de pago</th>
-              <th className="whitespace-nowrap px-3 py-2.5">Descripción</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Proveedor</th>
               <th className="whitespace-nowrap px-3 py-2.5">Origen</th>
               <th className="whitespace-nowrap px-3 py-2.5">Usuario</th>
+              <th className="whitespace-nowrap px-3 py-2.5">Descripción</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td className="px-4 py-4 text-ink-soft" colSpan={7}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={8}>
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && filas.length === 0 && (
               <tr>
-                <td className="px-4 py-4 text-ink-soft" colSpan={7}>
+                <td className="px-4 py-4 text-ink-soft" colSpan={8}>
                   No hay egresos para este filtro.
                 </td>
               </tr>
@@ -132,10 +148,10 @@ export function HistorialEgresosTab() {
             {filas.map((fila) => (
               <tr key={fila.id} className="border-b border-table-divider last:border-0 even:bg-table-row-alt">
                 <td className="whitespace-nowrap px-3 py-3 text-ink-soft">{formatFechaCorta(fila.fecha)}</td>
-                <td className="px-3 py-3 text-ink">{CATEGORIA_EGRESO_LABEL[fila.categoria]}</td>
+                <td className="whitespace-nowrap px-3 py-3 text-ink">{CATEGORIA_EGRESO_LABEL[fila.categoria]}</td>
                 <td className="px-3 py-3 text-right font-semibold text-error">{formatCurrency(-fila.monto)}</td>
                 <td className="px-3 py-3 text-ink-soft">{FORMA_PAGO_EGRESO_LABEL[fila.forma_pago]}</td>
-                <td className="px-3 py-3 text-ink-soft">{fila.descripcion ?? '—'}</td>
+                <td className="px-3 py-3 uppercase text-ink-soft">{fila.proveedorNombre ?? '—'}</td>
                 <td className="px-3 py-3">
                   <span
                     className={
@@ -148,6 +164,9 @@ export function HistorialEgresosTab() {
                   </span>
                 </td>
                 <td className="px-3 py-3 text-ink-soft">{fila.usuario?.nombre ?? '—'}</td>
+                <td className="px-3 py-3 text-ink-soft">
+                  {descripcionSinCategoria(fila.descripcion, CATEGORIA_EGRESO_LABEL[fila.categoria]) ?? '—'}
+                </td>
               </tr>
             ))}
           </tbody>
