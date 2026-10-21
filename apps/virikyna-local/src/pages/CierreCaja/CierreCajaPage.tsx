@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Eye } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
-import { friendlyError, mensajeErrorGuardado, nombresPorId } from '@virikyna/shared'
+import { descripcionSinCategoria, friendlyError, mensajeErrorGuardado, nombresPorId, proveedoresPorPago } from '@virikyna/shared'
 import { formatCurrency, formatHora, fechaHoyISO, rangoTimestampsAR } from '@virikyna/shared'
 import { CATEGORIA_EGRESO_LABEL, FORMA_PAGO_EGRESO_LABEL, diferenciaLabel } from '../../lib/caja'
 import { Fila, FilaMensaje, FilaTotal, TablaHead, TablaListado, Td, Th } from '../../components/TablaListado'
@@ -58,18 +58,9 @@ export function CierreCajaPage() {
       ((aperturasRes.data ?? []) as unknown as AperturaCaja[]).map((a) => [a.id, a]),
     )
 
-    const pagoIds = Array.from(
-      new Set(egresosSinUsuario.map((e) => e.pago_proveedor_id).filter((id): id is string => Boolean(id))),
-    )
-    const pagosRes =
-      pagoIds.length > 0
-        ? await supabase.from('pagos_proveedor').select('id, proveedor:proveedores(nombre)').in('id', pagoIds)
-        : { data: [], error: null }
-    const proveedorPorPago = new Map(
-      ((pagosRes.data ?? []) as unknown as { id: string; proveedor: { nombre: string } | null }[]).map((p) => [
-        p.id,
-        p.proveedor?.nombre ?? null,
-      ]),
+    const proveedorPorPago = await proveedoresPorPago(
+      supabase,
+      egresosSinUsuario.map((e) => e.pago_proveedor_id),
     )
 
     const nombrePorUsuario = await nombresPorId(supabase, [
@@ -251,14 +242,14 @@ export function CierreCajaPage() {
             {egresos.map((egreso) => (
               <Fila key={egreso.id}>
                 <Td className="whitespace-nowrap text-ink-soft">{formatHora(egreso.created_at)}</Td>
-                <Td className="text-ink">{CATEGORIA_EGRESO_LABEL[egreso.categoria]}</Td>
+                <Td className="whitespace-nowrap text-ink">{CATEGORIA_EGRESO_LABEL[egreso.categoria]}</Td>
                 <Td align="right" className="font-semibold text-error">
                   {formatCurrency(-egreso.monto)}
                 </Td>
                 <Td>{FORMA_PAGO_EGRESO_LABEL[egreso.forma_pago]}</Td>
-                <Td>{egreso.proveedorNombre ?? '—'}</Td>
+                <Td className="uppercase text-ink-soft">{egreso.proveedorNombre ?? '—'}</Td>
                 <Td>{egreso.usuario?.nombre ?? '—'}</Td>
-                <Td>{egreso.descripcion ?? '—'}</Td>
+                <Td>{descripcionSinCategoria(egreso.descripcion, CATEGORIA_EGRESO_LABEL[egreso.categoria]) ?? '—'}</Td>
               </Fila>
             ))}
           </tbody>
