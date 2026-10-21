@@ -1,5 +1,11 @@
 # Novedades de Virikyna Local
 
+## 0.7.1 — octubre 2026
+
+### Facturas de compra
+- **Vincular a producto actualiza el costo.** Al vincular un ítem sin producto de una factura ya cargada, además de sumar el stock, el producto toma el costo de ese ítem (con su descuento) si es su compra más nueva, igual que si se hubiera elegido al cargar la factura. Si tenía precio manual, el precio vuelve a salir de la fórmula. Si el producto tiene una compra más nueva, solo se suma el stock.
+- **Se ve antes de confirmar.** Al elegir el producto, la ventana muestra cómo quedan el costo y el precio de venta (o avisa que solo suma stock).
+
 ## 0.7.0 — octubre 2026
 
 > La versión 0.6.1 sigue funcionando con estos cambios. Conviene actualizar para ver las pantallas nuevas y la explicación de cómo una nota de crédito toca el stock.
