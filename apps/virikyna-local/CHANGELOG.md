@@ -1,5 +1,28 @@
 # Novedades de Virikyna Local
 
+## 0.7.0 — octubre 2026
+
+> La versión 0.6.1 sigue funcionando con estos cambios. Conviene actualizar para ver las pantallas nuevas y la explicación de cómo una nota de crédito toca el stock.
+
+### Cierre de Caja
+- **Tablas nuevas, iguales a las de Virikyna Gestión.** Egresos, retiros y Cierres X se ven en tablas con encabezado, filas alternadas y el total al pie.
+- **Se ve a qué proveedor se le pagó.** Los egresos de "Pago a proveedor" muestran la razón social en su propia columna.
+- **El monto contado se muestra como va a quedar.** Debajo del efectivo contado del Cierre Z y del monto de apertura aparece "Se va a registrar: $ …", para notar antes de confirmar si el punto se tomó como decimal.
+
+### Proveedores — pagos a cuenta
+- **Aplicar pagos a cuenta.** Si a un proveedor se le pagó sin tener comprobantes (la plata quedó "a cuenta"), ahora se puede aplicar después: en su cuenta corriente aparece **Aplicar a comprobantes** (a los seleccionados o a los más viejos). No mueve plata ni toca la caja.
+- **Al cargar una factura** de un proveedor con plata a cuenta, se ofrece aplicarla en el momento.
+- **Aviso al registrar un pago:** "Este proveedor tiene $ … a cuenta", para no pagar dos veces.
+- En la cuenta corriente se ve el total **A cuenta (pagos)**. Quitar una aplicación se hace desde Virikyna Gestión (administradores).
+
+### Facturas de compra
+- **Facturas de servicios.** Al cargar se elige **Artículos** o **Servicios**. Una factura de servicios (flete, mantenimiento, honorarios) lleva solo descripción e importe: no pide cantidad ni producto y no mueve stock. El tipo queda fijo y se ve como chip en los listados; la cuenta corriente se puede filtrar por tipo.
+- **Borradores.** Una factura a medio cargar ya no se pierde al cerrar la ventana, la app o con un corte de luz: se guarda sola como borrador. Al cerrar se puede **Guardar borrador**, **Descartar** o **Seguir editando**. Los borradores aparecen arriba del listado con el chip **Borrador** y se retoman desde ahí. No mueven stock, saldos ni caja hasta confirmarlos.
+- **Notas de crédito y stock.** Una nota de crédito ya **no suma stock**. Si la mercadería se devuelve al proveedor, se marca **Devolución de mercadería** y resta la cantidad de cada ítem en su depósito. Si se anula la nota, se revierte exactamente lo que movió.
+
+### Búsquedas
+- **Sin acentos en todo el sistema.** Los textos se guardan sin tildes (la Ñ se conserva) y las búsquedas los ignoran: "línea" encuentra "LINEA".
+
 ## 0.6.1 — octubre 2026
 
 ### Facturas de compra
