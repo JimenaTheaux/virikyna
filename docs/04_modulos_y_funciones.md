@@ -245,7 +245,7 @@ Etapa única para cargar el inventario existente del local antes de operar (docs
 - Revertir un pago desde Historial devuelve los comprobantes (y las notas de crédito usadas en ese pago) a su estado anterior.
 - **Pagos a cuenta (docs/52):** un pago hecho antes de tener el comprobante queda a cuenta y se aplica después. No sale plata: no hay egreso ni cambia la caja, y el saldo del proveedor no cambia.
   - Cuenta corriente (Gestión): indicador "A cuenta (pagos)"; en Pendientes, si hay algo a cuenta y comprobantes pendientes, el aviso "Hay $X a cuenta · Aplicar a comprobantes" (a los seleccionados, o a los más viejos). Muestra el reparto antes de confirmar.
-  - Al cargar una factura (Gestión), si el proveedor tiene algo a cuenta se ofrece "Aplicar $X a este comprobante" → aplicar o "Ahora no". Nunca automático.
+  - Al cargar una factura (Gestión y Local), si el proveedor tiene algo a cuenta se ofrece "Aplicar $X a este comprobante" → aplicar o "Ahora no". Nunca automático.
   - "Registrar pago" avisa si el proveedor ya tiene plata a cuenta, para no pagar dos veces.
   - Detalle de factura (Gestión, solo admin): "Quitar" una aplicación, con confirmación. La plata vuelve a cuenta (o el crédito a la NC).
 

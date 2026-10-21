@@ -14,7 +14,8 @@ type Props = {
 
 // La planilla vive en packages/shared (misma que Virikyna Gestión); acá solo se conecta el
 // cliente de Supabase, el formulario de producto de esta app (que depende del rol del usuario) y
-// el detalle que abre el link a la factura original de una copia.
+// el detalle que abre el link a la factura original de una copia. Si el proveedor tiene pagos a
+// cuenta (docs/52), al guardar se ofrece aplicarlos a la factura nueva.
 export function CargarFacturaCompraModal({ onClose, onSaved, copiadaDeId }: Props) {
   const { rol } = usePerfil()
   const [originalId, setOriginalId] = useState<string | null>(null)
@@ -27,6 +28,7 @@ export function CargarFacturaCompraModal({ onClose, onSaved, copiadaDeId }: Prop
         onSaved={onSaved}
         copiadaDeId={copiadaDeId}
         onVerOriginal={setOriginalId}
+        ofrecerAplicarACuenta
         crearProducto={({ proveedores, nombreInicial, codigoBarrasInicial, onClose: cerrar, onSaved: guardado, onUsarExistente }) =>
           rol ? (
             <ProductoFormSheet
