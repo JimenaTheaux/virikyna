@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { Eye } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 import { friendlyError, mensajeErrorGuardado, nombresPorId } from '@virikyna/shared'
-import { formatCurrency, formatFechaHora, fechaHoyISO, rangoTimestampsAR } from '@virikyna/shared'
-import { CATEGORIA_EGRESO_LABEL, diferenciaLabel } from '../../lib/caja'
+import { formatCurrency, formatHora, fechaHoyISO, rangoTimestampsAR } from '@virikyna/shared'
+import { CATEGORIA_EGRESO_LABEL, FORMA_PAGO_EGRESO_LABEL, diferenciaLabel } from '../../lib/caja'
+import { Fila, FilaMensaje, FilaTotal, TablaHead, TablaListado, Td, Th } from '../../components/TablaListado'
 import { CierreDetalleModal } from './CierreDetalleModal'
 import { RegistrarEgresoModal } from './RegistrarEgresoModal'
 import { RegistrarRetiroModal } from './RegistrarRetiroModal'
@@ -57,6 +58,20 @@ export function CierreCajaPage() {
       ((aperturasRes.data ?? []) as unknown as AperturaCaja[]).map((a) => [a.id, a]),
     )
 
+    const pagoIds = Array.from(
+      new Set(egresosSinUsuario.map((e) => e.pago_proveedor_id).filter((id): id is string => Boolean(id))),
+    )
+    const pagosRes =
+      pagoIds.length > 0
+        ? await supabase.from('pagos_proveedor').select('id, proveedor:proveedores(nombre)').in('id', pagoIds)
+        : { data: [], error: null }
+    const proveedorPorPago = new Map(
+      ((pagosRes.data ?? []) as unknown as { id: string; proveedor: { nombre: string } | null }[]).map((p) => [
+        p.id,
+        p.proveedor?.nombre ?? null,
+      ]),
+    )
+
     const nombrePorUsuario = await nombresPorId(supabase, [
       ...cierresSinUsuario.flatMap((c) => [c.usuario_id, c.validado_por]),
       ...egresosSinUsuario.map((e) => e.usuario_id),
@@ -89,6 +104,7 @@ export function CierreCajaPage() {
         egresosSinUsuario.map((e) => ({
           ...e,
           usuario: nombrePorUsuario.has(e.usuario_id) ? { nombre: nombrePorUsuario.get(e.usuario_id)! } : null,
+          proveedorNombre: e.pago_proveedor_id ? proveedorPorPago.get(e.pago_proveedor_id) ?? null : null,
         })),
       )
     }
@@ -144,8 +160,8 @@ export function CierreCajaPage() {
   }
 
   return (
-    <div className="flex h-full flex-col gap-stack-md">
-      <section className="rounded-lg bg-surface p-card shadow-sm">
+    <div className="flex flex-col gap-3">
+      <section className="rounded-lg bg-surface p-card-sm shadow-sm">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-display text-headline-lg text-accent-darker">Cierre de Caja</h1>
@@ -189,172 +205,138 @@ export function CierreCajaPage() {
         </div>
 
         {error && (
-          <p className="mt-stack-md rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>
+          <p className="mt-3 rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>
         )}
       </section>
 
       {cierreZ && (
-        <section className="rounded-lg bg-surface p-card shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-sans text-label-bold text-ink-soft">Cierre Z de hoy</p>
-              <p className="mt-1 font-display text-headline-md text-accent-darker">
-                {cierreZ.estado_validacion === 'validado' ? 'Validado' : 'Pendiente de validación'}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="font-sans text-label-md text-ink-soft">Diferencia</p>
-              <p className={`font-display text-headline-md ${diferenciaLabel(cierreZ.diferencia).className}`}>
-                {diferenciaLabel(cierreZ.diferencia).texto}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setVerDetalle(cierreZ)}
-              className="rounded px-4 py-3 font-sans text-label-bold text-accent-dark hover:bg-accent-light"
-            >
-              Ver detalle
-            </button>
+        <section className="flex items-center gap-6 rounded-lg bg-surface px-card-sm py-3 shadow-sm">
+          <div className="flex items-baseline gap-3">
+            <p className="font-sans text-label-bold text-ink-soft">Cierre Z de hoy</p>
+            <p className="font-sans text-body-lg font-bold text-accent-darker">
+              {cierreZ.estado_validacion === 'validado' ? 'Validado' : 'Pendiente de validación'}
+            </p>
           </div>
+          <div className="flex items-baseline gap-3">
+            <p className="font-sans text-label-md text-ink-soft">Diferencia</p>
+            <p className={`font-sans text-body-lg font-bold ${diferenciaLabel(cierreZ.diferencia).className}`}>
+              {diferenciaLabel(cierreZ.diferencia).texto}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setVerDetalle(cierreZ)}
+            className="ml-auto rounded px-4 py-2 font-sans text-label-bold text-accent-dark hover:bg-accent-light"
+          >
+            Ver detalle
+          </button>
         </section>
       )}
 
-      <section className="flex-1 overflow-auto rounded-lg bg-surface p-card shadow-sm">
-        <p className="font-sans text-label-bold text-ink-soft">Egresos de turno de hoy</p>
-        <div className="mt-3 overflow-auto rounded-lg border border-line">
-          <table className="w-full text-left font-sans text-body-md leading-5">
-            <thead>
-              <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-                <th className="whitespace-nowrap px-3 py-2">Hora</th>
-                <th className="whitespace-nowrap px-3 py-2">Categoría</th>
-                <th className="whitespace-nowrap px-3 py-2">Descripción</th>
-                <th className="whitespace-nowrap px-3 py-2">Usuario</th>
-                <th className="whitespace-nowrap px-3 py-2 text-right">Monto</th>
-              </tr>
-            </thead>
-            <tbody>
-              {!loading && egresos.length === 0 && (
-                <tr>
-                  <td className="px-4 py-4 text-ink-soft" colSpan={5}>
-                    Sin egresos registrados hoy.
-                  </td>
-                </tr>
-              )}
-              {egresos.map((egreso) => (
-                <tr key={egreso.id} className="border-b border-line last:border-0">
-                  <td className="px-3 py-1.5 text-ink-soft">{formatFechaHora(egreso.created_at)}</td>
-                  <td className="px-3 py-1.5 text-ink">{CATEGORIA_EGRESO_LABEL[egreso.categoria]}</td>
-                  <td className="px-3 py-1.5 text-ink-soft">{egreso.descripcion ?? '—'}</td>
-                  <td className="px-3 py-1.5 text-ink-soft">{egreso.usuario?.nombre ?? '—'}</td>
-                  <td className="px-3 py-1.5 text-right text-ink">{formatCurrency(egreso.monto)}</td>
-                </tr>
-              ))}
-            </tbody>
-            {egresos.length > 0 && (
-              <tfoot>
-                <tr>
-                  <td className="px-3 py-1.5 font-sans text-label-bold text-ink-soft" colSpan={4}>
-                    Total egresos
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-sans text-label-bold text-ink">
-                    {formatCurrency(totalEgresosHoy)}
-                  </td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
+      <section className="rounded-lg bg-surface p-card-sm shadow-sm">
+        <h2 className="mb-2 font-sans text-label-bold text-ink-soft">Egresos de turno de hoy</h2>
+        <TablaListado>
+          <TablaHead>
+            <Th>Hora</Th>
+            <Th>Categoría</Th>
+            <Th align="right">Monto</Th>
+            <Th>Forma de pago</Th>
+            <Th>Proveedor</Th>
+            <Th>Usuario</Th>
+            <Th>Descripción</Th>
+          </TablaHead>
+          <tbody>
+            {loading && <FilaMensaje colSpan={7}>Cargando...</FilaMensaje>}
+            {!loading && egresos.length === 0 && <FilaMensaje colSpan={7}>Sin egresos registrados hoy.</FilaMensaje>}
+            {egresos.map((egreso) => (
+              <Fila key={egreso.id}>
+                <Td className="whitespace-nowrap text-ink-soft">{formatHora(egreso.created_at)}</Td>
+                <Td className="text-ink">{CATEGORIA_EGRESO_LABEL[egreso.categoria]}</Td>
+                <Td align="right" className="font-semibold text-error">
+                  {formatCurrency(-egreso.monto)}
+                </Td>
+                <Td>{FORMA_PAGO_EGRESO_LABEL[egreso.forma_pago]}</Td>
+                <Td>{egreso.proveedorNombre ?? '—'}</Td>
+                <Td>{egreso.usuario?.nombre ?? '—'}</Td>
+                <Td>{egreso.descripcion ?? '—'}</Td>
+              </Fila>
+            ))}
+          </tbody>
+          {egresos.length > 0 && (
+            <FilaTotal label="Total egresos" labelColSpan={2} restoColSpan={4} montoClassName="text-error">
+              {formatCurrency(-totalEgresosHoy)}
+            </FilaTotal>
+          )}
+        </TablaListado>
+      </section>
 
-        <p className="mt-stack-md font-sans text-label-bold text-ink-soft">Retiros de caja de hoy</p>
-        <div className="mt-3 overflow-auto rounded-lg border border-line">
-          <table className="w-full text-left font-sans text-body-md leading-5">
-            <thead>
-              <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-                <th className="whitespace-nowrap px-3 py-2">Hora</th>
-                <th className="whitespace-nowrap px-3 py-2">Cajero</th>
-                <th className="whitespace-nowrap px-3 py-2">Admin que recibe</th>
-                <th className="whitespace-nowrap px-3 py-2 text-right">Monto</th>
-              </tr>
-            </thead>
-            <tbody>
-              {!loading && retiros.length === 0 && (
-                <tr>
-                  <td className="px-4 py-4 text-ink-soft" colSpan={4}>
-                    Sin retiros registrados hoy.
-                  </td>
-                </tr>
-              )}
-              {retiros.map((retiro) => (
-                <tr key={retiro.id} className="border-b border-line last:border-0">
-                  <td className="px-3 py-1.5 text-ink-soft">{formatFechaHora(retiro.created_at)}</td>
-                  <td className="px-3 py-1.5 text-ink-soft">{retiro.cajero?.nombre ?? '—'}</td>
-                  <td className="px-3 py-1.5 text-ink-soft">{retiro.admin?.nombre ?? '—'}</td>
-                  <td className="px-3 py-1.5 text-right text-ink">{formatCurrency(retiro.monto)}</td>
-                </tr>
-              ))}
-            </tbody>
-            {retiros.length > 0 && (
-              <tfoot>
-                <tr>
-                  <td className="px-3 py-1.5 font-sans text-label-bold text-ink-soft" colSpan={3}>
-                    Total retiros
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-sans text-label-bold text-ink">
-                    {formatCurrency(totalRetirosHoy)}
-                  </td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
+      <section className="rounded-lg bg-surface p-card-sm shadow-sm">
+        <h2 className="mb-2 font-sans text-label-bold text-ink-soft">Retiros de caja de hoy</h2>
+        <TablaListado>
+          <TablaHead>
+            <Th>Hora</Th>
+            <Th>Cajero</Th>
+            <Th>Admin que recibe</Th>
+            <Th align="right">Monto</Th>
+          </TablaHead>
+          <tbody>
+            {loading && <FilaMensaje colSpan={4}>Cargando...</FilaMensaje>}
+            {!loading && retiros.length === 0 && <FilaMensaje colSpan={4}>Sin retiros registrados hoy.</FilaMensaje>}
+            {retiros.map((retiro) => (
+              <Fila key={retiro.id}>
+                <Td className="whitespace-nowrap text-ink-soft">{formatHora(retiro.created_at)}</Td>
+                <Td>{retiro.cajero?.nombre ?? '—'}</Td>
+                <Td>{retiro.admin?.nombre ?? '—'}</Td>
+                <Td align="right" className="font-semibold text-error">
+                  {formatCurrency(-retiro.monto)}
+                </Td>
+              </Fila>
+            ))}
+          </tbody>
+          {retiros.length > 0 && (
+            <FilaTotal label="Total retiros" labelColSpan={3} montoClassName="text-error">
+              {formatCurrency(-totalRetirosHoy)}
+            </FilaTotal>
+          )}
+        </TablaListado>
+      </section>
 
-        <p className="mt-stack-md font-sans text-label-bold text-ink-soft">Cierres X de hoy</p>
-        <div className="mt-3 overflow-auto rounded-lg border border-line">
-          <table className="w-full text-left font-sans text-body-md leading-5">
-            <thead>
-              <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
-                <th className="whitespace-nowrap px-3 py-2">Hora</th>
-                <th className="whitespace-nowrap px-3 py-2">Usuario</th>
-                <th className="whitespace-nowrap px-3 py-2 text-right">Efectivo esperado</th>
-                <th className="whitespace-nowrap px-3 py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr>
-                  <td className="px-4 py-4 text-ink-soft" colSpan={4}>
-                    Cargando...
-                  </td>
-                </tr>
-              )}
-              {!loading && cierresX.length === 0 && (
-                <tr>
-                  <td className="px-4 py-4 text-ink-soft" colSpan={4}>
-                    Todavía no se hizo ningún Cierre X hoy.
-                  </td>
-                </tr>
-              )}
-              {cierresX.map((cierre) => (
-                <tr key={cierre.id} className="border-b border-line last:border-0">
-                  <td className="px-3 py-1.5 text-ink-soft">{formatFechaHora(cierre.created_at)}</td>
-                  <td className="px-3 py-1.5 text-ink-soft">{cierre.usuario?.nombre ?? '—'}</td>
-                  <td className="px-3 py-1.5 text-right text-ink">{formatCurrency(cierre.efectivo_esperado)}</td>
-                  <td className="px-3 py-1.5 text-right">
-                    <button
-                      type="button"
-                      onClick={() => setVerDetalle(cierre)}
-                      title="Ver detalle"
-                      aria-label="Ver detalle"
-                      className="rounded px-3 py-1.5 text-accent-dark hover:bg-accent-light"
-                    >
-                      <Eye size={18} strokeWidth={1.5} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <section className="rounded-lg bg-surface p-card-sm shadow-sm">
+        <h2 className="mb-2 font-sans text-label-bold text-ink-soft">Cierres X de hoy</h2>
+        <TablaListado>
+          <TablaHead>
+            <Th>Hora</Th>
+            <Th>Usuario</Th>
+            <Th align="right">Efectivo esperado</Th>
+            <Th />
+          </TablaHead>
+          <tbody>
+            {loading && <FilaMensaje colSpan={4}>Cargando...</FilaMensaje>}
+            {!loading && cierresX.length === 0 && (
+              <FilaMensaje colSpan={4}>Todavía no se hizo ningún Cierre X hoy.</FilaMensaje>
+            )}
+            {cierresX.map((cierre) => (
+              <Fila key={cierre.id}>
+                <Td className="whitespace-nowrap text-ink-soft">{formatHora(cierre.created_at)}</Td>
+                <Td>{cierre.usuario?.nombre ?? '—'}</Td>
+                <Td align="right" className="font-semibold text-ink">
+                  {formatCurrency(cierre.efectivo_esperado)}
+                </Td>
+                <Td align="right">
+                  <button
+                    type="button"
+                    onClick={() => setVerDetalle(cierre)}
+                    title="Ver detalle"
+                    aria-label="Ver detalle"
+                    className="-my-1 rounded p-1 align-middle text-accent-dark hover:bg-accent-light"
+                  >
+                    <Eye size={18} strokeWidth={1.5} />
+                  </button>
+                </Td>
+              </Fila>
+            ))}
+          </tbody>
+        </TablaListado>
       </section>
 
       {modalEgreso && (
