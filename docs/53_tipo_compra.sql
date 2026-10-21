@@ -1,6 +1,12 @@
 -- 53 — Tipo de compra: ARTICULOS / SERVICIOS en facturas de compra
 --
--- ⏳ NO APLICADO todavía. Correr desde la raíz del repo con
+-- ✅ APLICADO en producción el 2026-10-21 (archivo completo), con backup previo
+-- virikyna_2026-10-21_pre-docs53. Antes se corrió entero dentro de BEGIN … ROLLBACK (antes y
+-- después de aplicar docs/52). PARTE B: firma única con p_tipo_compra, sin anon; vista con
+-- security_invoker y tipo_compra; trigger presente; las 3 facturas existentes en 'articulos'.
+-- PARTE C: 12/12 ok, sin residuos.
+--
+-- Correr desde la raíz del repo con
 -- `npx supabase db query --linked -f docs/53_tipo_compra.sql` (o en el SQL Editor del proyecto
 -- ccpinvtleqlsukcqnili), después de 52. La PARTE A va una sola vez; la PARTE B (verificación) y la
 -- PARTE C (test, BEGIN … ROLLBACK) se pueden repetir.
