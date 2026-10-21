@@ -34,6 +34,10 @@ export default {
         'badge-green-text': '#2E9B5F',
         'badge-red-bg': '#FBEAE7',
         'badge-neutral-bg': '#F0F2F3',
+        // Violeta de la paleta secundaria (docs/08): chip decorativo, no de estado — tipo de compra
+        // Servicios (docs/53). Texto #5E3F75 sobre #F3EDF7: contraste ~7:1.
+        'badge-violet-bg': '#F3EDF7',
+        'badge-violet-text': '#5E3F75',
         // Tablas de listado (sección 5.2) — fila alternada y separador, más claros que `line`.
         'table-row-alt': '#FAFBFB',
         'table-divider': '#F0F2F3',

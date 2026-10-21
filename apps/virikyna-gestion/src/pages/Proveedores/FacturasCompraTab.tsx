@@ -8,6 +8,7 @@ import {
   formatFechaCorta,
   friendlyError,
   EstadoBadge,
+  ChipTipoCompra,
   TIPO_COMPROBANTE_COMPRA_LABEL as TIPO_LABEL,
 } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
@@ -122,6 +123,7 @@ export function FacturasCompraTab() {
                   {TIPO_LABEL[f.tipo_comprobante] ?? f.tipo_comprobante}
                   {f.letra ? ` ${f.letra}` : ''}
                   {f.numero_comprobante ? ` · ${f.numero_comprobante}` : ''}
+                  <ChipTipoCompra tipo={f.tipo_compra} className="ml-2" />
                 </td>
                 <td className={`px-3 py-3 text-right ${f.anulada ? '' : 'text-ink'}`}>{formatCurrency(f.total)}</td>
                 <td

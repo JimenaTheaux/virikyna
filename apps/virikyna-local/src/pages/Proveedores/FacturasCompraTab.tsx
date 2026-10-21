@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Copy, Eye } from 'lucide-react'
 import type { FacturaCompraSaldo, Proveedor } from '@virikyna/shared'
 import {
+  ChipTipoCompra,
   EstadoBadge,
   etiquetaComprobanteCompra,
   formatCurrency,
@@ -117,6 +118,7 @@ export function FacturasCompraTab() {
                   {TIPO_LABEL[f.tipo_comprobante] ?? f.tipo_comprobante}
                   {f.letra ? ` ${f.letra}` : ''}
                   {f.numero_comprobante ? ` · ${f.numero_comprobante}` : ''}
+                  <ChipTipoCompra tipo={f.tipo_compra} className="ml-2" />
                 </td>
                 <td className={`px-3 py-3 text-right ${f.anulada ? '' : 'text-ink'}`}>{formatCurrency(f.total)}</td>
                 <td

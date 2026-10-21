@@ -3,14 +3,17 @@ import { useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Ban, Copy, Eye, Pencil, Wallet } from 'lucide-react'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { EstadoFacturaCompra, FacturaCompraSaldo, OrigenEgreso, TipoComprobanteCompra } from '../../types/database'
+import type { EstadoFacturaCompra, FacturaCompraSaldo, OrigenEgreso, TipoComprobanteCompra, TipoCompra } from '../../types/database'
 import {
   etiquetaComprobanteCompra,
   etiquetaCortaAlicuotaIva,
   FORMA_PAGO_EGRESO_LABEL,
   invalidarCuentaProveedor,
+  TIPO_COMPRA_LABEL,
   TIPO_COMPROBANTE_COMPRA_LABEL,
+  TIPOS_COMPRA,
   TIPOS_COMPROBANTE_COMPRA,
+  tipoCompraDe,
   useComprobantesProveedor,
   usePagosProveedor,
   useProveedor,
@@ -21,7 +24,7 @@ import { usePagosACuenta } from '../../lib/pagosACuenta'
 import { formatCurrency, formatFechaCorta } from '../../lib/format'
 import { friendlyError } from '../../lib/supabaseErrors'
 import { Field, inputClass, selectClass } from './FormField'
-import { EstadoBadge } from './EstadoBadge'
+import { ChipTipoCompra, EstadoBadge } from './EstadoBadge'
 import { RowActionsMenu, type RowActionsMenuItem } from './RowActionsMenu'
 import { PagarProveedorModal } from './PagarProveedorModal'
 import { AplicarACuentaModal } from './AplicarACuentaModal'
@@ -106,10 +109,11 @@ export function ProveedorCuentaCorriente({
 
   const tab = (TABS.some((t) => t.id === params.get('tab')) ? params.get('tab') : 'pendientes') as TabId
   const tipo = (params.get('tipo') ?? '') as TipoComprobanteCompra | ''
+  const compra = (params.get('compra') ?? '') as TipoCompra | '' // docs/53: artículos / servicios
   const desde = params.get('desde') ?? ''
   const hasta = params.get('hasta') ?? ''
   const q = params.get('q') ?? ''
-  const hayFiltros = Boolean(tipo || desde || hasta || q)
+  const hayFiltros = Boolean(tipo || compra || desde || hasta || q)
 
   function setParam(clave: string, valor: string) {
     setParams(
@@ -126,7 +130,7 @@ export function ProveedorCuentaCorriente({
     setParams(
       (prev) => {
         const next = new URLSearchParams(prev)
-        for (const k of ['tipo', 'desde', 'hasta', 'q']) next.delete(k)
+        for (const k of ['tipo', 'compra', 'desde', 'hasta', 'q']) next.delete(k)
         return next
       },
       { replace: true },
@@ -200,6 +204,7 @@ export function ProveedorCuentaCorriente({
     const filtrados = comprobantes.filter(
       (c) =>
         (!tipo || c.tipo_comprobante === tipo) &&
+        (!compra || tipoCompraDe(c) === compra) &&
         (!desde || c.fecha_comprobante >= desde) &&
         (!hasta || c.fecha_comprobante <= hasta) &&
         (!texto ||
@@ -215,7 +220,7 @@ export function ProveedorCuentaCorriente({
     if (tab === 'pagados') return filtrados.filter((c) => !c.anulada && c.estado === 'pagada').sort(porFechaDesc)
     // Todos: abiertos primero; pagados y anulados al final (atenuados).
     return filtrados.sort((a, b) => Number(cerrada(a)) - Number(cerrada(b)) || porFechaDesc(a, b))
-  }, [comprobantes, tab, tipo, desde, hasta, q])
+  }, [comprobantes, tab, tipo, compra, desde, hasta, q])
 
   const pagosVisibles = useMemo(
     () => pagos.filter((p) => (!desde || p.fecha >= desde) && (!hasta || p.fecha <= hasta)),
@@ -423,6 +428,20 @@ export function ProveedorCuentaCorriente({
             </Field>
           </div>
         )}
+        {tab !== 'pagos' && (
+          <div className="w-36">
+            <Field label="Compra" compact>
+              <select value={compra} onChange={(e) => setParam('compra', e.target.value)} className={selectClass}>
+                <option value="">Todas</option>
+                {TIPOS_COMPRA.map((t) => (
+                  <option key={t} value={t}>
+                    {TIPO_COMPRA_LABEL[t]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+        )}
         <div className="w-40">
           <Field label="Desde" compact>
             <input type="date" value={desde} max={hasta || undefined} onChange={(e) => setParam('desde', e.target.value)} className={inputClass} />
@@ -601,6 +620,7 @@ export function ProveedorCuentaCorriente({
                       >
                         {numero}
                       </button>
+                      <ChipTipoCompra tipo={c.tipo_compra} className="ml-2" />
                     </td>
                     <td className={`px-3 py-3 text-right font-semibold tabular-nums ${nc ? 'text-success' : 'text-ink'}`}>
                       {nc ? negativo(Number(c.total)) : formatCurrency(Number(c.total))}

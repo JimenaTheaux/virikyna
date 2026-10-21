@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { FacturaCompra, FacturaCompraItem, FacturaCompraSaldo, PagoProveedor } from '@virikyna/shared'
 import {
   AnularFacturaCompraModal,
+  ChipTipoCompra,
   desaplicarPago,
   EditarFacturaCompraModal,
   EstadoBadge,
@@ -12,6 +13,7 @@ import {
   formatFechaCorta,
   friendlyError,
   nombresPorId,
+  tipoCompraDe,
   VincularItemFacturaModal,
 } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
@@ -76,6 +78,8 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
   const [quitando, setQuitando] = useState(false)
 
   const nc = esNotaCredito(facturaActual)
+  // docs/53: servicios no tiene cantidad (es 1) ni producto — no se ofrece vincular.
+  const servicios = tipoCompraDe(facturaActual) === 'servicios'
 
   async function cargar() {
     setLoading(true)
@@ -193,7 +197,9 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
       <div className="flex flex-col gap-stack-md">
         {facturaActual.anulada && (
           <div className="rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">
-            Esta factura está anulada — el stock que había sumado ya fue revertido.
+            {servicios
+              ? 'Esta factura está anulada.'
+              : 'Esta factura está anulada — el stock que había sumado ya fue revertido.'}
           </div>
         )}
 
@@ -233,21 +239,21 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
         {error && <ErrorText>{error}</ErrorText>}
 
         <div>
-          <p className="font-sans text-label-bold text-ink-soft">Ítems</p>
+          <p className="font-sans text-label-bold text-ink-soft">{servicios ? 'Servicios' : 'Ítems'}</p>
           <div className="mt-2 overflow-auto rounded-lg border border-line">
             <table className="w-full text-left font-sans text-body-md leading-5">
               <thead>
                 <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
                   <th className="px-4 py-2">Descripción</th>
-                  <th className="px-4 py-2 text-right">Cant.</th>
-                  <th className="px-4 py-2 text-right">Precio unit.</th>
+                  {!servicios && <th className="px-4 py-2 text-right">Cant.</th>}
+                  <th className="px-4 py-2 text-right">{servicios ? 'Importe' : 'Precio unit.'}</th>
                   <th className="px-4 py-2 text-right">Subtotal</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && (
                   <tr>
-                    <td className="px-4 py-4 text-ink-soft" colSpan={4}>
+                    <td className="px-4 py-4 text-ink-soft" colSpan={servicios ? 3 : 4}>
                       Cargando...
                     </td>
                   </tr>
@@ -257,11 +263,11 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
                     <tr key={it.id} className="border-b border-line last:border-0">
                       <td className="px-4 py-2 text-ink">
                         {it.descripcion}
-                        {!it.producto_id && !facturaActual.anulada && (
+                        {!servicios && !it.producto_id && !facturaActual.anulada && (
                           <ItemSinProducto onVincular={() => setItemAVincular(it)} />
                         )}
                       </td>
-                      <td className="px-4 py-2 text-right text-ink-soft">{it.cantidad}</td>
+                      {!servicios && <td className="px-4 py-2 text-right text-ink-soft">{it.cantidad}</td>}
                       <td className="px-4 py-2 text-right tabular-nums text-ink-soft">
                         {formatCurrency(it.precio_unitario_sin_iva)}
                       </td>
@@ -281,6 +287,7 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
                 <EstadoBadge variant={estado.variant}>
                   {nc && facturaActual.estado === 'pagada' ? 'Agotada' : estado.label}
                 </EstadoBadge>
+                <ChipTipoCompra tipo={facturaActual.tipo_compra} />
               </p>
               <p
                 className={`font-display text-headline-md tabular-nums ${
