@@ -21,6 +21,8 @@ export type EstadoComprobante = 'sin_facturar' | 'facturado' | 'anulada'
 // 'presupuesto' (docs/31): se comporta igual que remito — suma deuda, actualiza costo, se paga.
 export type TipoComprobanteCompra = 'factura' | 'remito' | 'cupon' | 'presupuesto' | 'nota_credito' | 'nota_debito'
 export type LetraComprobanteCompra = 'A' | 'B' | 'R' | 'X'
+// docs/53: servicios = ítems sin producto ni cantidad (va 1); no tocan stock, costo ni precio.
+export type TipoCompra = 'articulos' | 'servicios'
 export type FormaPagoCompra = 'contado' | 'cuenta_corriente'
 export type FormaPagoEgreso = 'efectivo' | 'transferencia' | 'cheque' | 'echeq'
 export type TipoCierre = 'x' | 'z'
@@ -259,6 +261,7 @@ export type FacturaCompra = {
   created_at: string
   copiada_de_id: string | null // docs/33: factura de la que se copió esta (cualquier proveedor, también anulada)
   iva_alicuota: number // docs/45: 21 o 0 (exento), para el comprobante completo
+  tipo_compra: TipoCompra // docs/53: fijo desde la carga; servicios no mueve stock ni costo
 }
 
 export type FacturaCompraItem = {

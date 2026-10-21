@@ -1,18 +1,29 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { FacturaCompraSaldo, FormaPagoCompra, LetraComprobanteCompra, Proveedor, TipoComprobanteCompra } from '../../types/database'
+import type {
+  FacturaCompraSaldo,
+  FormaPagoCompra,
+  LetraComprobanteCompra,
+  Proveedor,
+  TipoComprobanteCompra,
+  TipoCompra,
+} from '../../types/database'
 import {
   alicuotaDefault,
   cargarFacturaCompra,
   calcularTotalesFacturaCompra,
   errorCabeceraFacturaCompra,
   etiquetaAlicuotaIva,
+  hayItemsCargadosFacturaCompra,
   integrarMarcaEnItemsLibres,
   itemsLibresFacturaCompra,
   itemsValidosFacturaCompra,
   mensajeItemsLibresFacturaCompra,
+  mensajeSinItemsFacturaCompra,
   nuevoItemFacturaCompraUI,
+  OPCIONES_TIPO_COMPRA,
   problemasItemsFacturaCompra,
+  TIPO_COMPRA_LABEL,
   TIPO_COMPROBANTE_COMPRA_LABEL,
   TIPOS_COMPROBANTE_COMPRA,
   valoresFacturaCompraVacios,
@@ -35,6 +46,7 @@ import { AvisoComprobanteDuplicado } from './AvisosCopiaFactura'
 import { SelectorFacturaCopiaModal } from './SelectorFacturaCopiaModal'
 import { ObservacionesProveedor } from './ObservacionesProveedor'
 import { SelectorAlicuotaIva } from './SelectorAlicuotaIva'
+import { ControlSegmentado } from './ControlSegmentado'
 import { AplicarACuentaModal } from './AplicarACuentaModal'
 
 // Etiquetas compartidas (TIPO_COMPROBANTE_COMPRA_LABEL); acá se aclara cuáles no son fiscales.
@@ -55,6 +67,17 @@ const COLUMNAS_ITEMS = [
   { label: 'P. unitario', align: 'right', width: '10%' },
   { label: 'Desc. %', align: 'right', width: '6%' },
   { label: 'Depósito', align: 'left', width: '10%' },
+  { label: 'Subtotal', align: 'right', width: '11%' },
+  { label: '', align: 'center', width: '4%' },
+] as const
+
+// Servicios (docs/53): sin código, producto, marca ni cantidad. Mismas columnas de importe,
+// descuento, depósito y subtotal que artículos, para que el pie de totales se lea igual.
+const COLUMNAS_SERVICIOS = [
+  { label: 'Descripción', align: 'left', width: '55%' },
+  { label: 'Importe s/IVA', align: 'right', width: '12%' },
+  { label: 'Desc. %', align: 'right', width: '7%' },
+  { label: 'Depósito', align: 'left', width: '11%' },
   { label: 'Subtotal', align: 'right', width: '11%' },
   { label: '', align: 'center', width: '4%' },
 ] as const
@@ -110,12 +133,15 @@ export function CargarFacturaCompraModal({
   const [mostrarFechaFiscal, setMostrarFechaFiscal] = useState(Boolean(inicial.fechaFiscal))
   const [formaPago, setFormaPago] = useState<FormaPagoCompra>(inicial.formaPago)
   const [ivaAlicuota, setIvaAlicuota] = useState<AlicuotaIvaCompra>(inicial.ivaAlicuota)
+  const [tipoCompra, setTipoCompra] = useState<TipoCompra>(inicial.tipoCompra)
   const [items, setItems] = useState<ItemFacturaCompraUI[]>(inicial.items)
   const [copiaDe, setCopiaDe] = useState<OrigenCopiaFactura | null>(inicial.copiaDe)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [confirmCerrar, setConfirmCerrar] = useState(false)
+  // Cambio de artículos ↔ servicios pedido con ítems cargados: se confirma porque los limpia.
+  const [tipoCompraPendiente, setTipoCompraPendiente] = useState<TipoCompra | null>(null)
   const [confirmLibres, setConfirmLibres] = useState(false)
   const [selectorAbierto, setSelectorAbierto] = useState(false)
   // Factura ya guardada + lo que el proveedor tiene a cuenta: se ofrece aplicarlo (docs/52).
@@ -140,6 +166,7 @@ export function CargarFacturaCompraModal({
     setMostrarFechaFiscal(Boolean(v.fechaFiscal))
     setFormaPago(v.formaPago)
     setIvaAlicuota(v.ivaAlicuota)
+    setTipoCompra(v.tipoCompra)
     setItems(v.items)
     setCopiaDe(v.copiaDe)
     setItemsConError(new Set())
@@ -235,6 +262,25 @@ export function CargarFacturaCompraModal({
     setIvaAlicuota(alicuotaDefault(tipo))
   }
 
+  // Artículos ↔ servicios (docs/53): los ítems de uno no sirven en el otro, se arranca con una fila
+  // en blanco. Con algo cargado, antes se confirma (tipoCompraPendiente).
+  function pedirTipoCompra(tipo: TipoCompra) {
+    if (tipo === tipoCompra) return
+    if (hayItemsCargadosFacturaCompra(items)) setTipoCompraPendiente(tipo)
+    else aplicarTipoCompra(tipo)
+  }
+
+  function aplicarTipoCompra(tipo: TipoCompra) {
+    const fila = nuevoItemFacturaCompraUI()
+    setTipoCompraPendiente(null)
+    setTipoCompra(tipo)
+    setItems([fila])
+    setItemsConError(new Set())
+    setError(null)
+    setDirty(true)
+    setFoco((prev) => ({ key: fila.key, n: (prev?.n ?? 0) + 1 }))
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
@@ -248,7 +294,7 @@ export function CargarFacturaCompraModal({
     // Un ítem empezado pero incompleto se descartaba en silencio al guardar: ahora bloquea, se
     // marca en rojo y se lleva la vista hasta el primero. Incluye un producto inactivo copiado
     // sin confirmar (docs/33).
-    const problemas = problemasItemsFacturaCompra(items)
+    const problemas = problemasItemsFacturaCompra(items, tipoCompra)
     setItemsConError(new Set(problemas.map((p) => p.key)))
     if (problemas.length > 0) {
       setError(problemas.map((p) => p.mensaje).join(' '))
@@ -258,11 +304,12 @@ export function CargarFacturaCompraModal({
       return
     }
     if (itemsValidosFacturaCompra(items).length === 0) {
-      setError('Agregá al menos un ítem con descripción y cantidad mayor a cero.')
+      setError(mensajeSinItemsFacturaCompra(tipoCompra))
       return
     }
     // Ítems sin producto del inventario: no suman stock. Se confirman antes de guardar (docs/50).
-    if (itemsLibresFacturaCompra(items).length > 0) {
+    // En servicios no hay producto por definición: no se pregunta (docs/53).
+    if (tipoCompra === 'articulos' && itemsLibresFacturaCompra(items).length > 0) {
       setConfirmLibres(true)
       return
     }
@@ -292,6 +339,7 @@ export function CargarFacturaCompraModal({
       fechaFiscal: fechaFiscal || null,
       formaPago,
       ivaAlicuota,
+      tipoCompra,
       items: integrarMarcaEnItemsLibres(items),
       copiadaDeId: copiaDe?.id ?? null,
     })
@@ -331,6 +379,8 @@ export function CargarFacturaCompraModal({
   }
 
   const ocupado = saving || copia.cargando || esperandoCopia
+  const columnas: readonly { label: string; align: 'left' | 'right' | 'center'; width: string }[] =
+    tipoCompra === 'servicios' ? COLUMNAS_SERVICIOS : COLUMNAS_ITEMS
 
   // La factura ya se guardó: en lugar del formulario, la oferta de aplicar lo a cuenta.
   // Aplicar o "Ahora no" terminan igual que un guardado normal (onSaved).
@@ -458,14 +508,25 @@ export function CargarFacturaCompraModal({
             ) : (
               <span />
             )}
-            <button
-              type="button"
-              onClick={() => setSelectorAbierto(true)}
-              disabled={ocupado}
-              className="rounded border border-accent px-3 py-2 font-sans text-label-bold text-accent-darker transition hover:bg-accent-light disabled:opacity-60"
-            >
-              Copiar desde…
-            </button>
+            <div className="flex flex-wrap items-end gap-stack-md">
+              <button
+                type="button"
+                onClick={() => setSelectorAbierto(true)}
+                disabled={ocupado}
+                className="rounded border border-accent px-3 py-2 font-sans text-label-bold text-accent-darker transition hover:bg-accent-light disabled:opacity-60"
+              >
+                Copiar desde…
+              </button>
+              {/* docs/53: define qué columnas tiene la planilla; se elige siempre a mano. */}
+              <ControlSegmentado
+                legend="Tipo de compra"
+                opciones={OPCIONES_TIPO_COMPRA}
+                value={tipoCompra}
+                onChange={pedirTipoCompra}
+                disabled={ocupado}
+                resaltado
+              />
+            </div>
           </div>
 
           {copia.cargando && (
@@ -595,17 +656,19 @@ export function CargarFacturaCompraModal({
           )}
 
           {/* Tabla de ítems tipo planilla — sin scroll interno propio, crece con la página */}
-          <p className="font-sans text-label-bold text-ink">Ítems de la factura</p>
+          <p className="font-sans text-label-bold text-ink">
+            {tipoCompra === 'servicios' ? 'Servicios de la factura' : 'Ítems de la factura'}
+          </p>
 
           <table className="w-full table-fixed border-collapse">
             <colgroup>
-              {COLUMNAS_ITEMS.map((c) => (
+              {columnas.map((c) => (
                 <col key={c.label || 'accion'} style={{ width: c.width }} />
               ))}
             </colgroup>
             <thead>
               <tr className="border-b border-line">
-                {COLUMNAS_ITEMS.map((c) => (
+                {columnas.map((c) => (
                   <th
                     key={c.label || 'accion'}
                     className={`px-2 py-2 font-sans text-label-md text-ink-soft ${
@@ -623,6 +686,7 @@ export function CargarFacturaCompraModal({
                   key={item.key}
                   item={item}
                   index={i}
+                  servicios={tipoCompra === 'servicios'}
                   puedeEliminar={items.length > 1}
                   proveedores={proveedores}
                   supabase={supabase}
@@ -660,6 +724,20 @@ export function CargarFacturaCompraModal({
             copia.limpiarError()
             copia.pedirCopia(id)
           }}
+        />
+      )}
+
+      {tipoCompraPendiente && (
+        <ConfirmDialog
+          title={`Cambiar a ${TIPO_COMPRA_LABEL[tipoCompraPendiente].toLowerCase()}`}
+          mensaje={`Los ítems cargados se borran: ${
+            tipoCompraPendiente === 'servicios'
+              ? 'un servicio no lleva producto, código ni cantidad.'
+              : 'un artículo lleva producto y cantidad.'
+          } La cabecera (proveedor, comprobante, fechas e IVA) queda igual.`}
+          confirmLabel="Cambiar y borrar ítems"
+          onCancel={() => setTipoCompraPendiente(null)}
+          onConfirm={() => aplicarTipoCompra(tipoCompraPendiente)}
         />
       )}
 

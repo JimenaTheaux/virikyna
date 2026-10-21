@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Proveedor, UbicacionStock } from '../../types/database'
 import { formatCurrency } from '../../lib/format'
@@ -42,6 +42,8 @@ type Props = {
   supabase: SupabaseClient
   item: ItemFacturaCompraUI
   index: number
+  // Factura de servicios (docs/53): fila de descripción + importe, sin búsqueda de producto.
+  servicios?: boolean
   puedeEliminar: boolean
   proveedores: Proveedor[]
   crearProducto: CrearProductoRender
@@ -65,7 +67,13 @@ const cellSelectClass = `${selectClass} !rounded !border-transparent !bg-transpa
 // — la presentación de escritorio (Local y Gestión). Toda la lógica de búsqueda/escaneo/alta vive
 // en useItemFacturaBusqueda, compartida con la tarjeta de celular de Virikyna Inventario; acá solo
 // va el markup. El aviso de código no encontrado se muestra en una segunda fila debajo.
-export function ItemFacturaRow({
+// En una factura de servicios (docs/53) va FilaServicio: otra fila, no un modo de esta, así la
+// búsqueda de producto ni se monta.
+export function ItemFacturaRow({ servicios = false, ...props }: Props) {
+  return servicios ? <FilaServicio {...props} /> : <FilaArticulo {...props} />
+}
+
+function FilaArticulo({
   supabase,
   item,
   index,
@@ -78,7 +86,7 @@ export function ItemFacturaRow({
   onAvanzar,
   onChange,
   onEliminar,
-}: Props) {
+}: Omit<Props, 'servicios'>) {
   const filaRef = useRef<HTMLTableRowElement>(null)
   const busqueda = useItemFacturaBusqueda({ supabase, item, onChange, onAvanzar, focoCodigo, contenedorRef: filaRef })
   const { codigoRef, productoRef } = busqueda
@@ -231,5 +239,97 @@ export function ItemFacturaRow({
         </tr>
       )}
     </>
+  )
+}
+
+// Ítem de una factura de servicios (docs/53): descripción, importe sin IVA (precioUnitarioSinIva),
+// descuento %, depósito (informativo: dónde se recibió o gestionó, no mueve stock) y subtotal.
+// La cantidad no se muestra: queda en 1 y cargarFacturaCompra la manda así.
+function FilaServicio({
+  item,
+  index,
+  puedeEliminar,
+  conError = false,
+  focoCodigo,
+  onChange,
+  onEliminar,
+}: Omit<Props, 'servicios'>) {
+  const descripcionRef = useRef<HTMLInputElement>(null)
+  // Mismo pedido de foco que la fila de artículos (agregar ítem, cambiar de tipo), en la primera celda.
+  useEffect(() => {
+    if (focoCodigo) descripcionRef.current?.focus()
+  }, [focoCodigo])
+
+  return (
+    <tr
+      data-item-key={item.key}
+      className={`border-b border-line last:border-b-0 ${
+        conError ? 'bg-error/10 outline outline-2 -outline-offset-2 outline-error' : 'hover:bg-bg/60'
+      }`}
+    >
+      <td className="px-2 py-1.5 align-top">
+        <input
+          ref={descripcionRef}
+          value={item.descripcion}
+          title={item.descripcion}
+          onChange={(e) => onChange({ descripcion: e.target.value })}
+          aria-label={`Descripción del ítem ${index + 1}`}
+          placeholder="Ej.: flete, mantenimiento, honorarios"
+          className={`${cellInputClass} ${MAYUSCULAS}`}
+        />
+      </td>
+      <td className="px-2 py-1.5 align-top">
+        <input
+          type="number"
+          inputMode="decimal"
+          min="0"
+          step="0.01"
+          value={item.precioUnitarioSinIva}
+          onChange={(e) => onChange({ precioUnitarioSinIva: e.target.value })}
+          aria-label={`Importe sin IVA del ítem ${index + 1}`}
+          className={cellInputRightClass}
+        />
+      </td>
+      <td className="px-2 py-1.5 align-top">
+        <input
+          type="number"
+          inputMode="decimal"
+          min="0"
+          max="100"
+          step="0.01"
+          value={item.descuentoPorcentaje}
+          onChange={(e) => onChange({ descuentoPorcentaje: e.target.value })}
+          aria-label={`Descuento % del ítem ${index + 1}`}
+          className={cellInputRightClass}
+        />
+      </td>
+      <td className="px-2 py-1.5 align-top">
+        <select
+          value={item.ubicacion}
+          title={item.ubicacion === 'deposito' ? 'Depósito' : 'Local'}
+          onChange={(e) => onChange({ ubicacion: e.target.value as UbicacionStock })}
+          aria-label={`Depósito del ítem ${index + 1}`}
+          className={cellSelectClass}
+        >
+          <option value="local">Local</option>
+          <option value="deposito">Depósito</option>
+        </select>
+      </td>
+      <td className="px-2 py-1.5 text-right align-top">
+        <span className="font-sans text-label-bold text-ink">{formatCurrency(totalItemFacturaCompra(item))}</span>
+      </td>
+      <td className="px-2 py-1.5 text-center align-top">
+        {puedeEliminar && (
+          <button
+            type="button"
+            onClick={onEliminar}
+            aria-label={`Quitar ítem ${index + 1}`}
+            className="rounded p-1 font-sans text-body-md text-ink-soft hover:bg-error/10 hover:text-error"
+          >
+            ✕
+          </button>
+        )}
+      </td>
+    </tr>
   )
 }

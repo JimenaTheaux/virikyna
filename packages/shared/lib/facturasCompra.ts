@@ -21,6 +21,7 @@ import type {
   ProveedorSaldo,
   RegistrarPagoProveedorV2Resultado,
   TipoComprobanteCompra,
+  TipoCompra,
   UbicacionStock,
 } from '../types/database'
 import type { ProductoPrecioActual } from './precios'
@@ -52,6 +53,22 @@ export const TIPOS_COMPROBANTE_COMPRA: TipoComprobanteCompra[] = [
   'nota_credito',
   'nota_debito',
 ]
+
+// Tipo de compra (docs/53): se elige a mano al cargar y no cambia después. Mismas etiquetas en el
+// selector de carga, el chip de listados y el filtro de la cuenta corriente.
+export const TIPO_COMPRA_LABEL: Record<TipoCompra, string> = {
+  articulos: 'Artículos',
+  servicios: 'Servicios',
+}
+
+export const TIPOS_COMPRA: TipoCompra[] = ['articulos', 'servicios']
+
+export const OPCIONES_TIPO_COMPRA = TIPOS_COMPRA.map((t) => ({ value: t, label: TIPO_COMPRA_LABEL[t] }))
+
+// Comprobantes viejos (antes de docs/53) o una base sin la columna todavía: son artículos.
+export function tipoCompraDe(c: { tipo_compra?: TipoCompra | null }): TipoCompra {
+  return c.tipo_compra === 'servicios' ? 'servicios' : 'articulos'
+}
 
 export const FORMA_PAGO_EGRESO_LABEL: Record<FormaPagoEgreso, string> = {
   efectivo: 'Efectivo',
@@ -123,22 +140,57 @@ export function nuevoItemFacturaCompraUI(): ItemFacturaCompraUI {
 
 export type ProblemaItemFacturaCompra = { key: string; numero: number; mensaje: string }
 
+// Una fila con algo tipeado. La fila en blanco (cantidad 1 por defecto) no cuenta.
+function itemFacturaEmpezado(it: ItemFacturaCompraUI): boolean {
+  return (
+    it.descripcion.trim() !== '' ||
+    it.codigoBarras.trim() !== '' ||
+    it.marca.trim() !== '' ||
+    (Number(it.precioUnitarioSinIva) || 0) > 0 ||
+    (Number(it.descuentoPorcentaje) || 0) > 0
+  )
+}
+
+// Cambiar artículos ↔ servicios limpia los ítems (docs/53): se pide confirmar solo si hay algo cargado.
+export function hayItemsCargadosFacturaCompra(items: ItemFacturaCompraUI[]): boolean {
+  return items.some(itemFacturaEmpezado)
+}
+
+export function mensajeSinItemsFacturaCompra(tipoCompra: TipoCompra): string {
+  return tipoCompra === 'servicios'
+    ? 'Agregá al menos un ítem con descripción e importe.'
+    : 'Agregá al menos un ítem con descripción y cantidad mayor a cero.'
+}
+
 // Ítems que el usuario empezó a cargar pero que itemsValidosFacturaCompra descartaría al guardar
 // — antes se perdían en silencio (ej. un código escaneado que no existía, con cantidad y precio
 // cargados, pero sin producto). Una fila totalmente en blanco (cantidad 1 por defecto) no cuenta:
 // esa se ignora como siempre. Se valida antes de guardar y bloquea hasta resolverlo.
-export function problemasItemsFacturaCompra(items: ItemFacturaCompraUI[]): ProblemaItemFacturaCompra[] {
+// Servicios (docs/53): solo descripción e importe (precioUnitarioSinIva, la cantidad queda en 1).
+// Empezado = tiene descripción o importe; entonces necesita las dos cosas.
+export function problemasItemsFacturaCompra(
+  items: ItemFacturaCompraUI[],
+  tipoCompra: TipoCompra = 'articulos',
+): ProblemaItemFacturaCompra[] {
   const problemas: ProblemaItemFacturaCompra[] = []
+  if (tipoCompra === 'servicios') {
+    items.forEach((it, i) => {
+      const numero = i + 1
+      const tieneDescripcion = it.descripcion.trim() !== ''
+      const tieneImporte = (Number(it.precioUnitarioSinIva) || 0) > 0
+      if (!tieneDescripcion && !tieneImporte) return
+      if (!tieneDescripcion) {
+        problemas.push({ key: it.key, numero, mensaje: `El ítem ${numero} no tiene descripción.` })
+      } else if (!tieneImporte) {
+        problemas.push({ key: it.key, numero, mensaje: `El ítem ${numero} no tiene importe — completalo o quitá el ítem.` })
+      }
+    })
+    return problemas
+  }
   items.forEach((it, i) => {
     const numero = i + 1
     const tieneProducto = it.descripcion.trim() !== ''
-    const empezado =
-      tieneProducto ||
-      it.codigoBarras.trim() !== '' ||
-      it.marca.trim() !== '' ||
-      (Number(it.precioUnitarioSinIva) || 0) > 0 ||
-      (Number(it.descuentoPorcentaje) || 0) > 0
-    if (!empezado) return
+    if (!itemFacturaEmpezado(it)) return
     if (!tieneProducto) {
       problemas.push({ key: it.key, numero, mensaje: `El ítem ${numero} no tiene producto seleccionado.` })
     } else if (it.productoId && it.productoInactivo) {
@@ -187,6 +239,7 @@ export type CargarFacturaCompraInput = {
   fechaFiscal: string | null
   formaPago: FormaPagoCompra
   ivaAlicuota: AlicuotaIvaCompra // docs/45
+  tipoCompra?: TipoCompra // docs/53; sin dato = artículos
   items: ItemFacturaCompra[]
   copiadaDeId?: string | null // docs/33: factura de la que se copió esta
 }
@@ -195,9 +248,13 @@ export type CargarFacturaCompraInput = {
 // cálculo de totales y la actualización de stock quedan del lado de la función SQL.
 // p_copiada_de_id solo viaja cuando hay copia (el RPC le pone default NULL, docs/33).
 // p_iva_alicuota viaja siempre (docs/45): el default del RPC (21) es solo para las apps viejas.
+// p_tipo_compra solo viaja en servicios (docs/53): artículos es el default del RPC. En servicios
+// cada ítem va sin producto y con cantidad 1 (el RPC rechaza otra cosa).
 export function cargarFacturaCompra(supabase: SupabaseClient, input: CargarFacturaCompraInput) {
+  const servicios = input.tipoCompra === 'servicios'
   return supabase.rpc('cargar_factura_compra', {
     ...(input.copiadaDeId ? { p_copiada_de_id: input.copiadaDeId } : {}),
+    ...(servicios ? { p_tipo_compra: 'servicios' } : {}),
     p_iva_alicuota: input.ivaAlicuota,
     p_proveedor_id: input.proveedorId,
     p_tipo_comprobante: input.tipoComprobante,
@@ -208,9 +265,9 @@ export function cargarFacturaCompra(supabase: SupabaseClient, input: CargarFactu
     p_fecha_fiscal: input.fechaFiscal,
     p_forma_pago: input.formaPago,
     p_items: itemsValidosFacturaCompra(input.items).map((it) => ({
-      producto_id: it.productoId,
+      producto_id: servicios ? null : it.productoId,
       descripcion: it.descripcion.trim(),
-      cantidad: Number(it.cantidad),
+      cantidad: servicios ? 1 : Number(it.cantidad),
       precio_unitario_sin_iva: Number(it.precioUnitarioSinIva) || 0,
       descuento_porcentaje: Number(it.descuentoPorcentaje) || 0,
       ubicacion: it.ubicacion,
@@ -236,6 +293,7 @@ export type ValoresFacturaCompra = {
   fechaFiscal: string
   formaPago: FormaPagoCompra
   ivaAlicuota: AlicuotaIvaCompra // docs/45
+  tipoCompra: TipoCompra // docs/53
   items: ItemFacturaCompraUI[]
   copiaDe: OrigenCopiaFactura | null
 }
@@ -251,6 +309,7 @@ export function valoresFacturaCompraVacios(): ValoresFacturaCompra {
     fechaFiscal: '',
     formaPago: 'contado',
     ivaAlicuota: alicuotaDefault('factura'),
+    tipoCompra: 'articulos',
     items: [nuevoItemFacturaCompraUI()],
     copiaDe: null,
   }
@@ -339,6 +398,7 @@ export function facturaACopia(factura: FacturaParaCopiar): ValoresFacturaCompra 
     fechaFiscal: '',
     formaPago: factura.forma_pago,
     ivaAlicuota: aAlicuotaIvaCompra(factura.iva_alicuota),
+    tipoCompra: tipoCompraDe(factura), // docs/53: la copia es del mismo tipo que el original
     items: items.length > 0 ? items : [nuevoItemFacturaCompraUI()],
     copiaDe: { id: factura.id, etiqueta: etiquetaComprobanteCompra(factura), anulada: factura.anulada },
   }

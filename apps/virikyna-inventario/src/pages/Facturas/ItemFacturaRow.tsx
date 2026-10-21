@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import type { Proveedor, RolUsuario, UbicacionStock } from '@virikyna/shared'
 import {
   AvisoCambioPrecioFactura,
@@ -22,6 +22,8 @@ import { ProductoFormSheet } from '../Inventario/ProductoFormSheet'
 type Props = {
   item: ItemFacturaCompraUI
   index: number
+  // Factura de servicios (docs/53): tarjeta de descripción + importe, sin búsqueda de producto.
+  servicios?: boolean
   puedeEliminar: boolean
   proveedores: Proveedor[]
   rol: RolUsuario
@@ -46,7 +48,13 @@ const SCAN_BUTTON_CLASS =
 // Depósito → Subtotal), pero apilados: una planilla no entra en 360px. Toda la lógica de
 // búsqueda/escaneo/alta vive en useItemFacturaBusqueda (@virikyna/shared), la misma que usa la
 // fila de escritorio; acá solo va el markup táctil y el botón de cámara.
-export function ItemFacturaRow({
+// En una factura de servicios (docs/53) va TarjetaServicio: otra tarjeta, no un modo de esta, así
+// la búsqueda de producto ni se monta.
+export function ItemFacturaRow({ servicios = false, ...props }: Props) {
+  return servicios ? <TarjetaServicio {...props} /> : <TarjetaArticulo {...props} />
+}
+
+function TarjetaArticulo({
   item,
   index,
   puedeEliminar,
@@ -58,7 +66,7 @@ export function ItemFacturaRow({
   onAvanzar,
   onChange,
   onEliminar,
-}: Props) {
+}: Omit<Props, 'servicios'>) {
   const tarjetaRef = useRef<HTMLDivElement>(null)
   const busqueda = useItemFacturaBusqueda({ supabase, item, onChange, onAvanzar, focoCodigo, contenedorRef: tarjetaRef })
   const { codigoRef, productoRef } = busqueda
@@ -229,6 +237,99 @@ export function ItemFacturaRow({
           onStockChanged={() => {}}
         />
       )}
+    </div>
+  )
+}
+
+// Ítem de una factura de servicios (docs/53): descripción, importe sin IVA (precioUnitarioSinIva),
+// descuento %, depósito (informativo: dónde se recibió o gestionó, no mueve stock) y subtotal.
+// La cantidad no se muestra: queda en 1 y cargarFacturaCompra la manda así.
+function TarjetaServicio({ item, index, puedeEliminar, error, focoCodigo, onChange, onEliminar }: Omit<Props, 'servicios'>) {
+  const descripcionRef = useRef<HTMLInputElement>(null)
+  // Mismo pedido de foco que la tarjeta de artículos ("Agregar ítem"), en el primer campo.
+  useEffect(() => {
+    if (!focoCodigo) return
+    descripcionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    descripcionRef.current?.focus({ preventScroll: true })
+  }, [focoCodigo])
+
+  return (
+    <div
+      data-item-key={item.key}
+      className={`scroll-mt-4 rounded-lg border bg-surface p-4 shadow-sm ${error ? 'border-2 border-error' : 'border-line'}`}
+    >
+      <div className="flex items-center justify-between">
+        <span className="font-sans text-label-bold text-ink-soft">Ítem {index + 1}</span>
+        {puedeEliminar && (
+          <button
+            type="button"
+            onClick={onEliminar}
+            aria-label={`Quitar ítem ${index + 1}`}
+            className="-mr-2 flex h-11 w-11 items-center justify-center rounded text-error active:bg-error/10"
+          >
+            <IconPapelera className="h-5 w-5" />
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <p role="alert" className="mt-1 rounded bg-error/10 px-3 py-2 font-sans text-label-bold text-error">
+          {error}
+        </p>
+      )}
+
+      <div className="mt-1 flex flex-col gap-stack-sm">
+        <Field label="Descripción">
+          <input
+            ref={descripcionRef}
+            value={item.descripcion}
+            onChange={(e) => onChange({ descripcion: e.target.value })}
+            placeholder="Ej.: flete, mantenimiento"
+            className={`${inputClass} ${MAYUSCULAS}`}
+          />
+        </Field>
+
+        <div className="grid grid-cols-2 gap-stack-sm">
+          <Field label="Importe sin IVA">
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              value={item.precioUnitarioSinIva}
+              onChange={(e) => onChange({ precioUnitarioSinIva: e.target.value })}
+              className={inputClass}
+            />
+          </Field>
+          <Field label="Descuento %">
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              max="100"
+              step="0.01"
+              value={item.descuentoPorcentaje}
+              onChange={(e) => onChange({ descuentoPorcentaje: e.target.value })}
+              className={inputClass}
+            />
+          </Field>
+        </div>
+
+        <Field label="Depósito" hint="Dónde se recibió o gestionó. No mueve stock.">
+          <select
+            value={item.ubicacion}
+            onChange={(e) => onChange({ ubicacion: e.target.value as UbicacionStock })}
+            className={selectClass}
+          >
+            <option value="local">Local</option>
+            <option value="deposito">Depósito</option>
+          </select>
+        </Field>
+
+        <p className="text-right font-sans text-label-bold text-ink">
+          Subtotal: {formatCurrency(totalItemFacturaCompra(item))}
+        </p>
+      </div>
     </div>
   )
 }

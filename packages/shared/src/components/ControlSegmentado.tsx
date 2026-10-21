@@ -11,6 +11,9 @@ type Props<T extends string> = {
   size?: 'compact' | 'touch'
   // Deshabilita el grupo entero (fieldset disabled): se ve la opción elegida pero no se cambia.
   disabled?: boolean
+  // La opción elegida en teal lleno (accent-dark, texto blanco) en vez de la pestaña blanca: para
+  // una elección que cambia el formulario entero (tipo de compra, docs/53) y no se puede pasar por alto.
+  resaltado?: boolean
 }
 
 // Selector excluyente con aspecto de pestañas. Por debajo son radios nativos (visualmente ocultos),
@@ -23,6 +26,7 @@ export function ControlSegmentado<T extends string>({
   onChange,
   size = 'compact',
   disabled = false,
+  resaltado = false,
 }: Props<T>) {
   const name = useId()
   const touch = size === 'touch'
@@ -45,7 +49,11 @@ export function ControlSegmentado<T extends string>({
               className="peer sr-only"
             />
             <span
-              className={`flex cursor-pointer items-center justify-center rounded-[8px] px-4 font-sans text-label-bold text-ink-soft transition hover:text-ink peer-checked:bg-surface peer-checked:text-accent-darker peer-checked:shadow-sm peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent-dark peer-disabled:cursor-not-allowed peer-disabled:hover:text-ink-soft ${
+              className={`flex cursor-pointer items-center justify-center rounded-[8px] px-4 font-sans text-label-bold text-ink-soft transition hover:text-ink peer-checked:shadow-sm ${
+                resaltado
+                  ? 'peer-checked:bg-accent-dark peer-checked:text-white peer-checked:hover:text-white'
+                  : 'peer-checked:bg-surface peer-checked:text-accent-darker'
+              } peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent-dark peer-disabled:cursor-not-allowed peer-disabled:hover:text-ink-soft ${
                 touch ? 'min-h-12' : 'py-2'
               }`}
             >

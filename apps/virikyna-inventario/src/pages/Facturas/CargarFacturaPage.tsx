@@ -7,6 +7,7 @@ import type {
   OrigenCopiaFactura,
   Proveedor,
   TipoComprobanteCompra,
+  TipoCompra,
   ValoresFacturaCompra,
 } from '@virikyna/shared'
 import {
@@ -15,19 +16,24 @@ import {
   cargarFacturaCompra,
   calcularTotalesFacturaCompra,
   cambiosPrecioFactura,
+  ControlSegmentado,
   errorCabeceraFacturaCompra,
   EstadoBadge,
   etiquetaAlicuotaIva,
   formatCurrency,
   friendlyError,
+  hayItemsCargadosFacturaCompra,
   integrarMarcaEnItemsLibres,
   itemsLibresFacturaCompra,
   itemsValidosFacturaCompra,
   mensajeItemsLibresFacturaCompra,
+  mensajeSinItemsFacturaCompra,
   nuevoItemFacturaCompraUI,
   ObservacionesProveedor,
+  OPCIONES_TIPO_COMPRA,
   problemasItemsFacturaCompra,
   SelectorAlicuotaIva,
+  TIPO_COMPRA_LABEL,
   TIPO_COMPROBANTE_COMPRA_LABEL,
   TIPOS_COMPROBANTE_COMPRA,
   useCambiosSinGuardar,
@@ -77,6 +83,9 @@ export function CargarFacturaPage() {
   const [mostrarFechaFiscal, setMostrarFechaFiscal] = useState(false)
   const [formaPago, setFormaPago] = useState<FormaPagoCompra>(vacios.formaPago)
   const [ivaAlicuota, setIvaAlicuota] = useState<AlicuotaIvaCompra>(vacios.ivaAlicuota)
+  const [tipoCompra, setTipoCompra] = useState<TipoCompra>(vacios.tipoCompra)
+  // Cambio de artículos ↔ servicios pedido con ítems cargados: se confirma porque los limpia.
+  const [tipoCompraPendiente, setTipoCompraPendiente] = useState<TipoCompra | null>(null)
   const [items, setItems] = useState<ItemFacturaCompraUI[]>(vacios.items)
   const [copiaDe, setCopiaDe] = useState<OrigenCopiaFactura | null>(null)
   const [aviso, setAviso] = useState<Aviso | null>(null)
@@ -137,6 +146,7 @@ export function CargarFacturaPage() {
     setMostrarFechaFiscal(Boolean(v.fechaFiscal))
     setFormaPago(v.formaPago)
     setIvaAlicuota(v.ivaAlicuota)
+    setTipoCompra(v.tipoCompra)
     setItems(v.items)
     setCopiaDe(v.copiaDe)
     setErroresItems({})
@@ -196,6 +206,23 @@ export function CargarFacturaPage() {
     setIvaAlicuota(alicuotaDefault(tipo))
   }
 
+  // Artículos ↔ servicios (docs/53): los ítems de uno no sirven en el otro, se arranca con un ítem
+  // en blanco. Con algo cargado, antes se confirma (tipoCompraPendiente).
+  function pedirTipoCompra(tipo: TipoCompra) {
+    if (tipo === tipoCompra) return
+    if (hayItemsCargadosFacturaCompra(items)) setTipoCompraPendiente(tipo)
+    else aplicarTipoCompra(tipo)
+  }
+
+  function aplicarTipoCompra(tipo: TipoCompra) {
+    setTipoCompraPendiente(null)
+    setTipoCompra(tipo)
+    setItems([nuevoItemFacturaCompraUI()])
+    setErroresItems({})
+    setAviso(null)
+    setDirty(true)
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setAviso(null)
@@ -209,7 +236,7 @@ export function CargarFacturaPage() {
     // Un ítem empezado pero incompleto (ej. código escaneado sin producto) se descartaba en
     // silencio al guardar: ahora bloquea y se marca en la tarjeta, que se trae a la vista sola.
     // Incluye un producto inactivo copiado sin confirmar (docs/33).
-    const problemas = problemasItemsFacturaCompra(items)
+    const problemas = problemasItemsFacturaCompra(items, tipoCompra)
     setErroresItems(Object.fromEntries(problemas.map((p) => [p.key, p.mensaje])))
     if (problemas.length > 0) {
       document
@@ -225,11 +252,12 @@ export function CargarFacturaPage() {
       return
     }
     if (itemsValidosFacturaCompra(items).length === 0) {
-      setAviso({ tipo: 'error', texto: 'Agregá al menos un ítem con descripción y cantidad mayor a cero.' })
+      setAviso({ tipo: 'error', texto: mensajeSinItemsFacturaCompra(tipoCompra) })
       return
     }
     // Ítems sin producto del inventario: no suman stock. Se confirman antes de guardar (docs/50).
-    if (itemsLibresFacturaCompra(items).length > 0) {
+    // En servicios no hay producto por definición: no se pregunta (docs/53).
+    if (tipoCompra === 'articulos' && itemsLibresFacturaCompra(items).length > 0) {
       setConfirmLibres(true)
       return
     }
@@ -250,6 +278,7 @@ export function CargarFacturaPage() {
 
   async function guardar() {
     setConfirmLibres(false)
+    const servicios = tipoCompra === 'servicios'
     const sumaTodo = itemsLibresFacturaCompra(items).length === 0
     setSaving(true)
     const { error: dbError } = await cargarFacturaCompra(supabase, {
@@ -262,6 +291,7 @@ export function CargarFacturaPage() {
       fechaFiscal: fechaFiscal || null,
       formaPago,
       ivaAlicuota,
+      tipoCompra,
       items: integrarMarcaEnItemsLibres(items),
       copiadaDeId: copiaDe?.id ?? null,
     })
@@ -274,11 +304,16 @@ export function CargarFacturaPage() {
 
     // Formulario vacío para la próxima, sin copia.
     aplicarValores(valoresFacturaCompraVacios())
-    // Con ítems libres confirmados el stock no se actualizó entero: el mensaje no lo afirma.
+    // Con ítems libres confirmados el stock no se actualizó entero: el mensaje no lo afirma. Una de
+    // servicios nunca toca stock (docs/53).
     const cargada = copiaDe ? 'Copia cargada' : 'Factura cargada'
     setAviso({
       tipo: 'exito',
-      texto: sumaTodo ? `${cargada} y stock actualizado correctamente.` : `${cargada}. Los ítems sin producto no sumaron stock.`,
+      texto: servicios
+        ? `${cargada} (servicios, no mueve stock).`
+        : sumaTodo
+          ? `${cargada} y stock actualizado correctamente.`
+          : `${cargada}. Los ítems sin producto no sumaron stock.`,
     })
   }
 
@@ -291,9 +326,22 @@ export function CargarFacturaPage() {
       <div>
         <h1 className="font-display text-headline-lg text-accent-darker">{copiaDe ? 'Copiar factura' : 'Carga de factura'}</h1>
         <p className="mt-1 font-sans text-body-md text-ink-soft">
-          Registrá una factura de proveedor — actualiza el stock automáticamente por ítem.
+          {tipoCompra === 'servicios'
+            ? 'Registrá una factura de servicios — suma a la cuenta del proveedor, no mueve stock.'
+            : 'Registrá una factura de proveedor — actualiza el stock automáticamente por ítem.'}
         </p>
       </div>
+
+      {/* docs/53: define qué campos tiene cada ítem; se elige siempre a mano. */}
+      <ControlSegmentado
+        legend="Tipo de compra"
+        opciones={OPCIONES_TIPO_COMPRA}
+        value={tipoCompra}
+        onChange={pedirTipoCompra}
+        disabled={ocupado}
+        size="touch"
+        resaltado
+      />
 
       <button
         type="button"
@@ -451,7 +499,9 @@ export function CargarFacturaPage() {
           </button>
         )}
 
-        <p className="font-sans text-label-bold text-ink">Ítems de la factura</p>
+        <p className="font-sans text-label-bold text-ink">
+          {tipoCompra === 'servicios' ? 'Servicios de la factura' : 'Ítems de la factura'}
+        </p>
 
         <div className="flex flex-col gap-stack-sm">
           {items.map((item, i) => (
@@ -459,6 +509,7 @@ export function CargarFacturaPage() {
               key={item.key}
               item={item}
               index={i}
+              servicios={tipoCompra === 'servicios'}
               puedeEliminar={items.length > 1}
               proveedores={proveedores}
               rol={rol}
@@ -527,6 +578,20 @@ export function CargarFacturaPage() {
             copia.limpiarError()
             copia.pedirCopia(id)
           }}
+        />
+      )}
+
+      {tipoCompraPendiente && (
+        <ConfirmDialog
+          title={`¿Cambiar a ${TIPO_COMPRA_LABEL[tipoCompraPendiente].toLowerCase()}?`}
+          mensaje={`Los ítems cargados se borran: ${
+            tipoCompraPendiente === 'servicios'
+              ? 'un servicio no lleva producto, código ni cantidad.'
+              : 'un artículo lleva producto y cantidad.'
+          } La cabecera (proveedor, comprobante, fechas e IVA) queda igual.`}
+          confirmLabel="Cambiar y borrar ítems"
+          onCancel={() => setTipoCompraPendiente(null)}
+          onConfirm={() => aplicarTipoCompra(tipoCompraPendiente)}
         />
       )}
 
