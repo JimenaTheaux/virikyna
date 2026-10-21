@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import type { FormaPagoEgreso } from '@virikyna/shared'
-import { fechaHoyISO, formatCurrency, mensajeErrorGuardado, registrarPagoProveedor } from '@virikyna/shared'
+import { fechaHoyISO, formatCurrency, mensajeErrorGuardado, registrarPagoProveedor, usePagosACuenta } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { FORMA_PAGO_EGRESO_LABEL } from '../../lib/caja'
 import { Modal } from '../../components/Modal'
@@ -42,6 +42,8 @@ export function RegistrarPagoProveedorModal({
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [confirmCerrar, setConfirmCerrar] = useState(false)
+  // docs/52: si el proveedor ya tiene plata a cuenta, se avisa antes de pagar de nuevo (igual que Gestión).
+  const aCuenta = usePagosACuenta(supabase, proveedorId).data?.total ?? 0
 
   function pedirCierre() {
     if (dirty) {
@@ -104,6 +106,12 @@ export function RegistrarPagoProveedorModal({
         {saldoPendiente !== undefined && (
           <p className="font-sans text-body-md text-ink-soft">
             Saldo pendiente de esta factura: <span className="text-ink">{formatCurrency(saldoPendiente)}</span>
+          </p>
+        )}
+        {aCuenta > 0 && (
+          <p role="note" className="rounded border border-accent bg-accent-light px-4 py-3 font-sans text-body-md text-accent-darker">
+            Este proveedor tiene <span className="font-semibold tabular-nums">{formatCurrency(aCuenta)}</span> a cuenta (pagos sin
+            comprobante). Antes de registrar plata nueva, revisá si corresponde aplicarlos desde la cuenta corriente.
           </p>
         )}
 
