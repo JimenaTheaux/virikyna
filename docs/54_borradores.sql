@@ -1,6 +1,11 @@
 -- 54 — Borradores (fase 1: factura de compra / nota de crédito)
 --
--- ⏳ NO APLICADO todavía. Correr desde la raíz del repo con
+-- ✅ APLICADO en producción el 2026-10-21 (archivo completo), con backup previo
+-- virikyna_2026-10-21_pre-docs54. Antes se verificó que cargar_factura_compra era idéntica a la de
+-- docs/53. PARTE B ok (firma única con uuid al final, sin anon, RLS con 4 políticas, solo el trigger
+-- de mantenimiento); PARTE C 12/12, sin residuos.
+--
+-- Correr desde la raíz del repo con
 -- `npx supabase db query --linked -f docs/54_borradores.sql` (o en el SQL Editor del proyecto
 -- ccpinvtleqlsukcqnili), después de 53. La PARTE A va una sola vez; la PARTE B (verificación) y la
 -- PARTE C (test, BEGIN … ROLLBACK) se pueden repetir.
