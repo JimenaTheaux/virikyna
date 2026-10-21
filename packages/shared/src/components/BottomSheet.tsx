@@ -2,6 +2,7 @@ import { useId, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useFocoAtrapado } from '../../lib/useFocoAtrapado'
 import { useCambiosSinGuardar } from '../../lib/cambiosSinGuardar'
+import { PedirCierreContext, useCierreConBorrador, type CierreBorrador } from './Modal'
 
 type Props = {
   title: string
@@ -15,6 +16,8 @@ type Props = {
   // para formularios (Esc no cierra; con cambios, Atrás pide cerrar en vez de desmontarlo).
   dialogo?: { onEscape: () => void }
   cambiosSinGuardar?: boolean
+  // Borradores (docs/54): mismo diálogo de cierre que Modal (ver CierreBorrador).
+  cierreBorrador?: CierreBorrador
 }
 
 // Equivalente móvil de Modal (apps/virikyna-local y virikyna-gestion): en vez de un modal
@@ -34,14 +37,15 @@ type Props = {
 // también al onSubmit del formulario de afuera (por eso cerrar el subformulario de producto
 // cerraba la factura entera). Cortamos esa propagación acá, en el único punto por el que pasan
 // todos los sheets de la app.
-export function BottomSheet({ title, onClose, children, footer, dialogo, cambiosSinGuardar }: Props) {
+export function BottomSheet({ title, onClose, children, footer, dialogo, cambiosSinGuardar, cierreBorrador }: Props) {
   const tituloId = useId()
   const panelRef = useRef<HTMLDivElement>(null)
   const esFormulario = cambiosSinGuardar !== undefined
   useFocoAtrapado(panelRef, esFormulario ? null : dialogo?.onEscape)
+  const cierre = useCierreConBorrador(onClose, cambiosSinGuardar, cierreBorrador)
   useCambiosSinGuardar(!!cambiosSinGuardar, ({ cancelar }) => {
     cancelar()
-    onClose()
+    cierre.pedirCierre()
   })
 
   return createPortal(
@@ -57,7 +61,7 @@ export function BottomSheet({ title, onClose, children, footer, dialogo, cambios
         </h2>
         <button
           type="button"
-          onClick={onClose}
+          onClick={cierre.pedirCierre}
           aria-label="Cerrar"
           className="flex h-11 w-11 items-center justify-center rounded-full text-ink-soft hover:bg-accent-light hover:text-accent-darker"
         >
@@ -74,16 +78,19 @@ export function BottomSheet({ title, onClose, children, footer, dialogo, cambios
           </svg>
         </button>
       </div>
-      <div
-        className={`flex-1 overflow-y-auto p-stack-md ${footer ? 'pb-stack-md' : 'pb-[calc(32px+env(safe-area-inset-bottom,0px))]'}`}
-      >
-        {children}
-      </div>
-      {footer && (
-        <div className="flex-shrink-0 border-t border-line bg-surface px-stack-md pt-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))] shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
-          {footer}
+      <PedirCierreContext.Provider value={cierre.pedirCierre}>
+        <div
+          className={`flex-1 overflow-y-auto p-stack-md ${footer ? 'pb-stack-md' : 'pb-[calc(32px+env(safe-area-inset-bottom,0px))]'}`}
+        >
+          {children}
         </div>
-      )}
+        {footer && (
+          <div className="flex-shrink-0 border-t border-line bg-surface px-stack-md pt-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))] shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
+            {footer}
+          </div>
+        )}
+      </PedirCierreContext.Provider>
+      {cierre.dialogo}
     </div>,
     document.body,
   )
