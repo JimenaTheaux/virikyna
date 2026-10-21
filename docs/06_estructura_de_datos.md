@@ -2260,7 +2260,7 @@ Identidad (test 7 de docs/31): `saldo_actual = saldo_inicial + Σ saldo_pendient
 
 1. Valida: comprobantes del proveedor, no anulados, las facturas no son NC y las NC sí lo son. `origen='general'` solo admin (mismo criterio que `registrar_egreso_general`). Bloquea la fila del proveedor (`FOR UPDATE`): dos pagos simultáneos al mismo proveedor no pueden sobrepagar.
 2. Aplica primero el crédito de las NC a las facturas elegidas (o a todas las pendientes si no hay selección), más viejas primero (`fecha_comprobante`).
-3. Reparte `p_monto` en el mismo orden. **Con selección**: error si `p_monto` supera el saldo que queda después de las NC. **Sin selección**: el excedente queda a cuenta.
+3. Reparte `p_monto` en el mismo orden. **Con selección**: error si `p_monto` supera el saldo que queda después de las NC (desde docs/52, sección 29, ya no: el sobrante queda a cuenta). **Sin selección**: el excedente queda a cuenta.
 4. `p_monto = 0` solo vale si se aplican NC: crea la fila en `pagos_proveedor` (para Historial y reversión), pero no egreso ni movimiento.
 5. Un `pagos_proveedor`, un `egresos` con el origen recibido y `pago_proveedor_id`, y un `movimientos_cuenta` (solo efectivo/transferencia, vía `cuenta_forma_pago`).
 6. Devuelve `{pago_id, monto, aplicado_pago, aplicado_nota_credito, a_cuenta, aplicaciones[]}`.
@@ -2500,3 +2500,26 @@ SQL, verificación y test en `docs/43_idempotencia_venta.sql` (después de 42).
 - Caso límite: si el intento anterior sí se grabó y después se agregaron productos al ticket, el reintento cierra el ticket y avisa; lo agregado se carga en una venta nueva.
 
 **Prueba.** La PARTE C llama a `confirmar_venta` (3 ventas, `BEGIN … ROLLBACK`) y consume `ventas.numero`. Con ventas reales en la base, no correrla.
+
+## 29. Pagos a cuenta de proveedores: aplicarlos después y quitar una aplicación
+
+SQL, verificaciones y tests en `docs/52_pagos_a_cuenta.sql`. No toca tablas ni vistas existentes. La definición de `registrar_pago_proveedor_v2` que reemplaza se comparó con la de la base real (`pg_get_functiondef`): era idéntica a docs/31.
+
+**Problema.** Un pago solo se repartía al registrarlo (sección 22). Si el proveedor no tenía comprobantes pendientes, quedaba a cuenta para siempre: al cargar la factura después, figuraba pendiente por el total y se podía pagar dos veces. Caso real: EXPRESO JESUS MARIA S.R.L., dos pagos desde Local ($ 195.600 y $ 61.300) sin comprobantes.
+
+**Vistas nuevas** (`security_invoker = on`, solo `SELECT` para `authenticated`):
+- `pagos_proveedor_a_cuenta`: una fila por pago con `aplicado` (lo de su plata aplicado vigente), `vigente` (monto > 0, no es reversión, no fue revertido) y `a_cuenta` (`monto − aplicado`, 0 si no está vigente).
+- `proveedores_a_cuenta`: `a_cuenta` y `pagos_con_saldo` por proveedor.
+
+**RPC `aplicar_pagos_a_cuenta(p_proveedor_id, p_factura_ids[] = NULL, p_pago_ids[] = NULL) → JSONB`** — cualquier perfil activo (igual que v2; no mueve plata).
+1. Mismas validaciones de comprobantes que v2. Los pagos elegidos tienen que ser del proveedor y estar vigentes. Mismo `FOR UPDATE` sobre el proveedor.
+2. Reparte lo a cuenta de los pagos (más viejos primero: `fecha`, `created_at`, `id`) en los comprobantes elegidos o en todos los pendientes (más viejos primero, mismo orden que v2). Puede quedar sobrante a cuenta y comprobantes parciales.
+3. Cada aplicación lleva `operacion_id = pago_proveedor_id`: revertir el pago original desde el Historial también la deshace.
+4. **No crea egreso ni movimiento de cuenta, y no toca la caja.** Tampoco cambia `pagos_proveedor.factura_compra_id` (deprecated).
+5. Devuelve `{aplicado, a_cuenta_restante, aplicaciones[{id, pago_proveedor_id, factura_compra_id, monto}]}`. Error si no hay saldo pendiente o si el proveedor no tiene pagos a cuenta.
+
+**RPC `desaplicar_pago(p_aplicacion_id) → JSONB`** — solo admin. Marca la aplicación `revertida_at`/`revertida_por` (auditoría: `edicion`). La plata vuelve a cuenta del pago (o el crédito a la NC). Sin egreso ni movimiento: el saldo del proveedor no cambia. Error si ya estaba quitada.
+
+**`registrar_pago_proveedor_v2`.** Con comprobantes elegidos, un monto mayor a su saldo **ya no da error**: se aplica hasta el saldo de los elegidos y el sobrante queda a cuenta (no va a otros pendientes). Lo mismo para `registrar_pago_proveedor`, que delega en v2.
+
+Saldo del proveedor: `proveedores_saldo` no mira aplicaciones, así que aplicar o quitar no lo cambia. Identidad (test T8): `saldo_actual = saldo_inicial + Σ saldo_pendiente − Σ credito_disponible − proveedores_a_cuenta.a_cuenta`.
