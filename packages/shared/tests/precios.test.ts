@@ -134,13 +134,12 @@ test('producto repetido: gana la última línea', () => {
   assert.deepEqual(r.get('b'), { tipo: 'actualiza', antes: 1500, despues: 2500 })
 })
 
-test('proveedor distinto: márgenes default del proveedor nuevo (también en nota de crédito)', () => {
+test('proveedor distinto: márgenes default del proveedor nuevo (nunca en nota de crédito, docs/55)', () => {
   // 3000 × 2 × 1,2 × 1,21 = 8712 → resto 212 → 9000
   const r = cambiosPrecioFactura([item('a', '3000')], 'factura', 'prov-b', proveedores)
   assert.deepEqual(r.get('a'), { tipo: 'actualiza', antes: 1500, despues: 9000 })
-  // NC: costo queda 1000, márgenes 100/20 → 2904 → resto 404 → 3000
-  const nc = cambiosPrecioFactura([item('a', '3000')], 'nota_credito', 'prov-b', proveedores)
-  assert.deepEqual(nc.get('a'), { tipo: 'actualiza', antes: 1500, despues: 3000 })
+  // NC de otro proveedor: no le toca nada al producto (antes le pasaba proveedor y márgenes).
+  assert.equal(cambiosPrecioFactura([item('a', '3000')], 'nota_credito', 'prov-b', proveedores).size, 0)
 })
 
 // ── docs/34: costo null y precio manual ──────────────────────────
@@ -192,9 +191,8 @@ test('nota de crédito o precio 0 sobre producto manual: el manual sigue', () =>
   const manual = producto({ costo: null, precio_venta: 6300, precio_manual: 6300 })
   assert.equal(cambiosPrecioFactura([item('a', '3000', 'p1', manual)], 'nota_credito', 'prov-a', proveedores).size, 0)
   assert.equal(cambiosPrecioFactura([item('a', '0', 'p1', manual)], 'factura', 'prov-a', proveedores).size, 0)
-  // NC de otro proveedor: cambian proveedor y márgenes, pero el precio sigue siendo el manual.
-  const nc = cambiosPrecioFactura([item('a', '3000', 'p1', manual)], 'nota_credito', 'prov-b', proveedores)
-  assert.deepEqual(nc.get('a'), { tipo: 'sin_cambio_precio', precio: 6300 })
+  // NC de otro proveedor: tampoco cambia nada (docs/55).
+  assert.equal(cambiosPrecioFactura([item('a', '3000', 'p1', manual)], 'nota_credito', 'prov-b', proveedores).size, 0)
 })
 
 // ── docs/45: el costo que pone la factura lleva el descuento de la línea ──────

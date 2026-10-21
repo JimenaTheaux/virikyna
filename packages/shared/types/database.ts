@@ -262,6 +262,7 @@ export type FacturaCompra = {
   copiada_de_id: string | null // docs/33: factura de la que se copió esta (cualquier proveedor, también anulada)
   iva_alicuota: number // docs/45: 21 o 0 (exento), para el comprobante completo
   tipo_compra: TipoCompra // docs/53: fijo desde la carga; servicios no mueve stock ni costo
+  devuelve_mercaderia: boolean // docs/55: NC de artículos que restó stock (sin marcar, una NC no lo toca)
 }
 
 export type FacturaCompraItem = {

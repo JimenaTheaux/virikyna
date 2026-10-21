@@ -41,6 +41,8 @@ import {
   itemsLibresFacturaCompra,
   itemsValidosFacturaCompra,
   mensajeItemsLibresFacturaCompra,
+  accionStockFacturaCompra,
+  puedeDevolverMercaderia,
   mensajeSinItemsFacturaCompra,
   nuevoItemFacturaCompraUI,
   ObservacionesProveedor,
@@ -98,6 +100,8 @@ export function CargarFacturaPage() {
   const [formaPago, setFormaPago] = useState<FormaPagoCompra>(vacios.formaPago)
   const [ivaAlicuota, setIvaAlicuota] = useState<AlicuotaIvaCompra>(vacios.ivaAlicuota)
   const [tipoCompra, setTipoCompra] = useState<TipoCompra>(vacios.tipoCompra)
+  // docs/55: solo en NC de artículos; sin marcar, la NC no toca el stock.
+  const [devuelveMercaderia, setDevuelveMercaderia] = useState(vacios.devuelveMercaderia)
   // Cambio de artículos ↔ servicios pedido con ítems cargados: se confirma porque los limpia.
   const [tipoCompraPendiente, setTipoCompraPendiente] = useState<TipoCompra | null>(null)
   const [items, setItems] = useState<ItemFacturaCompraUI[]>(vacios.items)
@@ -170,6 +174,7 @@ export function CargarFacturaPage() {
     setFormaPago(v.formaPago)
     setIvaAlicuota(v.ivaAlicuota)
     setTipoCompra(v.tipoCompra)
+    setDevuelveMercaderia(v.devuelveMercaderia)
     setItems(v.items)
     setCopiaDe(v.copiaDe)
     setErroresItems({})
@@ -222,6 +227,8 @@ export function CargarFacturaPage() {
     saldoPendiente: saldoPendientePreview,
   } = calcularTotalesFacturaCompra(items, ivaAlicuota)
   const cambiosPrecio = cambiosPrecioFactura(items, tipoComprobante, proveedorId, proveedores)
+  // docs/55: 'suma' (factura, remito…), 'resta' (NC con devolución) o null (servicios, NC sin devolución).
+  const accionStock = accionStockFacturaCompra({ tipoComprobante, tipoCompra, devuelveMercaderia })
 
   // ── Borrador (docs/54) ──
   const valoresActuales: ValoresFacturaCompra = {
@@ -235,6 +242,7 @@ export function CargarFacturaPage() {
     formaPago,
     ivaAlicuota,
     tipoCompra,
+    devuelveMercaderia,
     items,
     copiaDe,
   }
@@ -300,6 +308,7 @@ export function CargarFacturaPage() {
   function cambiarTipo(tipo: TipoComprobanteCompra) {
     setTipoComprobante(tipo)
     setIvaAlicuota(alicuotaDefault(tipo))
+    if (tipo !== 'nota_credito') setDevuelveMercaderia(false)
   }
 
   // Artículos ↔ servicios (docs/53): los ítems de uno no sirven en el otro, se arranca con un ítem
@@ -313,6 +322,7 @@ export function CargarFacturaPage() {
   function aplicarTipoCompra(tipo: TipoCompra) {
     setTipoCompraPendiente(null)
     setTipoCompra(tipo)
+    if (tipo === 'servicios') setDevuelveMercaderia(false)
     setItems([nuevoItemFacturaCompraUI()])
     setErroresItems({})
     setAviso(null)
@@ -353,7 +363,8 @@ export function CargarFacturaPage() {
     }
     // Ítems sin producto del inventario: no suman stock. Se confirman antes de guardar (docs/50).
     // En servicios no hay producto por definición: no se pregunta (docs/53).
-    if (tipoCompra === 'articulos' && itemsLibresFacturaCompra(items).length > 0) {
+    // NC sin devolución no toca el stock: tampoco se pregunta; con devolución, "no van a restar" (docs/55).
+    if (accionStock !== null && itemsLibresFacturaCompra(items).length > 0) {
       setConfirmLibres(true)
       return
     }
@@ -377,7 +388,8 @@ export function CargarFacturaPage() {
   async function guardar(conBorrador = true) {
     setConfirmLibres(false)
     setConfirmSinBorrador(false)
-    const servicios = tipoCompra === 'servicios'
+    const accion = accionStock
+    const nc = tipoComprobante === 'nota_credito'
     const sumaTodo = itemsLibresFacturaCompra(items).length === 0
     setSaving(true)
     // Frena el autoguardado y espera la subida en curso (si no, quedaría un borrador huérfano).
@@ -394,6 +406,7 @@ export function CargarFacturaPage() {
       formaPago,
       ivaAlicuota,
       tipoCompra,
+      devuelveMercaderia,
       items: integrarMarcaEnItemsLibres(items),
       copiadaDeId: copiaDe?.id ?? null,
     })
@@ -413,17 +426,20 @@ export function CargarFacturaPage() {
     // La RPC ya borró el borrador; formulario vacío para la próxima, sin copia.
     borrador.finalizar()
     empezarDeNuevo()
-    // Con ítems libres confirmados el stock no se actualizó entero: el mensaje no lo afirma. Una de
-    // servicios nunca toca stock (docs/53).
-    const cargada = copiaDe ? 'Copia cargada' : 'Factura cargada'
-    setAviso({
-      tipo: 'exito',
-      texto: servicios
-        ? `${cargada} (servicios, no mueve stock).`
-        : sumaTodo
-          ? `${cargada} y stock actualizado correctamente.`
-          : `${cargada}. Los ítems sin producto no sumaron stock.`,
-    })
+    // Con ítems libres confirmados el stock no se actualizó entero: el mensaje no lo afirma. Servicios
+    // y una NC sin devolución nunca tocan el stock (docs/53, docs/55).
+    const cargada = copiaDe ? 'Copia cargada' : nc ? 'Nota de crédito cargada' : 'Factura cargada'
+    const texto =
+      accion === null
+        ? `${cargada} (no mueve stock).`
+        : accion === 'resta'
+          ? sumaTodo
+            ? `${cargada} y stock descontado (devolución de mercadería).`
+            : `${cargada}. Los ítems sin producto no restaron stock.`
+          : sumaTodo
+            ? `${cargada} y stock actualizado correctamente.`
+            : `${cargada}. Los ítems sin producto no sumaron stock.`
+    setAviso({ tipo: 'exito', texto })
   }
 
   if (!rol) return null
@@ -452,7 +468,9 @@ export function CargarFacturaPage() {
         <p className="mt-1 font-sans text-body-md text-ink-soft">
           {tipoCompra === 'servicios'
             ? 'Registrá una factura de servicios — suma a la cuenta del proveedor, no mueve stock.'
-            : 'Registrá una factura de proveedor — actualiza el stock automáticamente por ítem.'}
+            : tipoComprobante === 'nota_credito'
+              ? 'Nota de crédito — no mueve stock, salvo que marques "Devolución de mercadería".'
+              : 'Registrá una factura de proveedor — actualiza el stock automáticamente por ítem.'}
         </p>
       </div>
 
@@ -592,6 +610,26 @@ export function CargarFacturaPage() {
             />
           </Field>
         </div>
+
+        {/* docs/55: solo en NC de artículos. Sin marcar, la NC no toca el stock. */}
+        {puedeDevolverMercaderia(tipoComprobante, tipoCompra) && (
+          <label className="flex min-h-12 cursor-pointer items-start gap-3 rounded border border-line bg-surface px-4 py-3 active:bg-accent-light">
+            <input
+              type="checkbox"
+              checked={devuelveMercaderia}
+              onChange={(e) => setDevuelveMercaderia(e.target.checked)}
+              className="mt-0.5 h-5 w-5 shrink-0 accent-accent"
+            />
+            <span className="font-sans">
+              <span className="block text-label-bold text-ink">Devolución de mercadería</span>
+              <span className="block text-label-md text-ink-soft">
+                {devuelveMercaderia
+                  ? 'Resta del stock la cantidad de cada ítem, en su depósito.'
+                  : 'Sin marcar, la nota de crédito no toca el stock.'}
+              </span>
+            </span>
+          </label>
+        )}
 
         <AvisoComprobanteDuplicado coincidencias={duplicado.coincidencias} size="touch" />
 
@@ -778,9 +816,9 @@ export function CargarFacturaPage() {
 
       {confirmLibres && (
         <ConfirmDialog
-          title="Ítems que no suman stock"
-          mensaje={mensajeItemsLibresFacturaCompra(itemsLibresFacturaCompra(items))}
-          confirmLabel="Guardar sin sumar stock"
+          title={accionStock === 'resta' ? 'Ítems que no restan stock' : 'Ítems que no suman stock'}
+          mensaje={mensajeItemsLibresFacturaCompra(itemsLibresFacturaCompra(items), accionStock ?? 'suma')}
+          confirmLabel={accionStock === 'resta' ? 'Guardar sin restar stock' : 'Guardar sin sumar stock'}
           cancelLabel="Volver y vincular"
           onCancel={volverAVincular}
           onConfirm={() => void guardar()}

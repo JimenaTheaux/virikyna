@@ -64,8 +64,16 @@ export function AnularFacturaCompraModal({ supabase, factura, onClose, onAnulada
       <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
         <div className="rounded border border-error/40 bg-error/5 p-4">
           <p className="font-sans text-body-md text-ink">
-            El stock que esta factura había sumado se revierte. No se puede anular si tiene pagos o
-            notas de crédito aplicadas — revertí esos pagos desde Historial antes.
+            {/* docs/55: se revierte lo que el comprobante movió de verdad. */}
+            {factura.tipo_comprobante === 'nota_credito'
+              ? factura.devuelve_mercaderia
+                ? 'La mercadería que esta nota de crédito devolvió vuelve a sumarse al stock.'
+                : 'Esta nota de crédito no movió stock: anularla tampoco lo mueve.'
+              : factura.tipo_compra === 'servicios'
+                ? 'Una factura de servicios no movió stock: anularla tampoco lo mueve.'
+                : 'El stock que esta factura había sumado se revierte.'}{' '}
+            No se puede anular si tiene pagos o notas de crédito aplicadas — revertí esos pagos desde
+            Historial antes.
           </p>
           <p className="mt-2 font-sans text-label-bold text-ink">Total: {formatCurrency(factura.total)}</p>
         </div>

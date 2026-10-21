@@ -150,9 +150,13 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
       <div className="flex flex-col gap-stack-md">
         {facturaActual.anulada && (
           <div className="rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">
-            {servicios
-              ? 'Esta factura está anulada.'
-              : 'Esta factura está anulada — el stock que había sumado ya fue revertido.'}
+            {nc
+              ? facturaActual.devuelve_mercaderia
+                ? 'Esta nota de crédito está anulada — la mercadería devuelta volvió a sumarse al stock.'
+                : 'Esta nota de crédito está anulada.'
+              : servicios
+                ? 'Esta factura está anulada.'
+                : 'Esta factura está anulada — el stock que había sumado ya fue revertido.'}
           </div>
         )}
 
@@ -187,6 +191,15 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
               {formatCurrency(facturaActual.total)}
             </span>
           </p>
+          {/* docs/55: una NC de artículos solo toca el stock con devolución de mercadería. */}
+          {nc && !servicios && (
+            <p className="col-span-2 text-ink-soft">
+              Stock:{' '}
+              <span className="text-ink">
+                {facturaActual.devuelve_mercaderia ? 'devolución de mercadería (restó stock)' : 'no mueve stock'}
+              </span>
+            </p>
+          )}
         </div>
 
         {error && <ErrorText>{error}</ErrorText>}
@@ -216,7 +229,7 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
                     <tr key={it.id} className="border-b border-line last:border-0">
                       <td className="px-4 py-2 text-ink">
                         {it.descripcion}
-                        {!servicios && !it.producto_id && !facturaActual.anulada && (
+                        {!servicios && !nc && !it.producto_id && !facturaActual.anulada && (
                           <ItemSinProducto onVincular={rol === 'admin' ? () => setItemAVincular(it) : undefined} />
                         )}
                       </td>

@@ -200,7 +200,9 @@ export function cambiosPrecioFactura(
   proveedores: ProveedorMargenes[],
 ): Map<string, CambioPrecioFactura> {
   const resultado = new Map<string, CambioPrecioFactura>()
-  const actualizaCosto = tipoComprobante !== 'nota_credito' && tipoComprobante !== 'nota_debito'
+  // docs/55: una nota de crédito no le toca nada al producto (ni costo, ni proveedor, ni márgenes).
+  if (tipoComprobante === 'nota_credito') return resultado
+  const actualizaCosto = tipoComprobante !== 'nota_debito'
   const proveedor = proveedores.find((p) => p.id === proveedorId)
 
   const ultimaPorProducto = new Map<string, string>()

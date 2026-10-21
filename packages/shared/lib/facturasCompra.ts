@@ -213,11 +213,33 @@ export function itemsLibresFacturaCompra<T extends ItemFacturaCompra>(items: T[]
   return itemsValidosFacturaCompra(items).filter((it) => !it.productoId)
 }
 
-export function mensajeItemsLibresFacturaCompra(libres: Pick<ItemFacturaCompra, 'descripcion'>[]): string {
+// `accion` (docs/55): una factura suma stock; una NC con devolución de mercadería lo resta.
+export function mensajeItemsLibresFacturaCompra(
+  libres: Pick<ItemFacturaCompra, 'descripcion'>[],
+  accion: 'suma' | 'resta' = 'suma',
+): string {
   const nombres = libres.map((it) => it.descripcion.trim().toUpperCase()).join(', ')
+  const verbo = accion === 'resta' ? 'restar' : 'sumar'
   return libres.length === 1
-    ? `"${nombres}" no está vinculado a ningún producto del inventario: no va a sumar stock. Si es mercadería, volvé, elegila de la lista o tocá "Crear producto nuevo". Guardá igual solo si es un concepto sin stock (flete, ajuste, varios).`
-    : `${libres.length} ítems no están vinculados a ningún producto del inventario y no van a sumar stock: ${nombres}. Si son mercadería, volvé, elegilos de la lista o tocá "Crear producto nuevo". Guardá igual solo si son conceptos sin stock (flete, ajuste, varios).`
+    ? `"${nombres}" no está vinculado a ningún producto del inventario: no va a ${verbo} stock. Si es mercadería, volvé, elegila de la lista o tocá "Crear producto nuevo". Guardá igual solo si es un concepto sin stock (flete, ajuste, varios).`
+    : `${libres.length} ítems no están vinculados a ningún producto del inventario y no van a ${verbo} stock: ${nombres}. Si son mercadería, volvé, elegilos de la lista o tocá "Crear producto nuevo". Guardá igual solo si son conceptos sin stock (flete, ajuste, varios).`
+}
+
+// Qué hace el comprobante con el stock (docs/53 y docs/55): servicios y una NC sin devolución no lo
+// tocan; una NC de artículos con "Devolución de mercadería" lo resta; el resto lo suma.
+export function accionStockFacturaCompra(v: {
+  tipoComprobante: TipoComprobanteCompra
+  tipoCompra: TipoCompra
+  devuelveMercaderia: boolean
+}): 'suma' | 'resta' | null {
+  if (v.tipoCompra === 'servicios') return null
+  if (v.tipoComprobante === 'nota_credito') return v.devuelveMercaderia ? 'resta' : null
+  return 'suma'
+}
+
+// El checkbox "Devolución de mercadería" solo existe en una NC de artículos.
+export function puedeDevolverMercaderia(tipoComprobante: TipoComprobanteCompra, tipoCompra: TipoCompra): boolean {
+  return tipoComprobante === 'nota_credito' && tipoCompra === 'articulos'
 }
 
 // Un ítem libre (sin producto_id) no tiene columna propia de marca en la factura — la pegamos
@@ -243,6 +265,7 @@ export type CargarFacturaCompraInput = {
   items: ItemFacturaCompra[]
   copiadaDeId?: string | null // docs/33: factura de la que se copió esta
   borradorId?: string | null // docs/54: el RPC lo borra en la misma transacción
+  devuelveMercaderia?: boolean // docs/55: solo NC de artículos; resta stock
 }
 
 // Mensaje del RPC cuando el borrador que se confirma ya no existe (docs/54): otro lo confirmó o lo
@@ -263,6 +286,10 @@ export function cargarFacturaCompra(supabase: SupabaseClient, input: CargarFactu
     ...(input.copiadaDeId ? { p_copiada_de_id: input.copiadaDeId } : {}),
     ...(servicios ? { p_tipo_compra: 'servicios' } : {}),
     ...(input.borradorId ? { p_borrador_id: input.borradorId } : {}),
+    // docs/55: solo viaja marcado (y donde corresponde); sin él, una NC no toca el stock.
+    ...(input.devuelveMercaderia && puedeDevolverMercaderia(input.tipoComprobante, input.tipoCompra ?? 'articulos')
+      ? { p_devuelve_mercaderia: true }
+      : {}),
     p_iva_alicuota: input.ivaAlicuota,
     p_proveedor_id: input.proveedorId,
     p_tipo_comprobante: input.tipoComprobante,
@@ -302,6 +329,7 @@ export type ValoresFacturaCompra = {
   formaPago: FormaPagoCompra
   ivaAlicuota: AlicuotaIvaCompra // docs/45
   tipoCompra: TipoCompra // docs/53
+  devuelveMercaderia: boolean // docs/55: NC de artículos; default desmarcado
   items: ItemFacturaCompraUI[]
   copiaDe: OrigenCopiaFactura | null
 }
@@ -318,6 +346,7 @@ export function valoresFacturaCompraVacios(): ValoresFacturaCompra {
     formaPago: 'contado',
     ivaAlicuota: alicuotaDefault('factura'),
     tipoCompra: 'articulos',
+    devuelveMercaderia: false,
     items: [nuevoItemFacturaCompraUI()],
     copiaDe: null,
   }
@@ -407,6 +436,7 @@ export function facturaACopia(factura: FacturaParaCopiar): ValoresFacturaCompra 
     formaPago: factura.forma_pago,
     ivaAlicuota: aAlicuotaIvaCompra(factura.iva_alicuota),
     tipoCompra: tipoCompraDe(factura), // docs/53: la copia es del mismo tipo que el original
+    devuelveMercaderia: Boolean(factura.devuelve_mercaderia), // docs/55
     items: items.length > 0 ? items : [nuevoItemFacturaCompraUI()],
     copiaDe: { id: factura.id, etiqueta: etiquetaComprobanteCompra(factura), anulada: factura.anulada },
   }

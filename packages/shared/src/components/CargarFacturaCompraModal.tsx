@@ -20,6 +20,8 @@ import {
   itemsValidosFacturaCompra,
   mensajeItemsLibresFacturaCompra,
   mensajeSinItemsFacturaCompra,
+  accionStockFacturaCompra,
+  puedeDevolverMercaderia,
   nuevoItemFacturaCompraUI,
   OPCIONES_TIPO_COMPRA,
   problemasItemsFacturaCompra,
@@ -149,6 +151,8 @@ export function CargarFacturaCompraModal({
   const [formaPago, setFormaPago] = useState<FormaPagoCompra>(inicial.formaPago)
   const [ivaAlicuota, setIvaAlicuota] = useState<AlicuotaIvaCompra>(inicial.ivaAlicuota)
   const [tipoCompra, setTipoCompra] = useState<TipoCompra>(inicial.tipoCompra)
+  // docs/55: solo en NC de artículos; sin marcar, la NC no toca el stock.
+  const [devuelveMercaderia, setDevuelveMercaderia] = useState(inicial.devuelveMercaderia)
   const [items, setItems] = useState<ItemFacturaCompraUI[]>(inicial.items)
   const [copiaDe, setCopiaDe] = useState<OrigenCopiaFactura | null>(inicial.copiaDe)
   const [error, setError] = useState<string | null>(null)
@@ -187,6 +191,7 @@ export function CargarFacturaCompraModal({
     setFormaPago(v.formaPago)
     setIvaAlicuota(v.ivaAlicuota)
     setTipoCompra(v.tipoCompra)
+    setDevuelveMercaderia(v.devuelveMercaderia)
     setItems(v.items)
     setCopiaDe(v.copiaDe)
     setItemsConError(new Set())
@@ -229,6 +234,7 @@ export function CargarFacturaCompraModal({
     formaPago,
     ivaAlicuota,
     tipoCompra,
+    devuelveMercaderia,
     items,
     copiaDe,
   }
@@ -330,11 +336,14 @@ export function CargarFacturaCompraModal({
     saldoPendiente: saldoPendientePreview,
   } = calcularTotalesFacturaCompra(items, ivaAlicuota)
   const cambiosPrecio = cambiosPrecioFactura(items, tipoComprobante, proveedorId, proveedores)
+  // docs/55: 'suma' (factura, remito…), 'resta' (NC con devolución) o null (servicios, NC sin devolución).
+  const accionStock = accionStockFacturaCompra({ tipoComprobante, tipoCompra, devuelveMercaderia })
 
   // Cambiar el tipo vuelve la alícuota al default del tipo nuevo (docs/45); después se cambia a mano.
   function cambiarTipo(tipo: TipoComprobanteCompra) {
     setTipoComprobante(tipo)
     setIvaAlicuota(alicuotaDefault(tipo))
+    if (tipo !== 'nota_credito') setDevuelveMercaderia(false)
   }
 
   // Artículos ↔ servicios (docs/53): los ítems de uno no sirven en el otro, se arranca con una fila
@@ -349,6 +358,7 @@ export function CargarFacturaCompraModal({
     const fila = nuevoItemFacturaCompraUI()
     setTipoCompraPendiente(null)
     setTipoCompra(tipo)
+    if (tipo === 'servicios') setDevuelveMercaderia(false)
     setItems([fila])
     setItemsConError(new Set())
     setError(null)
@@ -383,8 +393,9 @@ export function CargarFacturaCompraModal({
       return
     }
     // Ítems sin producto del inventario: no suman stock. Se confirman antes de guardar (docs/50).
-    // En servicios no hay producto por definición: no se pregunta (docs/53).
-    if (tipoCompra === 'articulos' && itemsLibresFacturaCompra(items).length > 0) {
+    // En servicios no hay producto por definición, y una NC sin devolución no toca el stock: no se
+    // pregunta (docs/53, docs/55). En una NC con devolución, "no van a restar stock".
+    if (accionStock !== null && itemsLibresFacturaCompra(items).length > 0) {
       setConfirmLibres(true)
       return
     }
@@ -423,6 +434,7 @@ export function CargarFacturaCompraModal({
       formaPago,
       ivaAlicuota,
       tipoCompra,
+      devuelveMercaderia,
       items: integrarMarcaEnItemsLibres(items),
       copiadaDeId: copiaDe?.id ?? null,
     })
@@ -742,6 +754,26 @@ export function CargarFacturaCompraModal({
             </div>
           </div>
 
+          {/* docs/55: solo en NC de artículos. Sin marcar, la NC no toca el stock. */}
+          {puedeDevolverMercaderia(tipoComprobante, tipoCompra) && (
+            <label className="flex cursor-pointer items-start gap-3 self-start rounded border border-line px-3 py-2.5 hover:bg-bg">
+              <input
+                type="checkbox"
+                checked={devuelveMercaderia}
+                onChange={(e) => setDevuelveMercaderia(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-accent"
+              />
+              <span className="font-sans">
+                <span className="block text-label-bold text-ink">Devolución de mercadería</span>
+                <span className="block text-label-md text-ink-soft">
+                  {devuelveMercaderia
+                    ? 'Resta del stock la cantidad de cada ítem, en su depósito.'
+                    : 'Sin marcar, la nota de crédito no toca el stock.'}
+                </span>
+              </span>
+            </label>
+          )}
+
           <AvisoComprobanteDuplicado coincidencias={duplicado.coincidencias} />
 
           {mostrarFechaFiscal ? (
@@ -865,9 +897,9 @@ export function CargarFacturaCompraModal({
 
       {confirmLibres && (
         <ConfirmDialog
-          title="Ítems que no suman stock"
-          mensaje={mensajeItemsLibresFacturaCompra(itemsLibresFacturaCompra(items))}
-          confirmLabel="Guardar sin sumar stock"
+          title={accionStock === 'resta' ? 'Ítems que no restan stock' : 'Ítems que no suman stock'}
+          mensaje={mensajeItemsLibresFacturaCompra(itemsLibresFacturaCompra(items), accionStock ?? 'suma')}
+          confirmLabel={accionStock === 'resta' ? 'Guardar sin restar stock' : 'Guardar sin sumar stock'}
           cancelLabel="Volver y vincular"
           confirmando={saving}
           onCancel={volverAVincular}
