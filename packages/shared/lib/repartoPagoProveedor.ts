@@ -8,8 +8,8 @@
 //   1. Comprobantes a cancelar: los elegidos, o todos los pendientes si no se eligió ninguno.
 //      Nunca NC ni anulados. Orden: fecha_comprobante, created_at, id (más viejos primero).
 //   2. Primero se aplica el crédito de las NC elegidas (más viejas primero).
-//   3. Después se reparte el monto en el mismo orden. Con selección, el monto no puede superar lo
-//      que queda tras las NC. Sin selección, lo que sobra queda a cuenta.
+//   3. Después se reparte el monto en el mismo orden. Lo que sobra queda a cuenta: con selección,
+//      lo que supere el saldo de los elegidos (docs/52; no se va a otros pendientes).
 //   4. Monto 0 solo vale si se aplica crédito de alguna NC.
 //
 // Sin imports en runtime a propósito: lo importa `node --test` directo desde el .ts.
@@ -38,8 +38,8 @@ export type ResultadoReparto = {
   aplicadoNotaCredito: number
   aplicadoPago: number
   aCuenta: number
-  // Lo que queda por pagar de los comprobantes alcanzados después de aplicar las NC: con
-  // selección, es el tope del monto (y el "A pagar" de la barra de selección).
+  // Lo que queda por pagar de los comprobantes alcanzados después de aplicar las NC: el "A pagar"
+  // de la barra de selección y el monto precargado del pago.
   restanteTrasNotas: number
   saldoFinal: Map<string, number> // por comprobante alcanzado
   creditoFinal: Map<string, number> // por NC elegida
@@ -107,7 +107,6 @@ export function simularRepartoPago(input: {
   if (!(monto >= 0)) error = 'El monto no puede ser negativo.'
   else if (monto === 0 && ncs.length === 0) error = 'Ingresá un monto mayor a cero o elegí una nota de crédito.'
   else if (monto === 0 && totalNc === 0) error = 'No hay saldo pendiente al que aplicar la nota de crédito.'
-  else if (conSeleccion && monto > restante) error = 'El monto supera el saldo de los comprobantes elegidos.'
 
   // Paso 2: repartir el pago.
   let rest = Math.max(0, monto)

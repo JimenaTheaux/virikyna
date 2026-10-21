@@ -26,6 +26,8 @@ type Props = {
   facturaIds: string[] // vacío = se aplica a los más viejos
   notaCreditoIds: string[]
   origen: OrigenEgreso
+  aCuenta?: number // docs/52: pagos del proveedor sin comprobante, para avisar antes de pagar de nuevo
+  onAplicarACuenta?: () => void // sin esto el aviso no ofrece aplicar
   onClose: () => void
   onPagado: () => void
 }
@@ -43,6 +45,8 @@ export function PagarProveedorModal({
   facturaIds,
   notaCreditoIds,
   origen,
+  aCuenta = 0,
+  onAplicarACuenta,
   onClose,
   onPagado,
 }: Props) {
@@ -191,6 +195,27 @@ export function PagarProveedorModal({
           Proveedor: <span className="text-ink">{proveedorNombre}</span>
         </p>
 
+        {aCuenta > 0 && (
+          <div
+            role="note"
+            className="flex flex-wrap items-center justify-between gap-stack-sm rounded border border-accent bg-accent-light px-4 py-3"
+          >
+            <p className="font-sans text-body-md text-accent-darker">
+              Este proveedor tiene <span className="font-semibold tabular-nums">{formatCurrency(aCuenta)}</span> a cuenta (pagos
+              sin comprobante). Antes de registrar plata nueva, revisá si corresponde aplicarlos.
+            </p>
+            {onAplicarACuenta && (
+              <button
+                type="button"
+                onClick={onAplicarACuenta}
+                className="rounded border border-accent bg-surface px-3 py-2 font-sans text-label-bold text-accent-darker transition hover:bg-accent-light"
+              >
+                Aplicar a cuenta
+              </button>
+            )}
+          </div>
+        )}
+
         {!conSeleccion && (
           <p id={avisoId} className="rounded bg-accent-light px-4 py-3 font-sans text-body-md text-accent-darker">
             Se aplica a los comprobantes más antiguos. Lo que sobre queda a cuenta del proveedor.
@@ -200,13 +225,12 @@ export function PagarProveedorModal({
         <div className="grid grid-cols-2 gap-stack-sm">
           <Field
             label="Monto"
-            hint={conSeleccion ? `A pagar: ${formatCurrency(aPagar)} — podés pagar menos` : undefined}
+            hint={conSeleccion ? `A pagar: ${formatCurrency(aPagar)} — si pagás más, lo que sobre queda a cuenta` : undefined}
           >
             <input
               type="number"
               step="0.01"
               min={0}
-              max={conSeleccion ? aPagar : undefined}
               data-autofocus
               value={monto}
               onChange={(e) => setMonto(e.target.value)}

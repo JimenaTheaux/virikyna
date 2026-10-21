@@ -8,8 +8,8 @@ import { FacturaCompraDetalleModal } from './FacturaCompraDetalleModal'
 
 // /proveedores/:id — cuenta corriente de un proveedor (docs/31). Envoltorio fino del componente
 // compartido: Gestión registra sus pagos con origen 'general' (no salen de la caja de Local ni
-// entran en su Cierre), habilita Editar/Anular, Copiar (docs/33) y enchufa su propio detalle de
-// comprobante.
+// entran en su Cierre), habilita Editar/Anular, Copiar (docs/33), aplicar pagos a cuenta (docs/52)
+// y enchufa su propio detalle de comprobante.
 export function ProveedorDetallePage() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
@@ -24,6 +24,7 @@ export function ProveedorDetallePage() {
         proveedorId={id}
         origen="general"
         permitirEditarAnular
+        permitirAplicarACuenta
         onCopiar={(c) => setCopiarId(c.id)}
         onVolver={() => navigate('/proveedores?tab=proveedores')}
         renderDetalle={({ factura, proveedorNombre, onClose, onChanged }) => (

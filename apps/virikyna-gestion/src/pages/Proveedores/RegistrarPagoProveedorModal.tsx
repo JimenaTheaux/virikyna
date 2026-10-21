@@ -7,6 +7,7 @@ import {
   formatCurrency,
   friendlyError,
   mensajeErrorGuardado,
+  usePagosACuenta,
   useRegistrarPagoProveedorV2,
   validarPagoProveedor,
 } from '@virikyna/shared'
@@ -48,6 +49,8 @@ export function RegistrarPagoProveedorModal({
   const [dirty, setDirty] = useState(false)
   const [confirmCerrar, setConfirmCerrar] = useState(false)
   const mutation = useRegistrarPagoProveedorV2(supabase)
+  // docs/52: si el proveedor ya tiene plata a cuenta, se avisa antes de pagar de nuevo.
+  const aCuenta = usePagosACuenta(supabase, proveedorId).data?.total ?? 0
 
   function pedirCierre() {
     if (dirty) {
@@ -74,10 +77,8 @@ export function RegistrarPagoProveedorModal({
       setError(invalido)
       return
     }
-    if (saldoPendiente !== undefined && facturaCompraId && montoNum > saldoPendiente) {
-      setError(`El monto supera el saldo pendiente de esta factura (${formatCurrency(saldoPendiente)}).`)
-      return
-    }
+    // Un monto mayor al saldo ya no se rechaza (docs/52): el RPC paga la factura y el sobrante
+    // queda a cuenta del proveedor.
 
     try {
       await mutation.mutateAsync({
@@ -116,13 +117,21 @@ export function RegistrarPagoProveedorModal({
             Saldo pendiente de esta factura: <span className="text-ink">{formatCurrency(saldoPendiente)}</span>
           </p>
         )}
+        {aCuenta > 0 && (
+          <p role="note" className="rounded border border-accent bg-accent-light px-4 py-3 font-sans text-body-md text-accent-darker">
+            Este proveedor tiene <span className="font-semibold tabular-nums">{formatCurrency(aCuenta)}</span> a cuenta (pagos sin
+            comprobante). Antes de registrar plata nueva, revisá si corresponde aplicarlos desde la cuenta corriente.
+          </p>
+        )}
 
-        <Field label="Monto">
+        <Field
+          label="Monto"
+          hint={facturaCompraId && saldoPendiente !== undefined ? 'Si pagás más que el saldo, lo que sobre queda a cuenta' : undefined}
+        >
           <input
             type="number"
             step="0.01"
             min={0}
-            max={saldoPendiente}
             data-autofocus
             value={monto}
             onChange={(e) => setMonto(e.target.value)}

@@ -26,6 +26,7 @@ export function CargarFacturaCompraModal({ onClose, onSaved, copiadaDeId }: Prop
         onSaved={onSaved}
         copiadaDeId={copiadaDeId}
         onVerOriginal={setOriginalId}
+        ofrecerAplicarACuenta
         crearProducto={({ proveedores, nombreInicial, codigoBarrasInicial, onClose: cerrar, onSaved: guardado, onUsarExistente }) => (
           <ProductoFormModal
             proveedores={proveedores}

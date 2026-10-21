@@ -54,14 +54,29 @@ test('T2: NC 30.000 + factura 100.000, pago 70.000 → factura pagada, NC agotad
   )
 })
 
-test('T3: pago mayor al saldo seleccionado → error', () => {
+test('T9 de docs/52: pago mayor al saldo seleccionado → paga la elegida, el sobrante queda a cuenta', () => {
   const r = simularRepartoPago({
-    comprobantes: [doc('f', '2026-01-01', 100000)],
+    comprobantes: [doc('vieja', '2025-12-01', 5000), doc('f', '2026-01-01', 100000)],
     facturaIds: ['f'],
     notaCreditoIds: [],
     monto: 150000,
   })
-  assert.match(r.error ?? '', /supera el saldo/)
+  assert.equal(r.error, null)
+  assert.equal(r.saldoFinal.get('f'), 0)
+  assert.equal(r.aCuenta, 50000)
+  // El sobrante no se va a otra pendiente que no se eligió.
+  assert.deepEqual(r.aplicaciones.map((a) => a.comprobanteId), ['f'])
+})
+
+test('aplicar lo a cuenta (docs/52, T3): 195.600 + 61.300 contra una factura de 256.900 → pagada', () => {
+  const r = simularRepartoPago({
+    comprobantes: [doc('f', '2026-10-15', 256900)],
+    facturaIds: ['f'],
+    notaCreditoIds: [],
+    monto: 195600 + 61300,
+  })
+  assert.equal(r.saldoFinal.get('f'), 0)
+  assert.equal(r.aCuenta, 0)
 })
 
 test('anuladas y NC nunca se pagan, aunque estén en la lista', () => {

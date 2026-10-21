@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { FacturaCompra, FacturaCompraItem, FacturaCompraSaldo, PagoProveedor } from '@virikyna/shared'
 import {
   AnularFacturaCompraModal,
+  desaplicarPago,
   EditarFacturaCompraModal,
   EstadoBadge,
   esNotaCredito,
@@ -16,6 +17,7 @@ import {
 import { supabase } from '../../lib/supabaseClient'
 import { FORMA_PAGO_EGRESO_LABEL } from '../../lib/caja'
 import { Modal } from '../../components/Modal'
+import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { ErrorText } from '../../components/FormField'
 import { RegistrarPagoProveedorModal } from './RegistrarPagoProveedorModal'
 
@@ -69,6 +71,9 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
   const [modalPago, setModalPago] = useState(false)
   // Ítem libre a vincular a un producto (docs/50). Gestión es solo admin: siempre se ofrece.
   const [itemAVincular, setItemAVincular] = useState<FacturaCompraItem | null>(null)
+  // Quitar una aplicación (docs/52, solo admin; Gestión es solo admin). No mueve plata.
+  const [aQuitar, setAQuitar] = useState<AplicacionDetalle | null>(null)
+  const [quitando, setQuitando] = useState(false)
 
   const nc = esNotaCredito(facturaActual)
 
@@ -122,6 +127,26 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
     if (a.nc) return etiquetaComprobanteCompra(a.nc)
     if (a.pago) return `${FORMA_PAGO_EGRESO_LABEL[a.pago.forma_pago]}${a.pago.cheque_numero ? ` N° ${a.pago.cheque_numero}` : ''}`
     return '—'
+  }
+
+  async function quitar(a: AplicacionDetalle) {
+    setQuitando(true)
+    const { error: dbError } = await desaplicarPago(supabase, a.id)
+    setQuitando(false)
+    setAQuitar(null)
+    if (dbError) {
+      setError(friendlyError(dbError))
+      return
+    }
+    cargar()
+    onChanged()
+  }
+
+  function mensajeQuitar(a: AplicacionDetalle): string {
+    const monto = formatCurrency(a.monto)
+    if (nc) return `Se deja de usar ${monto} de esta nota de crédito (${origenAplicacion(a)}). El crédito vuelve a estar disponible.`
+    const vuelve = a.nc ? 'El crédito vuelve a la nota de crédito.' : 'La plata vuelve a quedar a cuenta del proveedor.'
+    return `Se quita ${monto} (${origenAplicacion(a)}) de este comprobante, que vuelve a tener ese saldo pendiente. ${vuelve} No se mueve plata ni cambia la caja.`
   }
 
   return (
@@ -287,12 +312,15 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
                   <th className="px-4 py-2">{nc ? 'Comprobante' : 'Origen'}</th>
                   <th className="px-4 py-2">Usuario</th>
                   <th className="px-4 py-2 text-right">Monto</th>
+                  <th className="px-4 py-2">
+                    <span className="sr-only">Acciones</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {!loading && aplicaciones.length === 0 && (
                   <tr>
-                    <td className="px-4 py-4 text-ink-soft" colSpan={4}>
+                    <td className="px-4 py-4 text-ink-soft" colSpan={5}>
                       {nc ? 'El crédito de esta nota todavía no se usó.' : 'Todavía no se registró ningún pago para esta factura.'}
                     </td>
                   </tr>
@@ -309,6 +337,18 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
                     <td className="px-4 py-2 text-ink-soft">{a.usuario ?? '—'}</td>
                     <td className={`px-4 py-2 text-right tabular-nums ${a.revertida_at ? 'line-through' : 'text-ink'}`}>
                       {formatCurrency(a.monto)}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      {!a.revertida_at && (
+                        <button
+                          type="button"
+                          onClick={() => setAQuitar(a)}
+                          aria-label={`Quitar ${formatCurrency(a.monto)} (${origenAplicacion(a)})`}
+                          className="rounded border border-error/60 px-2 py-0.5 font-sans text-label-bold text-error hover:bg-error/10"
+                        >
+                          Quitar
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -341,6 +381,17 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
             cargar()
             onChanged()
           }}
+        />
+      )}
+
+      {aQuitar && (
+        <ConfirmDialog
+          title="Quitar aplicación"
+          mensaje={mensajeQuitar(aQuitar)}
+          confirmLabel="Quitar"
+          confirmando={quitando}
+          onCancel={() => setAQuitar(null)}
+          onConfirm={() => quitar(aQuitar)}
         />
       )}
 

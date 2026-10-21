@@ -17,12 +17,14 @@ import {
   type PagoProveedorConDetalle,
 } from '../../lib/facturasCompra'
 import { esNotaCredito, esSeleccionableParaPago, simularRepartoPago } from '../../lib/repartoPagoProveedor'
+import { usePagosACuenta } from '../../lib/pagosACuenta'
 import { formatCurrency, formatFechaCorta } from '../../lib/format'
 import { friendlyError } from '../../lib/supabaseErrors'
 import { Field, inputClass, selectClass } from './FormField'
 import { EstadoBadge } from './EstadoBadge'
 import { RowActionsMenu, type RowActionsMenuItem } from './RowActionsMenu'
 import { PagarProveedorModal } from './PagarProveedorModal'
+import { AplicarACuentaModal } from './AplicarACuentaModal'
 import { EditarFacturaCompraModal } from './EditarFacturaCompraModal'
 import { AnularFacturaCompraModal } from './AnularFacturaCompraModal'
 import { ObservacionesProveedor } from './ObservacionesProveedor'
@@ -40,6 +42,8 @@ type Props = {
   // 'general' en Gestión (el pago no sale de la caja de Local), 'turno' en Local. Obligatorio.
   origen: OrigenEgreso
   permitirEditarAnular?: boolean // Gestión sí; Local no
+  // Aplicar pagos a cuenta a comprobantes pendientes (docs/52). No mueve plata. Cada app lo habilita.
+  permitirAplicarACuenta?: boolean
   // "Copiar" en el menú de cada comprobante, también en anulados (docs/33). Cada app abre su
   // formulario de carga con copiadaDeId; sin esta prop la acción no aparece.
   onCopiar?: (comprobante: FacturaCompraSaldo) => void
@@ -83,6 +87,7 @@ export function ProveedorCuentaCorriente({
   proveedorId,
   origen,
   permitirEditarAnular = false,
+  permitirAplicarACuenta = false,
   onCopiar,
   onVolver,
   renderDetalle,
@@ -92,6 +97,7 @@ export function ProveedorCuentaCorriente({
   const proveedorQ = useProveedor(supabase, proveedorId)
   const comprobantesQ = useComprobantesProveedor(supabase, proveedorId)
   const pagosQ = usePagosProveedor(supabase, proveedorId)
+  const aCuentaQ = usePagosACuenta(supabase, proveedorId)
 
   const proveedor = proveedorQ.data
   const comprobantes = useMemo(() => comprobantesQ.data ?? [], [comprobantesQ.data])
@@ -178,14 +184,15 @@ export function ProveedorCuentaCorriente({
 
   // ── Modales ──
   const [pago, setPago] = useState<{ facturaIds: string[]; notaCreditoIds: string[] } | null>(null)
+  const [aplicar, setAplicar] = useState<{ facturaIds: string[] } | null>(null)
   const [detalleId, setDetalleId] = useState<string | null>(null)
   const [editarId, setEditarId] = useState<string | null>(null)
   const [anularId, setAnularId] = useState<string | null>(null)
   const [aviso, setAviso] = useState('')
   const refrescar = () => invalidarCuentaProveedor(queryClient, proveedorId)
   useEffect(() => {
-    if (pago) setAviso('')
-  }, [pago])
+    if (pago || aplicar) setAviso('')
+  }, [pago, aplicar])
 
   // ── Comprobantes de la pestaña, con filtros ──
   const visibles = useMemo(() => {
@@ -219,6 +226,9 @@ export function ProveedorCuentaCorriente({
   const pendientes = comprobantes.filter((c) => !c.anulada && !esNotaCredito(c) && Number(c.saldo_pendiente) > 0)
   const totalPendiente = pendientes.reduce((acc, c) => acc + Number(c.saldo_pendiente), 0)
   const creditoNc = comprobantes.reduce((acc, c) => acc + Number(c.credito_disponible), 0)
+  // Pagos sin comprobante (docs/52), calculado por la base (vista pagos_proveedor_a_cuenta).
+  const aCuenta = aCuentaQ.data?.total ?? 0
+  const ofrecerAplicar = permitirAplicarACuenta && aCuenta > 0 && pendientes.length > 0
   const ultimoPago = pagos.find((p) => Number(p.monto) > 0 && !p.revierte_pago_proveedor_id && !p.revertido)
 
   // ── Tabs accesibles (flechas, Home/End) ──
@@ -260,7 +270,7 @@ export function ProveedorCuentaCorriente({
     })
   }
 
-  const error = proveedorQ.error ?? comprobantesQ.error ?? pagosQ.error
+  const error = proveedorQ.error ?? comprobantesQ.error ?? pagosQ.error ?? aCuentaQ.error
   const nombre = proveedor?.razon_social ?? ''
 
   if (proveedorQ.isPending) {
@@ -335,7 +345,7 @@ export function ProveedorCuentaCorriente({
       <ObservacionesProveedor observaciones={proveedor.observaciones} className="mt-stack-md" />
 
       {/* ── KPIs ── */}
-      <ul aria-label="Resumen de la cuenta" className="mt-stack-md grid grid-cols-2 gap-stack-sm lg:grid-cols-4">
+      <ul aria-label="Resumen de la cuenta" className="mt-stack-md grid grid-cols-2 gap-stack-sm lg:grid-cols-5">
         <Kpi label="Saldo">
           <span className={saldo > 0 ? 'text-error' : saldo < 0 ? 'text-success' : 'text-accent-darker'}>
             {formatCurrency(saldo)}
@@ -350,6 +360,10 @@ export function ProveedorCuentaCorriente({
         </Kpi>
         <Kpi label="Crédito NC disponible">
           <span className={creditoNc > 0 ? 'text-success' : ''}>{formatCurrency(creditoNc)}</span>
+        </Kpi>
+        <Kpi label="A cuenta (pagos)">
+          <span className={aCuenta > 0 ? 'text-success' : ''}>{formatCurrency(aCuenta)}</span>
+          <span className="block font-sans text-label-md text-ink-soft">sin comprobante</span>
         </Kpi>
         <Kpi label="Último pago">
           {ultimoPago ? (
@@ -442,7 +456,22 @@ export function ProveedorCuentaCorriente({
           {friendlyError(error as Error)}
         </p>
       )}
-      <p aria-live="polite" className={aviso ? 'mt-stack-md rounded bg-badge-green-bg px-4 py-3 font-sans text-body-md text-badge-green-text' : 'sr-only'}>
+      {tab === 'pendientes' && ofrecerAplicar && (
+        <div className="mt-stack-md flex flex-wrap items-center justify-between gap-stack-sm rounded-lg border border-accent bg-accent-light px-4 py-3">
+          <p className="font-sans text-body-md text-accent-darker">
+            Hay <span className="font-semibold tabular-nums">{formatCurrency(aCuenta)}</span> a cuenta
+            {seleccionFacturas.length > 0 ? ' · se aplican a los comprobantes seleccionados' : ' · se aplican a los comprobantes más viejos'}
+          </p>
+          <button
+            type="button"
+            onClick={() => setAplicar({ facturaIds: seleccionFacturas })}
+            className="rounded border border-accent bg-surface px-4 py-2.5 font-sans text-label-bold text-accent-darker transition hover:bg-accent-light focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+          >
+            Aplicar a comprobantes
+          </button>
+        </div>
+      )}
+      <p aria-live="polite" className={aviso ?'mt-stack-md rounded bg-badge-green-bg px-4 py-3 font-sans text-body-md text-badge-green-text' : 'sr-only'}>
         {aviso}
       </p>
 
@@ -454,7 +483,12 @@ export function ProveedorCuentaCorriente({
         className="mt-stack-md flex-1 overflow-hidden rounded-xl shadow-sm"
       >
         {tab === 'pagos' ? (
-          <TablaPagos pagos={pagosVisibles} porId={porId} cargando={pagosQ.isPending} />
+          <TablaPagos
+            pagos={pagosVisibles}
+            porId={porId}
+            aCuentaPorPago={aCuentaQ.data?.porPago}
+            cargando={pagosQ.isPending || aCuentaQ.isPending}
+          />
         ) : (
           <table className="w-full table-fixed text-left font-sans text-table-row max-xl:[&_td]:px-2 max-xl:[&_th]:px-2">
             <colgroup>
@@ -642,11 +676,40 @@ export function ProveedorCuentaCorriente({
           facturaIds={pago.facturaIds}
           notaCreditoIds={pago.notaCreditoIds}
           origen={origen}
+          aCuenta={aCuenta}
+          onAplicarACuenta={
+            ofrecerAplicar
+              ? () => {
+                  setAplicar({ facturaIds: pago?.facturaIds ?? [] })
+                  setPago(null)
+                }
+              : undefined
+          }
           onClose={() => setPago(null)}
           onPagado={() => {
             setPago(null)
             setSeleccion(new Set())
             setAviso('Pago registrado.')
+          }}
+        />
+      )}
+
+      {aplicar && (
+        <AplicarACuentaModal
+          supabase={supabase}
+          proveedorId={proveedorId}
+          proveedorNombre={nombre}
+          comprobantes={comprobantes}
+          facturaIds={aplicar.facturaIds}
+          aCuenta={aCuenta}
+          onClose={() => setAplicar(null)}
+          onAplicado={(r) => {
+            setAplicar(null)
+            setSeleccion(new Set())
+            setAviso(
+              `Se aplicaron ${formatCurrency(Number(r.aplicado))} de pagos a cuenta.` +
+                (Number(r.a_cuenta_restante) > 0 ? ` Siguen a cuenta ${formatCurrency(Number(r.a_cuenta_restante))}.` : ''),
+            )
           }}
         />
       )}
@@ -697,10 +760,12 @@ function Kpi({ label, children }: { label: string; children: ReactNode }) {
 function TablaPagos({
   pagos,
   porId,
+  aCuentaPorPago,
   cargando,
 }: {
   pagos: PagoProveedorConDetalle[]
   porId: Map<string, FacturaCompraSaldo>
+  aCuentaPorPago: Map<string, number> | undefined // vista pagos_proveedor_a_cuenta (docs/52)
   cargando: boolean
 }) {
   return (
@@ -735,8 +800,7 @@ function TablaPagos({
         {pagos.map((p) => {
           const monto = Number(p.monto)
           const esReversion = Boolean(p.revierte_pago_proveedor_id)
-          const deLaPlata = p.aplicaciones.filter((a) => a.pago_proveedor_id).reduce((acc, a) => acc + Number(a.monto), 0)
-          const aCuenta = esReversion ? 0 : Math.round((monto - deLaPlata) * 100) / 100
+          const aCuenta = aCuentaPorPago?.get(p.id) ?? 0
           return (
             <tr
               key={p.id}

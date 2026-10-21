@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { FormaPagoCompra, LetraComprobanteCompra, Proveedor, TipoComprobanteCompra } from '../../types/database'
+import type { FacturaCompraSaldo, FormaPagoCompra, LetraComprobanteCompra, Proveedor, TipoComprobanteCompra } from '../../types/database'
 import {
   alicuotaDefault,
   cargarFacturaCompra,
@@ -22,6 +22,7 @@ import {
   type ValoresFacturaCompra,
 } from '../../lib/facturasCompra'
 import { useComprobanteDuplicado, useCopiaFacturaCompra } from '../../lib/useCopiaFacturaCompra'
+import { obtenerACuentaProveedor } from '../../lib/pagosACuenta'
 import { formatCurrency } from '../../lib/format'
 import { cambiosPrecioFactura } from '../../lib/precios'
 import { mensajeErrorGuardado } from '../../lib/supabaseErrors'
@@ -34,6 +35,7 @@ import { AvisoComprobanteDuplicado } from './AvisosCopiaFactura'
 import { SelectorFacturaCopiaModal } from './SelectorFacturaCopiaModal'
 import { ObservacionesProveedor } from './ObservacionesProveedor'
 import { SelectorAlicuotaIva } from './SelectorAlicuotaIva'
+import { AplicarACuentaModal } from './AplicarACuentaModal'
 
 // Etiquetas compartidas (TIPO_COMPROBANTE_COMPRA_LABEL); acá se aclara cuáles no son fiscales.
 // Presupuesto (docs/31) se carga igual que un remito: suma stock y deuda, y actualiza costo.
@@ -70,6 +72,9 @@ type Props = {
   // Link "Copia de Factura A 0001-123": cada app abre su propio detalle de factura. Sin esta prop
   // el origen se muestra como texto.
   onVerOriginal?: (facturaId: string) => void
+  // docs/52: después de guardar, si el proveedor tiene pagos a cuenta, ofrecer aplicarlos a este
+  // comprobante (confirmar o "Ahora no"; nunca automático). Cada app lo habilita.
+  ofrecerAplicarACuenta?: boolean
 }
 
 // Carga de factura de compra de escritorio, compartida por Virikyna Local y Virikyna Gestión (una
@@ -88,6 +93,7 @@ export function CargarFacturaCompraModal({
   valoresIniciales,
   copiadaDeId,
   onVerOriginal,
+  ofrecerAplicarACuenta = false,
 }: Props) {
   const inicial = valoresIniciales ?? valoresFacturaCompraVacios()
   // Abierto con solo el id: hasta que llega la factura no se muestra un formulario vacío.
@@ -112,6 +118,8 @@ export function CargarFacturaCompraModal({
   const [confirmCerrar, setConfirmCerrar] = useState(false)
   const [confirmLibres, setConfirmLibres] = useState(false)
   const [selectorAbierto, setSelectorAbierto] = useState(false)
+  // Factura ya guardada + lo que el proveedor tiene a cuenta: se ofrece aplicarlo (docs/52).
+  const [ofertaACuenta, setOfertaACuenta] = useState<{ factura: FacturaCompraSaldo; aCuenta: number } | null>(null)
   // Ítems marcados por la última validación de "Guardar factura"; se desmarcan al editarlos.
   const [itemsConError, setItemsConError] = useState<Set<string>>(new Set())
   // Fila que tiene que tomar el foco en "Cód. barras"; `n` cambia en cada pedido para que se pueda
@@ -274,7 +282,7 @@ export function CargarFacturaCompraModal({
   async function guardar() {
     setConfirmLibres(false)
     setSaving(true)
-    const { error: dbError, status } = await cargarFacturaCompra(supabase, {
+    const { data: facturaId, error: dbError, status } = await cargarFacturaCompra(supabase, {
       proveedorId,
       tipoComprobante,
       letra: letra || null,
@@ -287,17 +295,63 @@ export function CargarFacturaCompraModal({
       items: integrarMarcaEnItemsLibres(items),
       copiadaDeId: copiaDe?.id ?? null,
     })
-    setSaving(false)
 
     if (dbError) {
+      setSaving(false)
       setError(mensajeErrorGuardado(dbError, status, 'cargar la factura', 'lo que cargaste sigue acá'))
       return
     }
 
+    // "Guardando..." sigue mientras se consulta: la factura ya está grabada, no se puede volver a guardar.
+    const oferta =
+      ofrecerAplicarACuenta && tipoComprobante !== 'nota_credito' && typeof facturaId === 'string'
+        ? await buscarOfertaACuenta(facturaId)
+        : null
+    setSaving(false)
+    if (oferta) {
+      setOfertaACuenta(oferta)
+      return
+    }
     onSaved()
   }
 
+  // La factura ya está guardada: si algo falla al consultar, no se ofrece nada y se cierra como siempre.
+  async function buscarOfertaACuenta(facturaId: string) {
+    try {
+      const [aCuenta, facturaRes] = await Promise.all([
+        obtenerACuentaProveedor(supabase, proveedorId),
+        supabase.from('facturas_compra_saldo').select('*').eq('id', facturaId).maybeSingle(),
+      ])
+      const factura = facturaRes.data as FacturaCompraSaldo | null
+      if (aCuenta > 0 && factura && Number(factura.saldo_pendiente) > 0) return { factura, aCuenta }
+    } catch {
+      // sin oferta
+    }
+    return null
+  }
+
   const ocupado = saving || copia.cargando || esperandoCopia
+
+  // La factura ya se guardó: en lugar del formulario, la oferta de aplicar lo a cuenta.
+  // Aplicar o "Ahora no" terminan igual que un guardado normal (onSaved).
+  if (ofertaACuenta) {
+    const { factura, aCuenta } = ofertaACuenta
+    const aplicable = Math.min(aCuenta, Number(factura.saldo_pendiente))
+    return (
+      <AplicarACuentaModal
+        supabase={supabase}
+        proveedorId={factura.proveedor_id}
+        proveedorNombre={proveedores.find((p) => p.id === factura.proveedor_id)?.razon_social ?? ''}
+        comprobantes={[factura]}
+        facturaIds={[factura.id]}
+        aCuenta={aCuenta}
+        titulo={`Aplicar ${formatCurrency(aplicable)} a este comprobante`}
+        cancelarLabel="Ahora no"
+        onClose={onSaved}
+        onAplicado={onSaved}
+      />
+    )
+  }
 
   return (
     <Modal

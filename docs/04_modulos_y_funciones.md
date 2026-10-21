@@ -238,16 +238,21 @@ Etapa única para cargar el inventario existente del local antes de operar (docs
 - Saldo del proveedor = saldo inicial + comprobantes − notas de crédito − pagos.
 - Cada comprobante tiene **estado** calculado: pendiente / parcial / pagada / anulada, y su saldo pendiente = total − lo aplicado (pagos + notas de crédito). Una nota de crédito muestra su **crédito disponible**.
 - **Un pago puede cancelar varias facturas a la vez.** El monto se reparte de la más vieja a la más nueva (por fecha del comprobante).
-  - Si se eligen facturas: el pago no puede superar lo que falta de esas facturas (error).
+  - Si se eligen facturas: se paga hasta lo que falta de esas facturas, y lo que sobra queda **a cuenta** (docs/52; antes daba error).
   - Si no se elige ninguna: se reparte entre todas las pendientes, y lo que sobra queda **a cuenta**.
 - En el mismo pago se pueden usar notas de crédito: primero se aplica su crédito a las facturas, después la plata. Se puede registrar una aplicación de NC sin plata (monto 0): no genera egreso.
 - No se puede pagar un comprobante anulado, una nota de crédito, ni un comprobante de otro proveedor.
 - Revertir un pago desde Historial devuelve los comprobantes (y las notas de crédito usadas en ese pago) a su estado anterior.
+- **Pagos a cuenta (docs/52):** un pago hecho antes de tener el comprobante queda a cuenta y se aplica después. No sale plata: no hay egreso ni cambia la caja, y el saldo del proveedor no cambia.
+  - Cuenta corriente (Gestión): indicador "A cuenta (pagos)"; en Pendientes, si hay algo a cuenta y comprobantes pendientes, el aviso "Hay $X a cuenta · Aplicar a comprobantes" (a los seleccionados, o a los más viejos). Muestra el reparto antes de confirmar.
+  - Al cargar una factura (Gestión), si el proveedor tiene algo a cuenta se ofrece "Aplicar $X a este comprobante" → aplicar o "Ahora no". Nunca automático.
+  - "Registrar pago" avisa si el proveedor ya tiene plata a cuenta, para no pagar dos veces.
+  - Detalle de factura (Gestión, solo admin): "Quitar" una aplicación, con confirmación. La plata vuelve a cuenta (o el crédito a la NC).
 
 **Detalle y saldo por factura:** cada factura de compra muestra su propio saldo pendiente y estado, y el historial de pagos que se le aplicaron — no solo el saldo general del proveedor.
 
 **Pantalla de cuenta corriente (Local y Gestión, `/proveedores/:id`):** se abre tocando un proveedor en la lista.
-- Cabecera con datos y márgenes, y 4 indicadores: saldo, comprobantes pendientes, crédito de NC disponible, último pago.
+- Cabecera con datos y márgenes, y 5 indicadores: saldo, comprobantes pendientes, crédito de NC disponible, a cuenta (pagos sin comprobante), último pago.
 - Pestañas Pendientes / Pagados / Todos / Pagos, con filtros por tipo, fechas y número que quedan en la URL.
 - Se pueden tildar comprobantes y notas de crédito y pagarlos juntos. El modal muestra cómo se reparte el pago antes de confirmar.
 - Todo pago desde Gestión se registra con `origen='general'`: no entra en el Cierre de Caja de Local. Desde Local se registra con `origen='turno'`: sale de la caja y entra en su Cierre.
