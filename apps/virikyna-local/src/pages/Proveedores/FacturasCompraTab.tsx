@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Copy, Eye } from 'lucide-react'
-import type { FacturaCompraSaldo, Proveedor } from '@virikyna/shared'
+import type { BorradorConNombres, FacturaCompraSaldo, PayloadBorradorFactura, Proveedor } from '@virikyna/shared'
 import {
   ChipTipoCompra,
   EstadoBadge,
@@ -10,6 +10,8 @@ import {
   friendlyError,
   RowActionsMenu,
   TIPO_COMPROBANTE_COMPRA_LABEL as TIPO_LABEL,
+  ListaBorradores,
+  useBorradores,
 } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { CargarFacturaCompraModal } from './CargarFacturaCompraModal'
@@ -24,6 +26,9 @@ export function FacturasCompraTab() {
   const [detalle, setDetalle] = useState<FacturaCompraConProveedor | null>(null)
   // Factura de la que se abre una copia (docs/33).
   const [copiarId, setCopiarId] = useState<string | null>(null)
+  // Borradores de factura/NC (docs/54): arriba del listado; no cuentan en saldos.
+  const borradores = useBorradores<PayloadBorradorFactura>(supabase, 'factura_compra', 'local')
+  const [retomar, setRetomar] = useState<BorradorConNombres<PayloadBorradorFactura> | null>(null)
 
   async function cargar() {
     setLoading(true)
@@ -72,6 +77,12 @@ export function FacturasCompraTab() {
 
       {error && (
         <p className="mt-stack-md rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>
+      )}
+
+      {borradores.borradores.length > 0 && (
+        <div className="mt-stack-md">
+          <ListaBorradores supabase={supabase} sistema="local" lista={borradores} onRetomar={setRetomar} />
+        </div>
       )}
 
       <div className="mt-stack-md flex-1 overflow-auto rounded-xl shadow-sm">
@@ -152,10 +163,14 @@ export function FacturasCompraTab() {
 
       {modalNueva && (
         <CargarFacturaCompraModal
-          onClose={() => setModalNueva(false)}
+          onClose={() => {
+            setModalNueva(false)
+            borradores.recargar()
+          }}
           onSaved={() => {
             setModalNueva(false)
             cargar()
+            borradores.recargar()
           }}
         />
       )}
@@ -176,10 +191,28 @@ export function FacturasCompraTab() {
       {copiarId && (
         <CargarFacturaCompraModal
           copiadaDeId={copiarId}
-          onClose={() => setCopiarId(null)}
+          onClose={() => {
+            setCopiarId(null)
+            borradores.recargar()
+          }}
           onSaved={() => {
             setCopiarId(null)
             cargar()
+            borradores.recargar()
+          }}
+        />
+      )}
+      {retomar && (
+        <CargarFacturaCompraModal
+          borrador={retomar}
+          onClose={() => {
+            setRetomar(null)
+            borradores.recargar()
+          }}
+          onSaved={() => {
+            setRetomar(null)
+            cargar()
+            borradores.recargar()
           }}
         />
       )}

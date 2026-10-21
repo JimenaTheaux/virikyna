@@ -33,11 +33,20 @@ import {
   type ValoresFacturaCompra,
 } from '../../lib/facturasCompra'
 import { useComprobanteDuplicado, useCopiaFacturaCompra } from '../../lib/useCopiaFacturaCompra'
+import { useBorrador, type BorradorConNombres, type BorradorFila, type SistemaApp } from '../../lib/borradores'
+import {
+  payloadBorradorFactura,
+  restaurarBorradorFactura,
+  resumenBorradorFactura,
+  type PayloadBorradorFactura,
+} from '../../lib/borradorFactura'
+import { esBorradorInexistente } from '../../lib/facturasCompra'
+import { AvisosBorrador, IndicadorBorrador } from './Borradores'
 import { obtenerACuentaProveedor } from '../../lib/pagosACuenta'
 import { formatCurrency } from '../../lib/format'
 import { cambiosPrecioFactura } from '../../lib/precios'
 import { mensajeErrorGuardado } from '../../lib/supabaseErrors'
-import { Modal } from './Modal'
+import { BotonCerrarModal, Modal } from './Modal'
 import { ConfirmDialog } from './ConfirmDialog'
 import { Field, ErrorText, inputClass, selectClass } from './FormField'
 import { EstadoBadge } from './EstadoBadge'
@@ -98,6 +107,9 @@ type Props = {
   // docs/52: después de guardar, si el proveedor tiene pagos a cuenta, ofrecer aplicarlos a este
   // comprobante (confirmar o "Ahora no"; nunca automático). Cada app lo habilita.
   ofrecerAplicarACuenta?: boolean
+  // Borradores (docs/54): desde qué app se carga, y el borrador a retomar si se abre desde la lista.
+  sistema: SistemaApp
+  borrador?: BorradorConNombres<PayloadBorradorFactura>
 }
 
 // Carga de factura de compra de escritorio, compartida por Virikyna Local y Virikyna Gestión (una
@@ -117,10 +129,13 @@ export function CargarFacturaCompraModal({
   copiadaDeId,
   onVerOriginal,
   ofrecerAplicarACuenta = false,
+  sistema,
+  borrador: borradorInicial,
 }: Props) {
   const inicial = valoresIniciales ?? valoresFacturaCompraVacios()
-  // Abierto con solo el id: hasta que llega la factura no se muestra un formulario vacío.
-  const [esperandoCopia, setEsperandoCopia] = useState(Boolean(copiadaDeId && !valoresIniciales))
+  // Abierto con solo el id: hasta que llega la factura no se muestra un formulario vacío. Lo
+  // mismo al retomar un borrador, hasta re-leer productos y proveedor.
+  const [esperandoCopia, setEsperandoCopia] = useState(Boolean((copiadaDeId && !valoresIniciales) || borradorInicial))
 
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [proveedorId, setProveedorId] = useState(inicial.proveedorId)
@@ -139,7 +154,12 @@ export function CargarFacturaCompraModal({
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
-  const [confirmCerrar, setConfirmCerrar] = useState(false)
+  // Borrador (docs/54): retomado de la lista (o recargado tras un conflicto), lo que cambió desde
+  // que se guardó, y la confirmación de "Guardar igual" si el borrador ya no existe.
+  const [retomado, setRetomado] = useState(false)
+  const [avisosRestauracion, setAvisosRestauracion] = useState<string[]>([])
+  const [confirmSinBorrador, setConfirmSinBorrador] = useState(false)
+  const [verificarDuplicado, setVerificarDuplicado] = useState(0)
   // Cambio de artículos ↔ servicios pedido con ítems cargados: se confirma porque los limpia.
   const [tipoCompraPendiente, setTipoCompraPendiente] = useState<TipoCompra | null>(null)
   const [confirmLibres, setConfirmLibres] = useState(false)
@@ -197,12 +217,67 @@ export function CargarFacturaCompraModal({
     if (focoNumero) numeroRef.current?.focus()
   }, [focoNumero])
 
-  function pedirCierre() {
-    if (dirty) {
-      setConfirmCerrar(true)
-    } else {
-      onClose()
-    }
+  // ── Borrador (docs/54) ──
+  const valoresActuales: ValoresFacturaCompra = {
+    proveedorId,
+    tipoComprobante,
+    letra,
+    puntoVenta,
+    numeroComprobante,
+    fechaComprobante,
+    fechaFiscal,
+    formaPago,
+    ivaAlicuota,
+    tipoCompra,
+    items,
+    copiaDe,
+  }
+  // Primer dato real: proveedor, número o un ítem empezado. Cambiar solo la fecha no cuenta.
+  const hayDatoReal = Boolean(proveedorId) || numeroComprobante.trim() !== '' || hayItemsCargadosFacturaCompra(items)
+  const borrador = useBorrador({
+    supabase,
+    sistema,
+    tipo: 'factura_compra',
+    payload: payloadBorradorFactura(valoresActuales),
+    resumen: resumenBorradorFactura(
+      valoresActuales,
+      proveedores.find((p) => p.id === proveedorId)?.razon_social ?? '',
+      calcularTotalesFacturaCompra(items, ivaAlicuota).total,
+    ),
+    // Autoguardado desde que el usuario carga algo real (una copia recién aplicada no cuenta), o
+    // siempre en un borrador retomado (no se vuelve a subir si no cambia nada).
+    activo: (dirty && hayDatoReal) || retomado,
+  })
+  // Con algo que perder, cerrar pregunta "Guardar borrador / Descartar / Seguir editando".
+  const cambiosSinGuardar = dirty && (hayDatoReal || retomado)
+
+  async function abrirBorrador(fila: BorradorFila<unknown>) {
+    const { valores, avisos } = await restaurarBorradorFactura(supabase, fila.payload as PayloadBorradorFactura)
+    aplicarValores(valores)
+    setAvisosRestauracion(avisos)
+    setRetomado(true)
+    borrador.retomar(fila, payloadBorradorFactura(valores))
+    setVerificarDuplicado((n) => n + 1)
+  }
+
+  useEffect(() => {
+    if (!borradorInicial) return
+    abrirBorrador(borradorInicial).catch(() => {
+      setEsperandoCopia(false)
+      setError('No se pudo abrir el borrador. Revisá la conexión y volvé a intentar.')
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Después de restaurar, el comprobante puede haberse cargado mientras el borrador esperaba.
+  useEffect(() => {
+    if (verificarDuplicado) void duplicado.verificar()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verificarDuplicado])
+
+  async function recargarBorrador() {
+    const fila = await borrador.leerDelServidor()
+    if (fila) await abrirBorrador(fila)
   }
 
   useEffect(() => {
@@ -326,10 +401,18 @@ export function CargarFacturaCompraModal({
     }
   }
 
-  async function guardar() {
+  // `conBorrador` false: "Guardar igual" después de que el borrador ya no existía (otro lo confirmó o
+  // lo eliminó) — se carga sin borrarlo, con el aviso de comprobante repetido a la vista.
+  async function guardar(conBorrador = true) {
     setConfirmLibres(false)
+    setConfirmSinBorrador(false)
     setSaving(true)
+    // Frena el autoguardado y espera la subida en curso: si no, podría llegar después de que la RPC
+    // borró el borrador y dejarlo huérfano.
+    const idBorrador = await borrador.prepararConfirmacion()
+    const borradorId = conBorrador ? idBorrador : null
     const { data: facturaId, error: dbError, status } = await cargarFacturaCompra(supabase, {
+      borradorId,
       proveedorId,
       tipoComprobante,
       letra: letra || null,
@@ -346,9 +429,17 @@ export function CargarFacturaCompraModal({
 
     if (dbError) {
       setSaving(false)
+      borrador.cancelarConfirmacion()
+      if (esBorradorInexistente(dbError)) {
+        setConfirmSinBorrador(true)
+        void duplicado.verificar()
+        return
+      }
       setError(mensajeErrorGuardado(dbError, status, 'cargar la factura', 'lo que cargaste sigue acá'))
       return
     }
+    // La RPC ya borró el borrador en la misma transacción; queda la copia del equipo.
+    borrador.finalizar()
 
     // "Guardando..." sigue mientras se consulta: la factura ya está grabada, no se puede volver a guardar.
     const oferta =
@@ -405,9 +496,10 @@ export function CargarFacturaCompraModal({
 
   return (
     <Modal
-      title={copiaDe ? 'Copiar factura' : 'Nueva factura de compra'}
-      onClose={pedirCierre}
-      cambiosSinGuardar={dirty}
+      title={retomado ? 'Factura de compra · borrador' : copiaDe ? 'Copiar factura' : 'Nueva factura de compra'}
+      onClose={onClose}
+      cambiosSinGuardar={cambiosSinGuardar}
+      cierreBorrador={{ onGuardar: borrador.guardarAhora, onDescartar: borrador.descartar, retomado }}
       widthClassName="max-w-[1180px]"
       footer={
         <div className="flex flex-col gap-stack-sm">
@@ -446,13 +538,21 @@ export function CargarFacturaCompraModal({
 
           {error && <ErrorText>{error}</ErrorText>}
 
-          <div className="flex justify-end gap-3">
+          <div className="flex items-center justify-end gap-3">
+            <div className="mr-auto min-w-0">
+              <IndicadorBorrador estado={borrador.estado} />
+            </div>
+            <BotonCerrarModal className="rounded px-4 py-3 font-sans text-label-bold text-ink-soft hover:bg-bg">
+              Cancelar
+            </BotonCerrarModal>
             <button
               type="button"
-              onClick={pedirCierre}
-              className="rounded px-4 py-3 font-sans text-label-bold text-ink-soft hover:bg-bg"
+              onClick={() => void borrador.guardarAhora()}
+              disabled={ocupado || !hayDatoReal}
+              title={hayDatoReal ? undefined : 'Cargá un proveedor, un número o un ítem para guardar el borrador'}
+              className="rounded border border-accent px-4 py-3 font-sans text-label-bold text-accent-darker transition hover:bg-accent-light disabled:opacity-60"
             >
-              Cancelar
+              Guardar borrador
             </button>
             <button
               type="submit"
@@ -468,7 +568,7 @@ export function CargarFacturaCompraModal({
     >
       {esperandoCopia ? (
         <p role="status" className="font-sans text-body-md text-ink-soft">
-          Cargando la factura a copiar…
+          {borradorInicial ? 'Abriendo el borrador…' : 'Cargando la factura a copiar…'}
         </p>
       ) : (
         <form
@@ -487,6 +587,18 @@ export function CargarFacturaCompraModal({
           }}
           className="flex flex-col gap-stack-md"
         >
+          <AvisosBorrador
+            estado={borrador.estado}
+            autorAjeno={
+              borradorInicial && borrador.usuarioId && borradorInicial.usuario_id !== borrador.usuarioId
+                ? { nombre: borradorInicial.autor, creado: borradorInicial.created_at }
+                : null
+            }
+            avisosRestauracion={avisosRestauracion}
+            onRecargar={() => void recargarBorrador()}
+            onGuardarComoNuevo={() => void borrador.guardarComoNuevo()}
+          />
+
           {/* Origen de la copia + "Copiar desde…" */}
           <div className="flex flex-wrap items-center justify-between gap-stack-sm">
             {copiaDe ? (
@@ -763,13 +875,15 @@ export function CargarFacturaCompraModal({
         />
       )}
 
-      {confirmCerrar && (
+      {confirmSinBorrador && (
         <ConfirmDialog
-          title="Cerrar sin guardar"
-          mensaje="Hay cambios sin guardar en este formulario. ¿Querés cerrar de todos modos?"
-          confirmLabel="Cerrar sin guardar"
-          onCancel={() => setConfirmCerrar(false)}
-          onConfirm={onClose}
+          title="El borrador ya no existe"
+          mensaje="Otro usuario lo confirmó o lo eliminó mientras lo editabas. La factura no se cargó: revisá en el listado (o el aviso de comprobante repetido) que no esté cargada antes de guardarla igual."
+          confirmLabel="Guardar igual"
+          cancelLabel="Volver"
+          confirmando={saving}
+          onCancel={() => setConfirmSinBorrador(false)}
+          onConfirm={() => void guardar(false)}
         />
       )}
     </Modal>

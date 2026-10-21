@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { CargarFacturaCompraModal as CargarFacturaCompraModalCompartido } from '@virikyna/shared'
+import type { BorradorConNombres, PayloadBorradorFactura } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { ProductoFormModal } from '../Inventario/ProductoFormModal'
 import { FacturaCompraDetallePorId } from './FacturaCompraDetallePorId'
@@ -9,13 +10,15 @@ type Props = {
   onSaved: () => void
   // Copiar una factura ya cargada (docs/33): el formulario la carga solo a partir del id.
   copiadaDeId?: string
+  // Borrador a retomar desde la lista (docs/54).
+  borrador?: BorradorConNombres<PayloadBorradorFactura>
 }
 
 // La planilla vive en packages/shared (misma que Virikyna Local); acá solo se conecta el
 // cliente de Supabase, el formulario de producto de esta app y el detalle que abre el link a la
 // factura original de una copia. La carga usa el mismo RPC atómico `cargar_factura_compra`, así
 // que un admin puede cargar una factura sin ir a la caja.
-export function CargarFacturaCompraModal({ onClose, onSaved, copiadaDeId }: Props) {
+export function CargarFacturaCompraModal({ onClose, onSaved, copiadaDeId, borrador }: Props) {
   const [originalId, setOriginalId] = useState<string | null>(null)
 
   return (
@@ -25,6 +28,8 @@ export function CargarFacturaCompraModal({ onClose, onSaved, copiadaDeId }: Prop
         onClose={onClose}
         onSaved={onSaved}
         copiadaDeId={copiadaDeId}
+        sistema="gestion"
+        borrador={borrador}
         onVerOriginal={setOriginalId}
         ofrecerAplicarACuenta
         crearProducto={({ proveedores, nombreInicial, codigoBarrasInicial, onClose: cerrar, onSaved: guardado, onUsarExistente }) => (

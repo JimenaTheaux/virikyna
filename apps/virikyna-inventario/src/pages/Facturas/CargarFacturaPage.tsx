@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type {
   AlicuotaIvaCompra,
+  BorradorConNombres,
+  BorradorFila,
   IntentoSalir,
+  PayloadBorradorFactura,
   FormaPagoCompra,
   LetraComprobanteCompra,
   OrigenCopiaFactura,
@@ -13,6 +16,17 @@ import type {
 import {
   alicuotaDefault,
   AvisoComprobanteDuplicado,
+  AvisosBorrador,
+  BottomSheet,
+  DialogoCierreBorrador,
+  esBorradorInexistente,
+  IndicadorBorrador,
+  ListaBorradores,
+  payloadBorradorFactura,
+  restaurarBorradorFactura,
+  resumenBorradorFactura,
+  useBorrador,
+  useBorradores,
   cargarFacturaCompra,
   calcularTotalesFacturaCompra,
   cambiosPrecioFactura,
@@ -103,11 +117,20 @@ export function CargarFacturaPage() {
   const numeroRef = useRef<HTMLInputElement>(null)
   const [focoNumero, setFocoNumero] = useState(0)
 
-  // Cambiar de pestaña (o volver atrás) con lo cargado sin guardar pide confirmación antes de
-  // descartarlo; recargar o cerrar la app muestra el aviso del navegador. Lo frena GuardiaNavegacion
-  // (App) mientras esta página esté anotada con cambios; acá solo se decide qué hacer.
+  // Borradores (docs/54): el abierto en la página (retomado de la lista o recargado tras un
+  // conflicto), lo que cambió desde que se guardó y la lista "Borradores (N)".
+  const [borradorAbierto, setBorradorAbierto] = useState<BorradorConNombres<PayloadBorradorFactura> | null>(null)
+  const [retomado, setRetomado] = useState(false)
+  const [avisosRestauracion, setAvisosRestauracion] = useState<string[]>([])
+  const [listaAbierta, setListaAbierta] = useState(false)
+  const [confirmSinBorrador, setConfirmSinBorrador] = useState(false)
+  const [verificarDuplicado, setVerificarDuplicado] = useState(0)
+  const listaBorradores = useBorradores<PayloadBorradorFactura>(supabase, 'factura_compra', 'inventario')
+
+  // Cambiar de pestaña (o volver atrás) con lo cargado: "Guardar borrador / Descartar / Seguir
+  // editando"; recargar o cerrar la app muestra el aviso del navegador (y el borrador ya quedó en el
+  // equipo). Lo frena GuardiaNavegacion (App) mientras esta página esté anotada con cambios.
   const [salida, setSalida] = useState<IntentoSalir | null>(null)
-  useCambiosSinGuardar(dirty, setSalida)
 
   useEffect(() => {
     supabase
@@ -200,6 +223,79 @@ export function CargarFacturaPage() {
   } = calcularTotalesFacturaCompra(items, ivaAlicuota)
   const cambiosPrecio = cambiosPrecioFactura(items, tipoComprobante, proveedorId, proveedores)
 
+  // ── Borrador (docs/54) ──
+  const valoresActuales: ValoresFacturaCompra = {
+    proveedorId,
+    tipoComprobante,
+    letra,
+    puntoVenta,
+    numeroComprobante,
+    fechaComprobante,
+    fechaFiscal,
+    formaPago,
+    ivaAlicuota,
+    tipoCompra,
+    items,
+    copiaDe,
+  }
+  // Primer dato real: proveedor, número o un ítem empezado. Cambiar solo la fecha no cuenta.
+  const hayDatoReal = Boolean(proveedorId) || numeroComprobante.trim() !== '' || hayItemsCargadosFacturaCompra(items)
+  const borrador = useBorrador({
+    supabase,
+    sistema: 'inventario',
+    tipo: 'factura_compra',
+    payload: payloadBorradorFactura(valoresActuales),
+    resumen: resumenBorradorFactura(valoresActuales, proveedores.find((p) => p.id === proveedorId)?.razon_social ?? '', totalPreview),
+    activo: (dirty && hayDatoReal) || retomado,
+  })
+  useCambiosSinGuardar(dirty && (hayDatoReal || retomado), setSalida)
+
+  async function abrirBorrador(fila: BorradorFila<unknown>) {
+    const { valores, avisos } = await restaurarBorradorFactura(supabase, fila.payload as PayloadBorradorFactura)
+    aplicarValores(valores)
+    setAviso(null)
+    setAvisosRestauracion(avisos)
+    setRetomado(true)
+    borrador.retomar(fila, payloadBorradorFactura(valores))
+    setVerificarDuplicado((n) => n + 1)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  // Retomar desde "Borradores (N)": lo que había en pantalla ya quedó como borrador; se sube antes
+  // de cambiar, por las dudas.
+  async function retomarDeLista(fila: BorradorConNombres<PayloadBorradorFactura>) {
+    setListaAbierta(false)
+    if (hayDatoReal) await borrador.guardarAhora()
+    setBorradorAbierto(fila)
+    try {
+      await abrirBorrador(fila)
+    } catch {
+      setAviso({ tipo: 'error', texto: 'No se pudo abrir el borrador. Revisá la conexión y volvé a intentar.' })
+    }
+    listaBorradores.recargar()
+  }
+
+  async function recargarBorrador() {
+    const fila = await borrador.leerDelServidor()
+    if (fila) await abrirBorrador(fila)
+  }
+
+  // Después de restaurar, el comprobante puede haberse cargado mientras el borrador esperaba.
+  useEffect(() => {
+    if (verificarDuplicado) void duplicado.verificar()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verificarDuplicado])
+
+  // Formulario vacío para la próxima: otro borrador, desde cero.
+  function empezarDeNuevo() {
+    aplicarValores(valoresFacturaCompraVacios())
+    borrador.reiniciar()
+    setRetomado(false)
+    setBorradorAbierto(null)
+    setAvisosRestauracion([])
+    listaBorradores.recargar()
+  }
+
   // Cambiar el tipo vuelve la alícuota al default del tipo nuevo (docs/45); después se cambia a mano.
   function cambiarTipo(tipo: TipoComprobanteCompra) {
     setTipoComprobante(tipo)
@@ -276,12 +372,18 @@ export function CargarFacturaPage() {
     }
   }
 
-  async function guardar() {
+  // `conBorrador` false: "Guardar igual" después de que el borrador ya no existía (otro lo confirmó o
+  // lo eliminó) — se carga sin borrarlo, con el aviso de comprobante repetido a la vista.
+  async function guardar(conBorrador = true) {
     setConfirmLibres(false)
+    setConfirmSinBorrador(false)
     const servicios = tipoCompra === 'servicios'
     const sumaTodo = itemsLibresFacturaCompra(items).length === 0
     setSaving(true)
+    // Frena el autoguardado y espera la subida en curso (si no, quedaría un borrador huérfano).
+    const idBorrador = await borrador.prepararConfirmacion()
     const { error: dbError } = await cargarFacturaCompra(supabase, {
+      borradorId: conBorrador ? idBorrador : null,
       proveedorId,
       tipoComprobante,
       letra: letra || null,
@@ -298,12 +400,19 @@ export function CargarFacturaPage() {
     setSaving(false)
 
     if (dbError) {
+      borrador.cancelarConfirmacion()
+      if (esBorradorInexistente(dbError)) {
+        setConfirmSinBorrador(true)
+        void duplicado.verificar()
+        return
+      }
       setAviso({ tipo: 'error', texto: friendlyError(dbError) })
       return
     }
 
-    // Formulario vacío para la próxima, sin copia.
-    aplicarValores(valoresFacturaCompraVacios())
+    // La RPC ya borró el borrador; formulario vacío para la próxima, sin copia.
+    borrador.finalizar()
+    empezarDeNuevo()
     // Con ítems libres confirmados el stock no se actualizó entero: el mensaje no lo afirma. Una de
     // servicios nunca toca stock (docs/53).
     const cargada = copiaDe ? 'Copia cargada' : 'Factura cargada'
@@ -324,7 +433,22 @@ export function CargarFacturaPage() {
   return (
     <div className="flex flex-col gap-stack-md pb-stack-lg">
       <div>
-        <h1 className="font-display text-headline-lg text-accent-darker">{copiaDe ? 'Copiar factura' : 'Carga de factura'}</h1>
+        <div className="flex items-start justify-between gap-stack-sm">
+          <h1 className="font-display text-headline-lg text-accent-darker">
+            {retomado ? 'Borrador de factura' : copiaDe ? 'Copiar factura' : 'Carga de factura'}
+          </h1>
+          {/* docs/54: Inventario no tiene listado de facturas; los borradores se abren desde acá. */}
+          <button
+            type="button"
+            onClick={() => {
+              listaBorradores.recargar()
+              setListaAbierta(true)
+            }}
+            className="flex min-h-11 shrink-0 items-center rounded border border-line bg-surface px-3 font-sans text-label-bold text-ink active:bg-accent-light"
+          >
+            Borradores ({listaBorradores.borradores.length})
+          </button>
+        </div>
         <p className="mt-1 font-sans text-body-md text-ink-soft">
           {tipoCompra === 'servicios'
             ? 'Registrá una factura de servicios — suma a la cuenta del proveedor, no mueve stock.'
@@ -362,6 +486,19 @@ export function CargarFacturaPage() {
           {copia.error}
         </p>
       )}
+
+      <AvisosBorrador
+        size="touch"
+        estado={borrador.estado}
+        autorAjeno={
+          borradorAbierto && borrador.usuarioId && borradorAbierto.usuario_id !== borrador.usuarioId
+            ? { nombre: borradorAbierto.autor, creado: borradorAbierto.created_at }
+            : null
+        }
+        avisosRestauracion={avisosRestauracion}
+        onRecargar={() => void recargarBorrador()}
+        onGuardarComoNuevo={() => void borrador.guardarComoNuevo()}
+      />
 
       {copiaDe && (
         <div className="flex flex-wrap items-center gap-2 rounded border border-accent/50 bg-accent-light/50 px-4 py-3 font-sans text-body-md text-ink">
@@ -566,7 +703,41 @@ export function CargarFacturaPage() {
         >
           {saving ? 'Guardando...' : 'Guardar factura'}
         </button>
+        <button
+          type="button"
+          onClick={() => void borrador.guardarAhora()}
+          disabled={ocupado || !hayDatoReal}
+          className="min-h-12 rounded border border-accent px-4 font-sans text-label-bold text-accent-darker active:bg-accent-light disabled:opacity-60"
+        >
+          Guardar borrador
+        </button>
+        <div className="text-center">
+          <IndicadorBorrador estado={borrador.estado} />
+        </div>
       </form>
+
+      {listaAbierta && (
+        <BottomSheet title="Borradores de facturas" onClose={() => setListaAbierta(false)} dialogo={{ onEscape: () => setListaAbierta(false) }}>
+          <ListaBorradores
+            supabase={supabase}
+            sistema="inventario"
+            lista={listaBorradores}
+            onRetomar={(b) => void retomarDeLista(b)}
+            variante="tarjetas"
+          />
+        </BottomSheet>
+      )}
+
+      {confirmSinBorrador && (
+        <ConfirmDialog
+          title="El borrador ya no existe"
+          mensaje="Otro usuario lo confirmó o lo eliminó mientras lo editabas. La factura no se cargó: revisá que no esté cargada antes de guardarla igual."
+          confirmLabel="Guardar igual"
+          cancelLabel="Volver"
+          onCancel={() => setConfirmSinBorrador(false)}
+          onConfirm={() => void guardar(false)}
+        />
+      )}
 
       {selectorAbierto && (
         <SelectorFacturaCopiaSheet
@@ -617,15 +788,19 @@ export function CargarFacturaPage() {
       )}
 
       {salida && (
-        <ConfirmDialog
-          title="¿Salir sin guardar?"
-          mensaje="Se perderán los ítems cargados."
-          confirmLabel="Salir sin guardar"
-          onCancel={() => {
+        <DialogoCierreBorrador
+          retomado={retomado}
+          onSeguir={() => {
             salida.cancelar()
             setSalida(null)
           }}
-          onConfirm={() => {
+          onDescartar={async () => {
+            await borrador.descartar()
+            setSalida(null)
+            salida.continuar()
+          }}
+          onGuardar={async () => {
+            await borrador.guardarAhora()
             setSalida(null)
             salida.continuar()
           }}

@@ -242,6 +242,13 @@ export type CargarFacturaCompraInput = {
   tipoCompra?: TipoCompra // docs/53; sin dato = artículos
   items: ItemFacturaCompra[]
   copiadaDeId?: string | null // docs/33: factura de la que se copió esta
+  borradorId?: string | null // docs/54: el RPC lo borra en la misma transacción
+}
+
+// Mensaje del RPC cuando el borrador que se confirma ya no existe (docs/54): otro lo confirmó o lo
+// eliminó. La factura NO se cargó; el formulario ofrece guardarla igual, sin borrador.
+export function esBorradorInexistente(error: { message?: string } | null | undefined): boolean {
+  return Boolean(error?.message?.startsWith('El borrador ya no existe'))
 }
 
 // Único punto de llamada al RPC `cargar_factura_compra` — arma el payload de ítems, el
@@ -255,6 +262,7 @@ export function cargarFacturaCompra(supabase: SupabaseClient, input: CargarFactu
   return supabase.rpc('cargar_factura_compra', {
     ...(input.copiadaDeId ? { p_copiada_de_id: input.copiadaDeId } : {}),
     ...(servicios ? { p_tipo_compra: 'servicios' } : {}),
+    ...(input.borradorId ? { p_borrador_id: input.borradorId } : {}),
     p_iva_alicuota: input.ivaAlicuota,
     p_proveedor_id: input.proveedorId,
     p_tipo_comprobante: input.tipoComprobante,
