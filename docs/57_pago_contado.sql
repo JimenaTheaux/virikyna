@@ -1,7 +1,10 @@
 -- 57 — Pago de contado al cargar una factura de compra: factura + pago + egreso en una transacción
 --
--- ⏳ SIN APLICAR en producción (esperando OK). Probado el 2026-10-21 con PARTE A + PARTE C dentro de
--- un solo BEGIN … ROLLBACK contra la base real: 17/17 casos ok, sin residuos.
+-- ✅ APLICADO en producción el 2026-10-21 (PARTE A), con backup previo virikyna_2026-10-21_pre-docs57-kogan.
+-- Antes se verificó que anular_factura_compra (docs/55) y editar_factura_compra (docs/45) eran las
+-- versiones de base. PARTE B ok (3 funciones, sin anon); PARTE C 17/17 (antes y después de aplicar).
+-- Mismo día, aparte: corrección del pago contado de KOGAN ($ 300.000) registrado después del Cierre Z
+-- (pago + egreso de Belu vinculados al Z, snapshot del Z recalculado: diferencia −298.800 → +1.200).
 --
 -- Correr desde la raíz del repo con
 -- `supabase db query --linked -f docs/57_pago_contado.sql` (o en el SQL Editor del proyecto

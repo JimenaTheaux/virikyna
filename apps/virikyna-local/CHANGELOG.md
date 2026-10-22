@@ -1,5 +1,16 @@
 # Novedades de Virikyna Local
 
+## 0.8.0 — octubre 2026
+
+> La versión 0.7.1 sigue funcionando, pero ahí "Contado" no registra el pago. Conviene actualizar.
+
+### Facturas de compra — pago de contado
+- **Contado registra el pago al guardar.** Si la factura se paga de contado, al guardarla queda registrado el pago en efectivo al proveedor, como egreso de la caja del día y a nombre de quien la carga. La factura queda **pagada** y el egreso aparece en el Cierre de Caja.
+- **Se confirma antes de grabar.** Antes de guardar se muestra a quién se le paga, el monto, de qué caja sale y el usuario. "Volver" no graba nada.
+- **Hace falta la caja abierta.** Sin caja abierta no se puede pagar de contado ("Abrí la caja para pagar de contado"); la factura se puede guardar igual en cuenta corriente.
+- **Ahora la forma de pago arranca en cuenta corriente.** Contado se elige a mano. Una nota de crédito queda siempre en cuenta corriente.
+- **Todo o nada.** Si el pago no se puede registrar, la factura tampoco se carga (y el borrador sigue disponible).
+
 ## 0.7.1 — octubre 2026
 
 ### Facturas de compra
