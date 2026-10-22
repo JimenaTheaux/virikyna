@@ -2554,3 +2554,21 @@ SQL, verificaciones y tests en `docs/52_pagos_a_cuenta.sql`. No toca tablas ni v
 **`registrar_pago_proveedor_v2`.** Con comprobantes elegidos, un monto mayor a su saldo **ya no da error**: se aplica hasta el saldo de los elegidos y el sobrante queda a cuenta (no va a otros pendientes). Lo mismo para `registrar_pago_proveedor`, que delega en v2.
 
 Saldo del proveedor: `proveedores_saldo` no mira aplicaciones, así que aplicar o quitar no lo cambia. Identidad (test T8): `saldo_actual = saldo_inicial + Σ saldo_pendiente − Σ credito_disponible − proveedores_a_cuenta.a_cuenta`.
+
+## 30. Pago de contado al cargar una factura de compra
+
+SQL, verificaciones y tests en `docs/57_pago_contado.sql`. No toca tablas ni vistas.
+
+**Antes.** `facturas_compra.forma_pago = 'contado'` era solo una etiqueta: la factura quedaba pendiente por el total y el pago se registraba aparte (o no se registraba).
+
+**RPC `cargar_factura_compra_contado(…mismos parámetros que cargar_factura_compra sin forma de pago ni devolución…, p_origen) → JSONB`** — cualquier perfil activo; con `p_origen = 'general'` solo admin (lo exige v2).
+1. Rechaza una NC. Con `p_origen = 'turno'` exige una caja abierta (`aperturas_caja` sin `cierre_z_id`): "Abrí la caja para pagar de contado".
+2. Llama a `cargar_factura_compra(…, p_forma_pago => 'contado', …)` (borra el borrador en la misma transacción) y toma el **total calculado por el servidor**; tiene que ser > 0.
+3. Llama a `registrar_pago_proveedor_v2` en efectivo por ese total, con la factura como único comprobante y nota `Contado: <comprobante>`: pago + aplicación íntegra (la factura queda **pagada**) + egreso (`turno` entra en el cierre del día; `general` = Caja Gestión) + movimiento de la cuenta Efectivo. Usuario = el logueado.
+4. Devuelve `{factura_id, pago_id, monto}`. Si algo falla no queda nada (el borrador vuelve).
+
+**`anular_factura_compra`.** Una factura de contado con su pago vigente responde "Es una factura de contado: revertí su pago desde el Historial" (antes el mensaje genérico). El camino sigue siendo revertir el pago y después anular; el contra-egreso queda con fecha del día en que se revierte.
+
+**`editar_factura_compra`.** La forma de pago es una etiqueta (cambiarla no crea ni borra pagos) y no se puede cambiar si el comprobante tiene pagos o NC aplicados vigentes.
+
+**Apps.** El default del formulario pasa a cuenta corriente (Local, Gestión, Inventario; una copia conserva la forma de pago del original). Contado pide confirmación ("Se registrará pago a … · Desde: Caja Local/Caja Gestión · Usuario") y en una NC el selector queda fijo en cuenta corriente. `cargar_factura_compra` con `contado` (apps viejas) sigue sin registrar pago.

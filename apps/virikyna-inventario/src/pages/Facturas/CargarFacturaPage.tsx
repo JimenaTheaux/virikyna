@@ -28,6 +28,12 @@ import {
   useBorrador,
   useBorradores,
   cargarFacturaCompra,
+  cargarFacturaCompraContado,
+  hayCajaAbierta,
+  mensajeConfirmacionContado,
+  mensajeContadoGuardado,
+  MENSAJE_SIN_CAJA_CONTADO,
+  pagaDeContado,
   calcularTotalesFacturaCompra,
   cambiosPrecioFactura,
   ControlSegmentado,
@@ -56,6 +62,7 @@ import {
   useComprobanteDuplicado,
   useCopiaFacturaCompra,
   valoresFacturaCompraVacios,
+  type CargarFacturaCompraContadoResultado,
   type ItemFacturaCompraUI,
 } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
@@ -86,7 +93,7 @@ type Aviso = { tipo: 'error' | 'exito'; texto: string }
 // payload y se muestra una vista previa de los totales. Copiar una factura (docs/33) usa los mismos
 // hooks que el escritorio (lib/useCopiaFacturaCompra.ts); acá solo va el dibujo táctil.
 export function CargarFacturaPage() {
-  const { rol } = usePerfil()
+  const { rol, perfil } = usePerfil()
   const vacios = valoresFacturaCompraVacios()
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [proveedorId, setProveedorId] = useState(vacios.proveedorId)
@@ -111,6 +118,8 @@ export function CargarFacturaPage() {
   const [dirty, setDirty] = useState(false)
   const [selectorAbierto, setSelectorAbierto] = useState(false)
   const [confirmLibres, setConfirmLibres] = useState(false)
+  // docs/57: confirmación del pago de contado antes de grabar.
+  const [confirmContado, setConfirmContado] = useState(false)
   // Errores por ítem de la última validación de "Guardar factura" (key → mensaje).
   const [erroresItems, setErroresItems] = useState<Record<string, string>>({})
   // Ítem que tiene que tomar el foco en "Cód. barras"; `n` cambia en cada pedido para que se
@@ -309,6 +318,8 @@ export function CargarFacturaPage() {
     setTipoComprobante(tipo)
     setIvaAlicuota(alicuotaDefault(tipo))
     if (tipo !== 'nota_credito') setDevuelveMercaderia(false)
+    // docs/57: una NC no se paga de contado.
+    if (tipo === 'nota_credito') setFormaPago('cuenta_corriente')
   }
 
   // Artículos ↔ servicios (docs/53): los ítems de uno no sirven en el otro, se arranca con un ítem
@@ -368,7 +379,35 @@ export function CargarFacturaPage() {
       setConfirmLibres(true)
       return
     }
-    await guardar()
+    await seguirGuardado()
+  }
+
+  const contado = pagaDeContado(formaPago, tipoComprobante)
+
+  // Último paso antes de grabar. Contado (docs/57): sale del cajón de Local, así que tiene que haber
+  // una caja abierta (el RPC lo vuelve a validar); después se confirma el pago con un diálogo.
+  async function seguirGuardado() {
+    setConfirmLibres(false)
+    if (!contado) {
+      await guardar()
+      return
+    }
+    if (totalPreview <= 0) {
+      setAviso({ tipo: 'error', texto: 'Para pagar de contado el total de la factura tiene que ser mayor a cero.' })
+      return
+    }
+    setSaving(true)
+    const abierta = await hayCajaAbierta(supabase).catch(() => null)
+    setSaving(false)
+    if (abierta === null) {
+      setAviso({ tipo: 'error', texto: 'No se pudo verificar si la caja está abierta. Revisá la conexión y volvé a intentar.' })
+      return
+    }
+    if (!abierta) {
+      setAviso({ tipo: 'error', texto: `${MENSAJE_SIN_CAJA_CONTADO}. También podés guardarla en cuenta corriente.` })
+      return
+    }
+    setConfirmContado(true)
   }
 
   // "Volver y vincular": marca cada ítem libre en su tarjeta y lleva la vista al primero.
@@ -388,13 +427,15 @@ export function CargarFacturaPage() {
   async function guardar(conBorrador = true) {
     setConfirmLibres(false)
     setConfirmSinBorrador(false)
+    setConfirmContado(false)
     const accion = accionStock
     const nc = tipoComprobante === 'nota_credito'
     const sumaTodo = itemsLibresFacturaCompra(items).length === 0
+    const pagaContado = contado
     setSaving(true)
     // Frena el autoguardado y espera la subida en curso (si no, quedaría un borrador huérfano).
     const idBorrador = await borrador.prepararConfirmacion()
-    const { error: dbError } = await cargarFacturaCompra(supabase, {
+    const datos = {
       borradorId: conBorrador ? idBorrador : null,
       proveedorId,
       tipoComprobante,
@@ -403,13 +444,15 @@ export function CargarFacturaPage() {
       numeroComprobante: numeroComprobante.trim() || null,
       fechaComprobante,
       fechaFiscal: fechaFiscal || null,
-      formaPago,
       ivaAlicuota,
       tipoCompra,
-      devuelveMercaderia,
       items: integrarMarcaEnItemsLibres(items),
       copiadaDeId: copiaDe?.id ?? null,
-    })
+    }
+    // docs/57: contado carga la factura y registra el pago (caja de Local) en la misma transacción.
+    const { data, error: dbError } = pagaContado
+      ? await cargarFacturaCompraContado(supabase, { ...datos, origen: 'turno' })
+      : await cargarFacturaCompra(supabase, { ...datos, formaPago, devuelveMercaderia })
     setSaving(false)
 
     if (dbError) {
@@ -426,6 +469,10 @@ export function CargarFacturaPage() {
     // La RPC ya borró el borrador; formulario vacío para la próxima, sin copia.
     borrador.finalizar()
     empezarDeNuevo()
+    if (pagaContado) {
+      setAviso({ tipo: 'exito', texto: mensajeContadoGuardado(Number((data as CargarFacturaCompraContadoResultado).monto)) })
+      return
+    }
     // Con ítems libres confirmados el stock no se actualizó entero: el mensaje no lo afirma. Servicios
     // y una NC sin devolución nunca tocan el stock (docs/53, docs/55).
     const cargada = copiaDe ? 'Copia cargada' : nc ? 'Nota de crédito cargada' : 'Factura cargada'
@@ -644,8 +691,10 @@ export function CargarFacturaPage() {
             />
           </Field>
           <Field label="Forma de pago">
+            {/* docs/57: contado registra el pago en efectivo (caja de Local) al guardar; una NC no se paga. */}
             <select
               value={formaPago}
+              disabled={tipoComprobante === 'nota_credito'}
               onChange={(e) => setFormaPago(e.target.value as FormaPagoCompra)}
               className={selectClass}
             >
@@ -821,6 +870,22 @@ export function CargarFacturaPage() {
           confirmLabel={accionStock === 'resta' ? 'Guardar sin restar stock' : 'Guardar sin sumar stock'}
           cancelLabel="Volver y vincular"
           onCancel={volverAVincular}
+          onConfirm={() => void seguirGuardado()}
+        />
+      )}
+
+      {confirmContado && (
+        <ConfirmDialog
+          title="Pago de contado"
+          mensaje={mensajeConfirmacionContado({
+            proveedor: proveedores.find((p) => p.id === proveedorId)?.razon_social ?? '',
+            monto: totalPreview,
+            origen: 'turno',
+            usuario: perfil?.nombre ?? '',
+          })}
+          confirmLabel="Confirmar y guardar"
+          cancelLabel="Volver"
+          onCancel={() => setConfirmContado(false)}
           onConfirm={() => void guardar()}
         />
       )}

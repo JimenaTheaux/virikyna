@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import type { FacturaCompra, FacturaCompraItem, FacturaCompraSaldo, PagoProveedor } from '@virikyna/shared'
+import type { FacturaCompra, FacturaCompraItem, FacturaCompraSaldo, OrigenEgreso, PagoProveedor } from '@virikyna/shared'
 import {
   AnularFacturaCompraModal,
+  CAJA_ORIGEN_LABEL,
   ChipTipoCompra,
   desaplicarPago,
   EditarFacturaCompraModal,
@@ -34,7 +35,7 @@ type AplicacionDetalle = {
   revertida_at: string | null
   created_at: string
   operacion: Pick<PagoProveedor, 'fecha'> | null
-  pago: Pick<PagoProveedor, 'forma_pago' | 'cheque_numero'> | null
+  pago: (Pick<PagoProveedor, 'forma_pago' | 'cheque_numero'> & { egresos: { origen: OrigenEgreso }[] | null }) | null
   nc: ComprobanteRef | null
   factura: ComprobanteRef | null
   usuario: string | null
@@ -93,7 +94,7 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
         .select(
           `id, monto, usuario_id, revertida_at, created_at,
            operacion:pagos_proveedor!pagos_proveedor_aplicaciones_operacion_id_fkey(fecha),
-           pago:pagos_proveedor!pagos_proveedor_aplicaciones_pago_proveedor_id_fkey(forma_pago, cheque_numero),
+           pago:pagos_proveedor!pagos_proveedor_aplicaciones_pago_proveedor_id_fkey(forma_pago, cheque_numero, egresos(origen)),
            nc:facturas_compra!pagos_proveedor_aplicaciones_nota_credito_id_fkey(tipo_comprobante, letra, punto_venta, numero_comprobante),
            factura:facturas_compra!pagos_proveedor_aplicaciones_factura_compra_id_fkey(tipo_comprobante, letra, punto_venta, numero_comprobante)`,
         )
@@ -129,7 +130,13 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
   function origenAplicacion(a: AplicacionDetalle): string {
     if (nc) return a.factura ? `Aplicada a ${etiquetaComprobanteCompra(a.factura)}` : 'Aplicada'
     if (a.nc) return etiquetaComprobanteCompra(a.nc)
-    if (a.pago) return `${FORMA_PAGO_EGRESO_LABEL[a.pago.forma_pago]}${a.pago.cheque_numero ? ` N° ${a.pago.cheque_numero}` : ''}`
+    if (a.pago) {
+      // docs/57: de qué caja salió la plata (el egreso del pago).
+      const origen = a.pago.egresos?.[0]?.origen
+      return `${FORMA_PAGO_EGRESO_LABEL[a.pago.forma_pago]}${a.pago.cheque_numero ? ` N° ${a.pago.cheque_numero}` : ''}${
+        origen ? ` · ${CAJA_ORIGEN_LABEL[origen]}` : ''
+      }`
+    }
     return '—'
   }
 

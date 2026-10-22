@@ -4,6 +4,7 @@ import type {
   FacturaCompraSaldo,
   FormaPagoCompra,
   LetraComprobanteCompra,
+  OrigenEgreso,
   Proveedor,
   TipoComprobanteCompra,
   TipoCompra,
@@ -11,15 +12,22 @@ import type {
 import {
   alicuotaDefault,
   cargarFacturaCompra,
+  cargarFacturaCompraContado,
   calcularTotalesFacturaCompra,
   errorCabeceraFacturaCompra,
   etiquetaAlicuotaIva,
+  hayCajaAbierta,
   hayItemsCargadosFacturaCompra,
   integrarMarcaEnItemsLibres,
   itemsLibresFacturaCompra,
   itemsValidosFacturaCompra,
   mensajeItemsLibresFacturaCompra,
   mensajeSinItemsFacturaCompra,
+  mensajeConfirmacionContado,
+  mensajeContadoGuardado,
+  MENSAJE_SIN_CAJA_CONTADO,
+  pagaDeContado,
+  CAJA_ORIGEN_LABEL,
   accionStockFacturaCompra,
   puedeDevolverMercaderia,
   nuevoItemFacturaCompraUI,
@@ -30,6 +38,7 @@ import {
   TIPOS_COMPROBANTE_COMPRA,
   valoresFacturaCompraVacios,
   type AlicuotaIvaCompra,
+  type CargarFacturaCompraContadoResultado,
   type ItemFacturaCompraUI,
   type OrigenCopiaFactura,
   type ValoresFacturaCompra,
@@ -112,6 +121,10 @@ type Props = {
   // Borradores (docs/54): desde qué app se carga, y el borrador a retomar si se abre desde la lista.
   sistema: SistemaApp
   borrador?: BorradorConNombres<PayloadBorradorFactura>
+  // Pago de contado al guardar (docs/57): de qué caja sale la plata y quién la paga (el logueado),
+  // para el diálogo de confirmación. Con `onRegistrado` (Local: toast) el aviso final lo muestra la
+  // app; sin él, el modal muestra el aviso antes de cerrar (Gestión).
+  pagoContado: { origen: OrigenEgreso; usuarioNombre: string; onRegistrado?: (texto: string) => void }
 }
 
 // Carga de factura de compra de escritorio, compartida por Virikyna Local y Virikyna Gestión (una
@@ -133,6 +146,7 @@ export function CargarFacturaCompraModal({
   ofrecerAplicarACuenta = false,
   sistema,
   borrador: borradorInicial,
+  pagoContado,
 }: Props) {
   const inicial = valoresIniciales ?? valoresFacturaCompraVacios()
   // Abierto con solo el id: hasta que llega la factura no se muestra un formulario vacío. Lo
@@ -167,6 +181,9 @@ export function CargarFacturaCompraModal({
   // Cambio de artículos ↔ servicios pedido con ítems cargados: se confirma porque los limpia.
   const [tipoCompraPendiente, setTipoCompraPendiente] = useState<TipoCompra | null>(null)
   const [confirmLibres, setConfirmLibres] = useState(false)
+  // docs/57: confirmación del pago antes de grabar, y el aviso final cuando lo muestra el modal.
+  const [confirmContado, setConfirmContado] = useState(false)
+  const [contadoGuardado, setContadoGuardado] = useState<string | null>(null)
   const [selectorAbierto, setSelectorAbierto] = useState(false)
   // Factura ya guardada + lo que el proveedor tiene a cuenta: se ofrece aplicarlo (docs/52).
   const [ofertaACuenta, setOfertaACuenta] = useState<{ factura: FacturaCompraSaldo; aCuenta: number } | null>(null)
@@ -344,6 +361,8 @@ export function CargarFacturaCompraModal({
     setTipoComprobante(tipo)
     setIvaAlicuota(alicuotaDefault(tipo))
     if (tipo !== 'nota_credito') setDevuelveMercaderia(false)
+    // docs/57: una NC no se paga de contado.
+    if (tipo === 'nota_credito') setFormaPago('cuenta_corriente')
   }
 
   // Artículos ↔ servicios (docs/53): los ítems de uno no sirven en el otro, se arranca con una fila
@@ -399,7 +418,37 @@ export function CargarFacturaCompraModal({
       setConfirmLibres(true)
       return
     }
-    await guardar()
+    await seguirGuardado()
+  }
+
+  const contado = pagaDeContado(formaPago, tipoComprobante)
+
+  // Último paso antes de grabar. Contado (docs/57): con caja de Local tiene que haber una abierta
+  // (el RPC lo vuelve a validar); después se confirma el pago con un diálogo.
+  async function seguirGuardado() {
+    setConfirmLibres(false)
+    if (!contado) {
+      await guardar()
+      return
+    }
+    if (totalPreview <= 0) {
+      setError('Para pagar de contado el total de la factura tiene que ser mayor a cero.')
+      return
+    }
+    if (pagoContado.origen === 'turno') {
+      setSaving(true)
+      const abierta = await hayCajaAbierta(supabase).catch(() => null)
+      setSaving(false)
+      if (abierta === null) {
+        setError('No se pudo verificar si la caja está abierta. Revisá la conexión y volvé a intentar.')
+        return
+      }
+      if (!abierta) {
+        setError(`${MENSAJE_SIN_CAJA_CONTADO}. También podés guardarla en cuenta corriente.`)
+        return
+      }
+    }
+    setConfirmContado(true)
   }
 
   // "Volver y vincular": marca los ítems libres y lleva la vista al primero.
@@ -417,12 +466,13 @@ export function CargarFacturaCompraModal({
   async function guardar(conBorrador = true) {
     setConfirmLibres(false)
     setConfirmSinBorrador(false)
+    setConfirmContado(false)
     setSaving(true)
     // Frena el autoguardado y espera la subida en curso: si no, podría llegar después de que la RPC
     // borró el borrador y dejarlo huérfano.
     const idBorrador = await borrador.prepararConfirmacion()
     const borradorId = conBorrador ? idBorrador : null
-    const { data: facturaId, error: dbError, status } = await cargarFacturaCompra(supabase, {
+    const datos = {
       borradorId,
       proveedorId,
       tipoComprobante,
@@ -431,13 +481,15 @@ export function CargarFacturaCompraModal({
       numeroComprobante: numeroComprobante.trim() || null,
       fechaComprobante,
       fechaFiscal: fechaFiscal || null,
-      formaPago,
       ivaAlicuota,
       tipoCompra,
-      devuelveMercaderia,
       items: integrarMarcaEnItemsLibres(items),
       copiadaDeId: copiaDe?.id ?? null,
-    })
+    }
+    // docs/57: contado carga la factura y registra el pago en la misma transacción.
+    const { data, error: dbError, status } = contado
+      ? await cargarFacturaCompraContado(supabase, { ...datos, origen: pagoContado.origen })
+      : await cargarFacturaCompra(supabase, { ...datos, formaPago, devuelveMercaderia })
 
     if (dbError) {
       setSaving(false)
@@ -452,6 +504,20 @@ export function CargarFacturaCompraModal({
     }
     // La RPC ya borró el borrador en la misma transacción; queda la copia del equipo.
     borrador.finalizar()
+
+    // Contado: la factura quedó pagada, no hay nada a cuenta que ofrecer.
+    if (contado) {
+      const texto = mensajeContadoGuardado(Number((data as CargarFacturaCompraContadoResultado).monto))
+      setSaving(false)
+      if (pagoContado.onRegistrado) {
+        pagoContado.onRegistrado(texto)
+        onSaved()
+      } else {
+        setContadoGuardado(texto)
+      }
+      return
+    }
+    const facturaId = data
 
     // "Guardando..." sigue mientras se consulta: la factura ya está grabada, no se puede volver a guardar.
     const oferta =
@@ -484,6 +550,30 @@ export function CargarFacturaCompraModal({
   const ocupado = saving || copia.cargando || esperandoCopia
   const columnas: readonly { label: string; align: 'left' | 'right' | 'center'; width: string }[] =
     tipoCompra === 'servicios' ? COLUMNAS_SERVICIOS : COLUMNAS_ITEMS
+
+  // Contado ya guardado (docs/57), sin toast en la app: el aviso reemplaza al formulario y cerrarlo
+  // termina como un guardado normal.
+  if (contadoGuardado) {
+    return (
+      <Modal title="Pago de contado" onClose={onSaved} widthClassName="max-w-[440px]" dialogo={{ onEscape: onSaved }}>
+        <div className="flex flex-col gap-stack-md">
+          <p role="status" className="font-sans text-body-md text-ink">
+            {contadoGuardado}
+          </p>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              data-autofocus
+              onClick={onSaved}
+              className="rounded bg-accent px-4 py-3 font-sans text-label-bold text-white transition hover:bg-accent-dark"
+            >
+              Aceptar
+            </button>
+          </div>
+        </div>
+      </Modal>
+    )
+  }
 
   // La factura ya se guardó: en lugar del formulario, la oferta de aplicar lo a cuenta.
   // Aplicar o "Ahora no" terminan igual que un guardado normal (onSaved).
@@ -741,9 +831,17 @@ export function CargarFacturaCompraModal({
             </div>
             <div className="col-span-1 md:col-span-2">
               <Field label="Forma de pago">
+                {/* docs/57: contado registra el pago en efectivo al guardar; una NC no se paga. */}
                 <select
                   value={formaPago}
-                  title={formaPago === 'contado' ? 'Contado' : 'Cuenta corriente'}
+                  title={
+                    tipoComprobante === 'nota_credito'
+                      ? 'Una nota de crédito no se paga de contado'
+                      : formaPago === 'contado'
+                        ? `Contado: al guardar se registra el pago en efectivo (${CAJA_ORIGEN_LABEL[pagoContado.origen]})`
+                        : 'Cuenta corriente'
+                  }
+                  disabled={tipoComprobante === 'nota_credito'}
                   onChange={(e) => setFormaPago(e.target.value as FormaPagoCompra)}
                   className={selectClass}
                 >
@@ -903,6 +1001,23 @@ export function CargarFacturaCompraModal({
           cancelLabel="Volver y vincular"
           confirmando={saving}
           onCancel={volverAVincular}
+          onConfirm={() => void seguirGuardado()}
+        />
+      )}
+
+      {confirmContado && (
+        <ConfirmDialog
+          title="Pago de contado"
+          mensaje={mensajeConfirmacionContado({
+            proveedor: proveedores.find((p) => p.id === proveedorId)?.razon_social ?? '',
+            monto: totalPreview,
+            origen: pagoContado.origen,
+            usuario: pagoContado.usuarioNombre,
+          })}
+          confirmLabel="Confirmar y guardar"
+          cancelLabel="Volver"
+          confirmando={saving}
+          onCancel={() => setConfirmContado(false)}
           onConfirm={() => void guardar()}
         />
       )}

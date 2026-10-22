@@ -27,7 +27,8 @@ export function ConfirmDialog({
     // Cancelar — un Enter apurado no ejecuta la acción destructiva.
     <Modal title={title} onClose={onCancel} widthClassName="max-w-[440px]" dialogo={{ onEscape: onCancel }}>
       <div className="flex flex-col gap-stack-md">
-        <p className="font-sans text-body-md text-ink">{mensaje}</p>
+        {/* pre-line: un mensaje con varias líneas (ej. confirmación de contado, docs/57) se lee por renglón. */}
+        <p className="whitespace-pre-line font-sans text-body-md text-ink">{mensaje}</p>
         <div className="flex justify-end gap-3">
           <button
             type="button"

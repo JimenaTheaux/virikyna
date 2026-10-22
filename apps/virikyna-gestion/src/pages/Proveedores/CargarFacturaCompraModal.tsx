@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { CargarFacturaCompraModal as CargarFacturaCompraModalCompartido } from '@virikyna/shared'
 import type { BorradorConNombres, PayloadBorradorFactura } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
+import { usePerfil } from '../../auth/AuthContext'
 import { ProductoFormModal } from '../Inventario/ProductoFormModal'
 import { FacturaCompraDetallePorId } from './FacturaCompraDetallePorId'
 
@@ -20,6 +21,7 @@ type Props = {
 // que un admin puede cargar una factura sin ir a la caja.
 export function CargarFacturaCompraModal({ onClose, onSaved, copiadaDeId, borrador }: Props) {
   const [originalId, setOriginalId] = useState<string | null>(null)
+  const { perfil } = usePerfil()
 
   return (
     <>
@@ -32,6 +34,8 @@ export function CargarFacturaCompraModal({ onClose, onSaved, copiadaDeId, borrad
         borrador={borrador}
         onVerOriginal={setOriginalId}
         ofrecerAplicarACuenta
+        // docs/57: contado = egreso general de Caja Gestión (sin caja abierta); el modal avisa al cerrar.
+        pagoContado={{ origen: 'general', usuarioNombre: perfil?.nombre ?? '' }}
         crearProducto={({ proveedores, nombreInicial, codigoBarrasInicial, onClose: cerrar, onSaved: guardado, onUsarExistente }) => (
           <ProductoFormModal
             proveedores={proveedores}

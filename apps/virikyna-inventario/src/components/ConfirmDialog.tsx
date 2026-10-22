@@ -33,7 +33,7 @@ export function ConfirmDialog({ title, mensaje, confirmLabel = 'Confirmar', canc
         <h2 id={tituloId} className="font-display text-headline-md text-accent-darker">
           {title}
         </h2>
-        <p className="mt-2 font-sans text-body-md text-ink">{mensaje}</p>
+        <p className="mt-2 whitespace-pre-line font-sans text-body-md text-ink">{mensaje}</p>
         <div className="mt-stack-md flex justify-end gap-3">
           <button
             type="button"

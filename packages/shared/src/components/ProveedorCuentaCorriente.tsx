@@ -5,6 +5,7 @@ import { Ban, Copy, Eye, Pencil, Wallet } from 'lucide-react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { EstadoFacturaCompra, FacturaCompraSaldo, OrigenEgreso, TipoComprobanteCompra, TipoCompra } from '../../types/database'
 import {
+  CAJA_ORIGEN_LABEL,
   etiquetaComprobanteCompra,
   etiquetaCortaAlicuotaIva,
   FORMA_PAGO_EGRESO_LABEL,
@@ -836,7 +837,11 @@ function TablaPagos({
                 {monto === 0 ? 'Solo crédito NC' : FORMA_PAGO_EGRESO_LABEL[p.forma_pago]}
                 {p.cheque_numero && <span className="block text-ink-soft">N° {p.cheque_numero}</span>}
               </td>
-              <td className="px-3 py-3 text-ink-soft [overflow-wrap:anywhere]">{p.usuario_nombre ?? '—'}</td>
+              <td className="px-3 py-3 text-ink-soft [overflow-wrap:anywhere]">
+                {p.usuario_nombre ?? '—'}
+                {/* docs/57: de qué caja salió la plata (su egreso). */}
+                {p.origen && <span className="block">{CAJA_ORIGEN_LABEL[p.origen]}</span>}
+              </td>
               <td className="px-3 py-3 [overflow-wrap:anywhere]">
                 {esReversion ? (
                   <span className="text-ink-soft">Reversión de un pago (Historial)</span>

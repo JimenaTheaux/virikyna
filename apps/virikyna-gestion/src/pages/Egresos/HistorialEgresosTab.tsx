@@ -90,8 +90,8 @@ export function HistorialEgresosTab() {
             className="rounded border border-line bg-surface px-3 py-2 font-sans text-body-md text-ink outline-none focus:border-accent"
           >
             <option value="todos">Todos</option>
-            <option value="general">Gestión</option>
-            <option value="turno">Local</option>
+            <option value="general">{ORIGEN_EGRESO_LABEL.general}</option>
+            <option value="turno">{ORIGEN_EGRESO_LABEL.turno}</option>
           </select>
         </label>
         <label className="flex flex-col gap-1">

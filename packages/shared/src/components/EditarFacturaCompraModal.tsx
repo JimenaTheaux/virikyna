@@ -177,11 +177,21 @@ export function EditarFacturaCompraModal({ supabase, factura, onClose, onSaved }
           />
         </Field>
 
-        <Field label="Forma de pago">
+        {/* docs/57: acá es solo una etiqueta (no crea ni borra pagos). Con pagos aplicados queda fija;
+            el RPC también lo rechaza. */}
+        <Field
+          label="Forma de pago"
+          hint={
+            bloqueado
+              ? 'Tiene pagos aplicados: la forma de pago no se cambia.'
+              : 'Cambiarla acá no registra ni borra pagos.'
+          }
+        >
           <select
             value={formaPago}
+            disabled={bloqueado}
             onChange={(e) => setFormaPago(e.target.value as FormaPagoCompra)}
-            className={selectClass}
+            className={`${selectClass} disabled:cursor-not-allowed disabled:opacity-60`}
           >
             <option value="contado">Contado</option>
             <option value="cuenta_corriente">Cuenta corriente</option>

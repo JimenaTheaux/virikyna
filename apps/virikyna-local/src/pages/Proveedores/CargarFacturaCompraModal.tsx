@@ -3,6 +3,7 @@ import { CargarFacturaCompraModal as CargarFacturaCompraModalCompartido } from '
 import type { BorradorConNombres, PayloadBorradorFactura } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { usePerfil } from '../../auth/AuthContext'
+import { showToast } from '../../lib/toast'
 import { ProductoFormSheet } from '../Inventario/ProductoFormSheet'
 import { FacturaCompraDetallePorId } from './FacturaCompraDetallePorId'
 
@@ -20,7 +21,7 @@ type Props = {
 // el detalle que abre el link a la factura original de una copia. Si el proveedor tiene pagos a
 // cuenta (docs/52), al guardar se ofrece aplicarlos a la factura nueva.
 export function CargarFacturaCompraModal({ onClose, onSaved, copiadaDeId, borrador }: Props) {
-  const { rol } = usePerfil()
+  const { rol, perfil } = usePerfil()
   const [originalId, setOriginalId] = useState<string | null>(null)
 
   return (
@@ -34,6 +35,8 @@ export function CargarFacturaCompraModal({ onClose, onSaved, copiadaDeId, borrad
         borrador={borrador}
         onVerOriginal={setOriginalId}
         ofrecerAplicarACuenta
+        // docs/57: contado sale del cajón (entra en el cierre del día) y exige caja abierta.
+        pagoContado={{ origen: 'turno', usuarioNombre: perfil?.nombre ?? '', onRegistrado: showToast }}
         crearProducto={({ proveedores, nombreInicial, codigoBarrasInicial, onClose: cerrar, onSaved: guardado, onUsarExistente }) =>
           rol ? (
             <ProductoFormSheet

@@ -26,7 +26,7 @@ import type {
 } from '../types/database'
 import type { ProductoPrecioActual } from './precios'
 import { aAlicuotaIvaCompra, alicuotaDefault, itemsValidosFacturaCompra, type AlicuotaIvaCompra } from './totalesCompra'
-import { fechaHoyISO } from './format'
+import { fechaHoyISO, formatCurrency, formatFechaCorta } from './format'
 import { nombresPorId } from './perfiles'
 
 // Alícuota de IVA, totales y validez de ítems (docs/45): viven en lib/totalesCompra.ts (sin imports,
@@ -274,22 +274,17 @@ export function esBorradorInexistente(error: { message?: string } | null | undef
   return Boolean(error?.message?.startsWith('El borrador ya no existe'))
 }
 
-// Único punto de llamada al RPC `cargar_factura_compra` — arma el payload de ítems, el
-// cálculo de totales y la actualización de stock quedan del lado de la función SQL.
+// Parámetros comunes a `cargar_factura_compra` y `cargar_factura_compra_contado` (docs/57).
 // p_copiada_de_id solo viaja cuando hay copia (el RPC le pone default NULL, docs/33).
 // p_iva_alicuota viaja siempre (docs/45): el default del RPC (21) es solo para las apps viejas.
 // p_tipo_compra solo viaja en servicios (docs/53): artículos es el default del RPC. En servicios
 // cada ítem va sin producto y con cantidad 1 (el RPC rechaza otra cosa).
-export function cargarFacturaCompra(supabase: SupabaseClient, input: CargarFacturaCompraInput) {
+function parametrosFacturaCompra(input: CargarFacturaCompraInput) {
   const servicios = input.tipoCompra === 'servicios'
-  return supabase.rpc('cargar_factura_compra', {
+  return {
     ...(input.copiadaDeId ? { p_copiada_de_id: input.copiadaDeId } : {}),
     ...(servicios ? { p_tipo_compra: 'servicios' } : {}),
     ...(input.borradorId ? { p_borrador_id: input.borradorId } : {}),
-    // docs/55: solo viaja marcado (y donde corresponde); sin él, una NC no toca el stock.
-    ...(input.devuelveMercaderia && puedeDevolverMercaderia(input.tipoComprobante, input.tipoCompra ?? 'articulos')
-      ? { p_devuelve_mercaderia: true }
-      : {}),
     p_iva_alicuota: input.ivaAlicuota,
     p_proveedor_id: input.proveedorId,
     p_tipo_comprobante: input.tipoComprobante,
@@ -298,7 +293,6 @@ export function cargarFacturaCompra(supabase: SupabaseClient, input: CargarFactu
     p_numero_comprobante: input.numeroComprobante,
     p_fecha_comprobante: input.fechaComprobante,
     p_fecha_fiscal: input.fechaFiscal,
-    p_forma_pago: input.formaPago,
     p_items: itemsValidosFacturaCompra(input.items).map((it) => ({
       producto_id: servicios ? null : it.productoId,
       descripcion: it.descripcion.trim(),
@@ -307,6 +301,77 @@ export function cargarFacturaCompra(supabase: SupabaseClient, input: CargarFactu
       descuento_porcentaje: Number(it.descuentoPorcentaje) || 0,
       ubicacion: it.ubicacion,
     })),
+  }
+}
+
+// Único punto de llamada al RPC `cargar_factura_compra` — arma el payload de ítems, el
+// cálculo de totales y la actualización de stock quedan del lado de la función SQL.
+export function cargarFacturaCompra(supabase: SupabaseClient, input: CargarFacturaCompraInput) {
+  return supabase.rpc('cargar_factura_compra', {
+    ...parametrosFacturaCompra(input),
+    // docs/55: solo viaja marcado (y donde corresponde); sin él, una NC no toca el stock.
+    ...(input.devuelveMercaderia && puedeDevolverMercaderia(input.tipoComprobante, input.tipoCompra ?? 'articulos')
+      ? { p_devuelve_mercaderia: true }
+      : {}),
+    p_forma_pago: input.formaPago,
+  })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Pago de contado al cargar (docs/57): factura + pago en efectivo + egreso en una transacción
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+// De qué caja sale la plata: 'turno' = cajón de Local (entra en su cierre), 'general' = Caja Gestión.
+export const CAJA_ORIGEN_LABEL: Record<OrigenEgreso, string> = {
+  turno: 'Caja Local',
+  general: 'Caja Gestión',
+}
+
+export const MENSAJE_SIN_CAJA_CONTADO = 'Abrí la caja para pagar de contado'
+
+// Contado se paga al guardar; una NC no se paga (queda siempre en cuenta corriente).
+export function pagaDeContado(formaPago: FormaPagoCompra, tipoComprobante: TipoComprobanteCompra): boolean {
+  return formaPago === 'contado' && tipoComprobante !== 'nota_credito'
+}
+
+// Caja de Local abierta = una apertura sin Cierre Z (mismo criterio que AbrirCajaCard y el RPC).
+export async function hayCajaAbierta(supabase: SupabaseClient): Promise<boolean> {
+  const { data, error } = await supabase.from('aperturas_caja').select('id').is('cierre_z_id', null).limit(1)
+  if (error) throw error
+  return (data ?? []).length > 0
+}
+
+// Texto del diálogo previo a guardar (una línea por dato; los ConfirmDialog respetan los saltos).
+export function mensajeConfirmacionContado(v: {
+  proveedor: string
+  monto: number
+  origen: OrigenEgreso
+  usuario: string
+}): string {
+  return [
+    `Se registrará pago a ${v.proveedor}`,
+    `Monto: ${formatCurrency(v.monto)} · Efectivo`,
+    `Desde: ${CAJA_ORIGEN_LABEL[v.origen]} · ${formatFechaCorta(fechaHoyISO())}`,
+    `Usuario: ${v.usuario}`,
+  ].join('\n')
+}
+
+export function mensajeContadoGuardado(monto: number): string {
+  return `Factura cargada y pago registrado · ${formatCurrency(monto)}`
+}
+
+export type CargarFacturaCompraContadoResultado = { factura_id: string; pago_id: string; monto: number }
+
+// Único punto de llamada a `cargar_factura_compra_contado` (docs/57). El monto lo calcula el
+// servidor (el total de la factura); el pago queda a nombre del usuario logueado. Sin devolución
+// de mercadería: el RPC rechaza una NC.
+export function cargarFacturaCompraContado(
+  supabase: SupabaseClient,
+  input: Omit<CargarFacturaCompraInput, 'formaPago' | 'devuelveMercaderia'> & { origen: OrigenEgreso },
+) {
+  return supabase.rpc('cargar_factura_compra_contado', {
+    ...parametrosFacturaCompra({ ...input, formaPago: 'contado' }),
+    p_origen: input.origen,
   })
 }
 
@@ -343,7 +408,8 @@ export function valoresFacturaCompraVacios(): ValoresFacturaCompra {
     numeroComprobante: '',
     fechaComprobante: fechaHoyISO(),
     fechaFiscal: '',
-    formaPago: 'contado',
+    // docs/57: contado registra el pago al guardar; por defecto, cuenta corriente.
+    formaPago: 'cuenta_corriente',
     ivaAlicuota: alicuotaDefault('factura'),
     tipoCompra: 'articulos',
     devuelveMercaderia: false,
@@ -826,6 +892,7 @@ export type PagoProveedorConDetalle = PagoProveedor & {
   usuario_nombre: string | null
   aplicaciones: AplicacionDePago[] // todas las de la operación (plata y NC), vigentes o revertidas
   revertido: boolean // existe una fila de reversión que apunta a este pago
+  origen: OrigenEgreso | null // de qué caja salió (su egreso); null = solo crédito de NC, sin egreso
 }
 
 export function usePagosProveedor(supabase: SupabaseClient, proveedorId: string) {
@@ -835,21 +902,25 @@ export function usePagosProveedor(supabase: SupabaseClient, proveedorId: string)
       const { data, error } = await supabase
         .from('pagos_proveedor')
         .select(
-          '*, aplicaciones:pagos_proveedor_aplicaciones!pagos_proveedor_aplicaciones_operacion_id_fkey(id, factura_compra_id, monto, pago_proveedor_id, nota_credito_id, revertida_at)',
+          '*, aplicaciones:pagos_proveedor_aplicaciones!pagos_proveedor_aplicaciones_operacion_id_fkey(id, factura_compra_id, monto, pago_proveedor_id, nota_credito_id, revertida_at), egresos(origen)',
         )
         .eq('proveedor_id', proveedorId)
         .order('fecha', { ascending: false })
         .order('created_at', { ascending: false })
       if (error) throw error
 
-      const pagos = (data ?? []) as (PagoProveedor & { aplicaciones: AplicacionDePago[] | null })[]
+      const pagos = (data ?? []) as (PagoProveedor & {
+        aplicaciones: AplicacionDePago[] | null
+        egresos: { origen: OrigenEgreso }[] | null
+      })[]
       const revertidos = new Set(pagos.map((p) => p.revierte_pago_proveedor_id).filter(Boolean))
       const nombres = await nombresPorId(
         supabase,
         pagos.map((p) => p.usuario_id),
       )
-      return pagos.map((p) => ({
+      return pagos.map(({ egresos, ...p }) => ({
         ...p,
+        origen: egresos?.[0]?.origen ?? null,
         aplicaciones: p.aplicaciones ?? [],
         usuario_nombre: nombres.get(p.usuario_id) ?? null,
         revertido: revertidos.has(p.id),
