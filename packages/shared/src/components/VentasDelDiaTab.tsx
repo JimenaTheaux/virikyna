@@ -4,33 +4,24 @@ import { FileText } from 'lucide-react'
 import { friendlyError } from '../../lib/supabaseErrors'
 import { formatCurrency, fechaHoyISO, formatFechaCortaLocal, formatHora, rangoTimestampsAR } from '../../lib/format'
 import { emitirFacturaCReal } from '../../lib/arcaFacturacion'
-import { formatCantidad } from '../../lib/cargaInicial'
-import { nombreItemVendido } from '../../lib/productoTexto'
 import type { Cliente, FacturaC, FormaPagoVenta, Venta, VentaPago } from '../../types/database'
-import {
-  itemsComprobanteDesdeVenta,
-  SELECT_ITEMS_COMPROBANTE,
-  type DatosComprobante,
-  type VentaItemComprobanteRow,
-} from '../../lib/comprobante'
+import { itemsComprobanteDesdeVenta, type DatosComprobante } from '../../lib/comprobante'
 import { EstadoBadge } from './EstadoBadge'
 import { RowActionsMenu, type RowActionsMenuItem } from './RowActionsMenu'
+import {
+  clasesFilaConItems,
+  FilaItemsVenta,
+  SELECT_ITEMS_VENTA_EMBEBIDOS,
+  useVentasExpandidas,
+  type ConItemsVenta,
+} from './ItemsVentaFila'
 
 export type VentaConFactura = Venta & {
   factura_c: FacturaC | null
   cliente: Pick<Cliente, 'razon_social' | 'nombre_fantasia' | 'mail' | 'celular'> | null
 }
 
-// Los ítems vienen en la misma consulta (mismo select que el comprobante), así la fila los muestra
-// y "Ver detalle" no vuelve a pedirlos.
-type VentaConItems = VentaConFactura & { items: VentaItemComprobanteRow[] }
-
-// Ítems que entran en el renglón resumen antes del "+N más" (promedio real: 1,3 por ticket).
-const ITEMS_EN_RESUMEN = 3
-
-function nombreCorto(it: VentaItemComprobanteRow): string {
-  return it.producto_nombre ?? it.producto?.nombre ?? 'Producto'
-}
+type VentaConItems = VentaConFactura & ConItemsVenta
 
 export interface VentasDelDiaTabProps {
   supabase: SupabaseClient
@@ -55,16 +46,7 @@ export function VentasDelDiaTab({
   const [error, setError] = useState<string | null>(null)
   const [resultado, setResultado] = useState<string | null>(null)
   const [emitiendoId, setEmitiendoId] = useState<string | null>(null)
-  const [expandidas, setExpandidas] = useState<Set<string>>(new Set())
-
-  function toggleExpandida(id: string) {
-    setExpandidas((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
+  const { expandidas, toggle: toggleExpandida } = useVentasExpandidas()
 
   const [verComprobante, setVerComprobante] = useState<DatosComprobante | null>(null)
 
@@ -76,7 +58,7 @@ export function VentasDelDiaTab({
     const { data, error: dbError } = await supabase
       .from('ventas')
       .select(
-        `*, factura_c:facturas_c(*), cliente:clientes(razon_social, nombre_fantasia, mail, celular), items:venta_items(${SELECT_ITEMS_COMPROBANTE})`,
+        `*, factura_c:facturas_c(*), cliente:clientes(razon_social, nombre_fantasia, mail, celular), ${SELECT_ITEMS_VENTA_EMBEBIDOS}`,
       )
       .gte('created_at', rango.desde)
       .lte('created_at', rango.hasta)
@@ -219,15 +201,9 @@ export function VentasDelDiaTab({
               }
               const items = venta.items ?? []
               const conItems = items.length > 0
-              const expandida = expandidas.has(venta.id)
-              const ocultos = items.length - ITEMS_EN_RESUMEN
-              // Cada venta son dos <tr> (datos + renglón de ítems): la franja alternada va por
-              // índice, no con even:, para que las dos filas compartan color. Estado y ⋮ (26px)
-              // abarcan las dos filas (rowSpan) para no estirar la primera: ~56px con ítems.
+              // Franja alternada por índice (no even:): las dos filas de la venta comparten color.
               const franja = i % 2 === 1 ? 'bg-table-row-alt' : ''
-              const celda = conItems ? 'px-3 pb-0 pt-2.5' : 'px-3 py-2.5'
-              const celdaDoble = conItems ? 'px-3 pt-2 align-top' : 'px-3 py-2.5'
-              const filas = conItems ? 2 : undefined
+              const { celda, celdaDoble, rowSpan: filas } = clasesFilaConItems(conItems)
               return (
                 <Fragment key={venta.id}>
                   <tr
@@ -251,43 +227,14 @@ export function VentasDelDiaTab({
                     </td>
                   </tr>
                   {conItems && (
-                    <tr onClick={() => toggleExpandida(venta.id)} className={`cursor-pointer border-b border-table-divider ${franja}`}>
-                      <td colSpan={5} className="px-3 pb-2.5 pt-0">
-                        <button
-                          type="button"
-                          aria-expanded={expandida}
-                          aria-label={`${expandida ? 'Ocultar' : 'Ver'} ítems de la venta N° ${venta.numero}`}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            toggleExpandida(venta.id)
-                          }}
-                          className="block w-full rounded-sm text-left font-sans text-label-md text-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                        >
-                          {expandida ? (
-                            <ul className="flex max-w-2xl flex-col gap-0.5 py-0.5">
-                              {items.map((it, j) => (
-                                <li key={j} className="flex justify-between gap-stack-md">
-                                  <span className="min-w-0 [overflow-wrap:anywhere]">
-                                    {formatCantidad(Number(it.cantidad))}× {nombreItemVendido(it, it.producto)}
-                                  </span>
-                                  <span className="whitespace-nowrap">{formatCurrency(Number(it.importe))}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <span className="flex min-w-0 gap-1">
-                              <span className="min-w-0 truncate">
-                                {items
-                                  .slice(0, ITEMS_EN_RESUMEN)
-                                  .map((it) => `${formatCantidad(Number(it.cantidad))}× ${nombreCorto(it)}`)
-                                  .join(' · ')}
-                              </span>
-                              {ocultos > 0 && <span className="shrink-0">· +{ocultos} más</span>}
-                            </span>
-                          )}
-                        </button>
-                      </td>
-                    </tr>
+                    <FilaItemsVenta
+                      items={items}
+                      numero={venta.numero}
+                      expandida={expandidas.has(venta.id)}
+                      onToggle={() => toggleExpandida(venta.id)}
+                      colSpan={5}
+                      className={franja}
+                    />
                   )}
                 </Fragment>
               )

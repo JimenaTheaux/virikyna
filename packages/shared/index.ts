@@ -33,6 +33,8 @@ export * from './lib/useDebouncedValue'
 export * from './auth/createAuthController'
 export * from './src/components/Footer'
 export * from './src/components/VentasDelDiaTab'
+// Renglón de ítems bajo cada venta (Ventas del día y Facturación de Local y Gestión).
+export * from './src/components/ItemsVentaFila'
 // Pestaña Devoluciones de Facturación (Local y Gestión); registrar una devolución es solo de Local.
 export * from './src/components/DevolucionesTab'
 export * from './src/components/DevolucionDetalleModal'

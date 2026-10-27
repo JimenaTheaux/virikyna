@@ -1,16 +1,17 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { EstadoComprobante, FormaPagoVenta } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
-import { friendlyError, formatCurrency, emitirFacturaCReal, rangoTimestampsAR } from '@virikyna/shared'
+import { friendlyError, formatCurrency, emitirFacturaCReal, rangoTimestampsAR, hoyAR } from '@virikyna/shared'
 import { formatFechaCortaLocal, formatHora, EstadoBadge } from '@virikyna/shared'
+import { FORMA_PAGO_LABEL, itemsComprobanteDesdeVenta, type DatosComprobante } from '@virikyna/shared'
 import {
-  FORMA_PAGO_LABEL,
-  itemsComprobanteDesdeVenta,
-  SELECT_ITEMS_COMPROBANTE,
-  type DatosComprobante,
-  type VentaItemComprobanteRow,
+  clasesFilaConItems,
+  FilaItemsVenta,
+  SELECT_ITEMS_VENTA_EMBEBIDOS,
+  useVentasExpandidas,
+  type ConItemsVenta,
 } from '@virikyna/shared'
 import { ComprobanteModal } from '../../components/ComprobanteModal'
 import { IconVerDetalle } from '../../components/icons'
@@ -24,25 +25,33 @@ const ESTADO_LABEL: Record<'sin_facturar' | 'facturado', string> = {
 
 type EstadoFiltro = 'todas' | EstadoComprobante
 
+// Ítems embebidos en la misma consulta: renglón bajo cada venta y "Ver comprobante" sin otra consulta.
+type VentaFila = VentaConFactura & ConItemsVenta
+
+// Sin ninguna fecha elegida se traen los últimos 30 días (hora AR), no todo el historial: con los
+// ítems embebidos la respuesta crece y la API corta en 1000 filas de ventas.
+const DIAS_POR_DEFECTO = 30
+
 async function fetchVentas(
   fechaDesde: string,
   fechaHasta: string,
   estadoFiltro: EstadoFiltro,
   formaPagoFiltro: 'todas' | FormaPagoVenta,
-): Promise<VentaConFactura[]> {
+): Promise<VentaFila[]> {
   let query = supabase
     .from('ventas')
-    .select('*, factura_c:facturas_c(*), cliente:clientes(razon_social, nombre_fantasia, mail, celular)')
+    .select(`*, factura_c:facturas_c(*), cliente:clientes(razon_social, nombre_fantasia, mail, celular), ${SELECT_ITEMS_VENTA_EMBEBIDOS}`)
     .in('estado', estadoFiltro === 'todas' ? ['sin_facturar', 'facturado'] : [estadoFiltro])
     .order('created_at', { ascending: false })
 
-  if (fechaDesde) query = query.gte('created_at', rangoTimestampsAR(fechaDesde, fechaDesde).desde)
+  const desde = fechaDesde || (fechaHasta ? '' : hoyAR(-(DIAS_POR_DEFECTO - 1)))
+  if (desde) query = query.gte('created_at', rangoTimestampsAR(desde, desde).desde)
   if (fechaHasta) query = query.lte('created_at', rangoTimestampsAR(fechaHasta, fechaHasta).hasta)
   if (formaPagoFiltro !== 'todas') query = query.eq('forma_pago', formaPagoFiltro)
 
   const { data, error } = await query
   if (error) throw error
-  return (data ?? []) as unknown as VentaConFactura[]
+  return (data ?? []) as unknown as VentaFila[]
 }
 
 // Emite y envía Factura C de ventas ya cobradas en Virikyna Local — esta app no cobra
@@ -83,6 +92,7 @@ export function FacturacionTab() {
   }, [busqueda])
 
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
+  const { expandidas, toggle: toggleExpandida } = useVentasExpandidas()
   const [emitiendo, setEmitiendo] = useState(false)
   const [resultadoEmision, setResultadoEmision] = useState<string | null>(null)
 
@@ -148,12 +158,8 @@ export function FacturacionTab() {
     queryClient.invalidateQueries({ queryKey: ['facturacion'] })
   }
 
-  async function verDetalle(venta: VentaConFactura) {
-    const { data: itemsData } = await supabase
-      .from('venta_items')
-      .select(SELECT_ITEMS_COMPROBANTE)
-      .eq('venta_id', venta.id)
-    const items = itemsComprobanteDesdeVenta((itemsData ?? []) as unknown as VentaItemComprobanteRow[])
+  async function verDetalle(venta: VentaFila) {
+    const items = itemsComprobanteDesdeVenta(venta.items)
 
     let pagos: { formaPago: FormaPagoVenta; monto: number }[] | undefined
     if (venta.forma_pago === 'combinado') {
@@ -287,6 +293,12 @@ export function FacturacionTab() {
         </div>
       </div>
 
+      {!fechaDesde && !fechaHasta && (
+        <p className="mt-2 font-sans text-label-md text-ink-soft">
+          Mostrando los últimos {DIAS_POR_DEFECTO} días. Para ver ventas anteriores, elegí las fechas.
+        </p>
+      )}
+
       <p className="sr-only" aria-live="polite">
         {loading ? '' : `${visibles.length} venta${visibles.length === 1 ? '' : 's'}`}
       </p>
@@ -348,68 +360,90 @@ export function FacturacionTab() {
                 </td>
               </tr>
             )}
-            {visibles.map((venta) => (
-              <tr key={venta.id} className="border-b border-table-divider last:border-0 even:bg-table-row-alt">
-                <td className="px-3 py-3">
-                  {venta.estado === 'sin_facturar' && (
-                    <input
-                      type="checkbox"
-                      checked={seleccion.has(venta.id)}
-                      onChange={() => toggleSeleccion(venta.id)}
-                      aria-label={`Seleccionar venta N° ${venta.numero}`}
-                      className="h-4 w-4 accent-accent"
+            {visibles.map((venta, i) => {
+              const conItems = (venta.items ?? []).length > 0
+              // Franja alternada por índice (no even:): las dos filas de la venta comparten color.
+              const franja = i % 2 === 1 ? 'bg-table-row-alt' : ''
+              const { celda, celdaDoble, rowSpan } = clasesFilaConItems(conItems)
+              return (
+                <Fragment key={venta.id}>
+                  <tr
+                    onClick={conItems ? () => toggleExpandida(venta.id) : undefined}
+                    className={`${franja} ${conItems ? 'cursor-pointer' : 'border-b border-table-divider'}`}
+                  >
+                    {/* Checkbox y "Ver" no expanden la fila. */}
+                    <td rowSpan={rowSpan} className={`cursor-default ${celdaDoble}`} onClick={(e) => e.stopPropagation()}>
+                      {venta.estado === 'sin_facturar' && (
+                        <input
+                          type="checkbox"
+                          checked={seleccion.has(venta.id)}
+                          onChange={() => toggleSeleccion(venta.id)}
+                          aria-label={`Seleccionar venta N° ${venta.numero}`}
+                          className="mt-0.5 h-4 w-4 accent-accent"
+                        />
+                      )}
+                    </td>
+                    <td className={`text-ink ${celda}`}>{venta.numero}</td>
+                    <td className={`text-ink-soft ${celda}`}>
+                      {/* Fecha y hora en una línea si entran; si la columna es angosta, la hora baja. */}
+                      <span className="whitespace-nowrap">{formatFechaCortaLocal(venta.created_at)}</span>{' '}
+                      <span className="whitespace-nowrap">{formatHora(venta.created_at)}</span>
+                    </td>
+                    <td className={`text-ink-soft [overflow-wrap:anywhere] ${celda}`}>
+                      {venta.cliente ? venta.cliente.razon_social ?? venta.cliente.nombre_fantasia : 'Consumidor final'}
+                    </td>
+                    <td className={`text-ink-soft ${celda}`}>
+                      {tieneNota(venta.nota) ? (
+                        <p className="line-clamp-1 [overflow-wrap:anywhere]" title={venta.nota}>
+                          {segmentosResaltados(venta.nota, q).map((s, i) =>
+                            s.coincide ? (
+                              <mark key={i} className="rounded-sm bg-amarillo text-ink">
+                                {s.texto}
+                              </mark>
+                            ) : (
+                              <span key={i}>{s.texto}</span>
+                            ),
+                          )}
+                        </p>
+                      ) : (
+                        <>
+                          <span aria-hidden="true">—</span>
+                          <span className="sr-only">Sin nota</span>
+                        </>
+                      )}
+                    </td>
+                    <td className={`text-ink-soft [overflow-wrap:anywhere] ${celda}`}>{FORMA_PAGO_LABEL[venta.forma_pago]}</td>
+                    <td className={`whitespace-nowrap font-semibold text-ink ${celda}`}>{formatCurrency(venta.total)}</td>
+                    <td rowSpan={rowSpan} className={celdaDoble}>
+                      <EstadoBadge variant={venta.estado === 'facturado' ? 'green' : 'amber'}>
+                        {ESTADO_LABEL[venta.estado === 'facturado' ? 'facturado' : 'sin_facturar']}
+                      </EstadoBadge>
+                    </td>
+                    <td rowSpan={rowSpan} className={`cursor-default text-right ${celdaDoble}`} onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => verDetalle(venta)}
+                        aria-label={`${venta.estado === 'facturado' ? 'Ver factura' : 'Ver comprobante'} de la venta N° ${venta.numero}`}
+                        title={venta.estado === 'facturado' ? 'Ver factura' : 'Ver comprobante'}
+                        className="inline-flex h-[26px] w-[26px] items-center justify-center rounded bg-table-divider text-accent-dark hover:bg-accent-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      >
+                        <IconVerDetalle className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                  {conItems && (
+                    <FilaItemsVenta
+                      items={venta.items}
+                      numero={venta.numero}
+                      expandida={expandidas.has(venta.id)}
+                      onToggle={() => toggleExpandida(venta.id)}
+                      colSpan={6}
+                      className={franja}
                     />
                   )}
-                </td>
-                <td className="px-3 py-3 text-ink">{venta.numero}</td>
-                <td className="px-3 py-3 text-ink-soft">
-                  {/* Fecha y hora en una línea si entran; si la columna es angosta, la hora baja. */}
-                  <span className="whitespace-nowrap">{formatFechaCortaLocal(venta.created_at)}</span>{' '}
-                  <span className="whitespace-nowrap">{formatHora(venta.created_at)}</span>
-                </td>
-                <td className="px-3 py-3 text-ink-soft [overflow-wrap:anywhere]">
-                  {venta.cliente ? venta.cliente.razon_social ?? venta.cliente.nombre_fantasia : 'Consumidor final'}
-                </td>
-                <td className="px-3 py-3 text-ink-soft">
-                  {tieneNota(venta.nota) ? (
-                    <p className="line-clamp-1 [overflow-wrap:anywhere]" title={venta.nota}>
-                      {segmentosResaltados(venta.nota, q).map((s, i) =>
-                        s.coincide ? (
-                          <mark key={i} className="rounded-sm bg-amarillo text-ink">
-                            {s.texto}
-                          </mark>
-                        ) : (
-                          <span key={i}>{s.texto}</span>
-                        ),
-                      )}
-                    </p>
-                  ) : (
-                    <>
-                      <span aria-hidden="true">—</span>
-                      <span className="sr-only">Sin nota</span>
-                    </>
-                  )}
-                </td>
-                <td className="px-3 py-3 text-ink-soft [overflow-wrap:anywhere]">{FORMA_PAGO_LABEL[venta.forma_pago]}</td>
-                <td className="whitespace-nowrap px-3 py-3 font-semibold text-ink">{formatCurrency(venta.total)}</td>
-                <td className="px-3 py-3">
-                  <EstadoBadge variant={venta.estado === 'facturado' ? 'green' : 'amber'}>
-                    {ESTADO_LABEL[venta.estado === 'facturado' ? 'facturado' : 'sin_facturar']}
-                  </EstadoBadge>
-                </td>
-                <td className="px-3 py-3 text-right">
-                  <button
-                    type="button"
-                    onClick={() => verDetalle(venta)}
-                    aria-label={`${venta.estado === 'facturado' ? 'Ver factura' : 'Ver comprobante'} de la venta N° ${venta.numero}`}
-                    title={venta.estado === 'facturado' ? 'Ver factura' : 'Ver comprobante'}
-                    className="inline-flex h-[26px] w-[26px] items-center justify-center rounded bg-table-divider text-accent-dark hover:bg-accent-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                  >
-                    <IconVerDetalle className="h-4 w-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
+                </Fragment>
+              )
+            })}
           </tbody>
         </table>
       </div>
