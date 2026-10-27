@@ -1,5 +1,29 @@
 # Novedades de Virikyna Local
 
+## 0.10.0 — octubre 2026
+
+> Conviene actualizar hoy: en la 0.9.0, un pago a proveedor hecho desde Virikyna Gestión con varios medios (por ejemplo transferencia + cheques) se ve con la forma de pago rota.
+
+### Facturación
+- **Se confirma antes de emitir la Factura C.** Antes de pedirla a ARCA se muestra el cliente, el documento que se informa, el ticket, el total y el punto de venta. "Volver" (o Esc) no emite nada. Con varias ventas tildadas, muestra la lista de tickets y el total general.
+- **El DNI no se informa.** Si el cliente tiene cargado un DNI (o un CUIT incompleto), el aviso lo dice: la factura sale como consumidor final. Solo un CUIT de 11 dígitos va en la factura.
+- **Se emite solo lo que se ve.** Una venta tildada que quedó oculta por el buscador ya no se factura.
+- Un doble clic en confirmar no pide dos facturas.
+
+### Inventario
+- **Filtros nuevos.** Arriba del listado: buscador (con la "x" para borrar), **Activos / Inactivos / Todos**, **Marca** y **Proveedor** (con buscador adentro), y chips con la cantidad de cada caso: **Sin stock**, **Negativo**, **Stock bajo** y **Sin mínimo**. "Limpiar filtros" vuelve todo a cero. Los filtros quedan guardados: al volver a Inventario siguen igual.
+- **Stock con color.** Rojo oscuro si está negativo, rojo si no hay, ámbar si está en el mínimo o debajo; debajo se ve el mínimo ("min 5" o "sin min"). Los productos inactivos se ven más claros y con la etiqueta INACTIVO.
+- **Ordenar** por nombre, precio o stock tocando el encabezado de la columna.
+- **Stock mínimo, más claro.** El campo ahora se llama "Stock mínimo (alerta)" y explica para qué sirve. Si al dar de alta un producto se carga un mínimo, avisa que no es la cantidad que entra (el stock se suma con la factura o con un ajuste).
+- **IVA como estado.** La pantalla de IVA abre con los productos exentos ya tildados: se tilda o destilda y se ve qué cambia. Filtro "Ver solo los exentos" y etiqueta "sin IVA" en las listas. (Solo administradoras.)
+- El error "Tildá al menos un producto" ya no queda a la vista cuando ya hay productos tildados.
+
+### Dashboard
+- **La alerta de stock mira solo los productos con mínimo cargado.** La card muestra **Sin stock (N) · Stock bajo (N)**; tocando cada uno se abre Inventario con ese filtro.
+
+### Proveedores
+- **Pagos con varios medios.** Un pago registrado en Virikyna Gestión con varios medios se ve como "Mixto (N medios)" en la cuenta corriente y en el detalle de la factura; al tocarlo se despliega cada medio con su monto (y en los cheques, el banco y cuándo se cobran). Desde Local los pagos se siguen registrando con un solo medio.
+
 ## 0.9.0 — octubre 2026
 
 > La versión 0.8.0 sigue funcionando: se pueden seguir creando y archivando notas, pero no se ven las respuestas. Conviene actualizar.
