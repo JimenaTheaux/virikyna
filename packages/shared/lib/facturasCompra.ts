@@ -11,12 +11,14 @@ import type {
   CategoriaEgreso,
   FacturaCompraItem,
   FacturaCompraSaldo,
+  FormaPagoCabecera,
   FormaPagoCompra,
   FormaPagoEgreso,
   LetraComprobanteCompra,
   OrigenEgreso,
   PagoProveedor,
   PagoProveedorAplicacion,
+  PagoProveedorMedio,
   Producto,
   ProveedorSaldo,
   RegistrarPagoProveedorV2Resultado,
@@ -28,6 +30,7 @@ import type { ProductoPrecioActual } from './precios'
 import { aAlicuotaIvaCompra, alicuotaDefault, itemsValidosFacturaCompra, type AlicuotaIvaCompra } from './totalesCompra'
 import { fechaHoyISO, formatCurrency, formatFechaCorta } from './format'
 import { nombresPorId } from './perfiles'
+import { payloadMedios, type MedioPagoForm } from './mediosPago'
 
 // Alícuota de IVA, totales y validez de ítems (docs/45): viven en lib/totalesCompra.ts (sin imports,
 // para los tests) y se exportan desde acá como siempre.
@@ -78,6 +81,41 @@ export const FORMA_PAGO_EGRESO_LABEL: Record<FormaPagoEgreso, string> = {
 }
 
 export const FORMAS_PAGO_EGRESO = Object.keys(FORMA_PAGO_EGRESO_LABEL) as FormaPagoEgreso[]
+
+// Forma de pago de la cabecera de un pago a proveedor: además de los medios, 'mixto' (docs/65).
+// No es una opción para elegir: sale sola cuando el pago tiene más de un medio.
+export const FORMA_PAGO_CABECERA_LABEL: Record<FormaPagoCabecera, string> = {
+  ...FORMA_PAGO_EGRESO_LABEL,
+  mixto: 'Mixto',
+}
+
+// Medio de un pago, lo que muestran los listados (cuenta corriente, detalle de factura, Historial).
+export type MedioDePago = Pick<PagoProveedorMedio, 'id' | 'medio' | 'monto' | 'numero' | 'banco' | 'fecha_pago' | 'orden'>
+
+// Embed de los medios en un select de pagos_proveedor (requiere docs/65).
+export const SELECT_MEDIOS_PAGO = 'medios:pagos_proveedor_medios!pagos_proveedor_medios_pago_proveedor_id_fkey(id, medio, monto, numero, banco, fecha_pago, orden)'
+
+export function ordenarMedios<T extends { orden: number }>(medios: T[] | null | undefined): T[] {
+  return [...(medios ?? [])].sort((a, b) => a.orden - b.orden)
+}
+
+// "Cheque N° 123", "Transferencia", "Mixto (3 medios)".
+export function etiquetaFormaPago(pago: {
+  forma_pago: FormaPagoCabecera
+  cheque_numero: string | null
+  medios?: { medio: FormaPagoEgreso }[] | null
+}): string {
+  if (pago.forma_pago === 'mixto') {
+    const n = pago.medios?.length ?? 0
+    return n > 0 ? `Mixto (${n} medios)` : 'Mixto'
+  }
+  return `${FORMA_PAGO_CABECERA_LABEL[pago.forma_pago]}${pago.cheque_numero ? ` N° ${pago.cheque_numero}` : ''}`
+}
+
+// "Cheque N° 123 · Nación · vence 26/11" para un renglón del detalle de medios.
+export function etiquetaMedio(m: Pick<MedioDePago, 'medio' | 'numero' | 'banco'>): string {
+  return [FORMA_PAGO_EGRESO_LABEL[m.medio] + (m.numero ? ` N° ${m.numero}` : ''), m.banco].filter(Boolean).join(' · ')
+}
 
 export function esCheque(formaPago: FormaPagoEgreso): boolean {
   return formaPago === 'cheque' || formaPago === 'echeq'
@@ -893,6 +931,7 @@ export type PagoProveedorConDetalle = PagoProveedor & {
   aplicaciones: AplicacionDePago[] // todas las de la operación (plata y NC), vigentes o revertidas
   revertido: boolean // existe una fila de reversión que apunta a este pago
   origen: OrigenEgreso | null // de qué caja salió (su egreso); null = solo crédito de NC, sin egreso
+  medios: MedioDePago[] // docs/65, en orden; vacío = solo crédito de NC
 }
 
 export function usePagosProveedor(supabase: SupabaseClient, proveedorId: string) {
@@ -902,7 +941,7 @@ export function usePagosProveedor(supabase: SupabaseClient, proveedorId: string)
       const { data, error } = await supabase
         .from('pagos_proveedor')
         .select(
-          '*, aplicaciones:pagos_proveedor_aplicaciones!pagos_proveedor_aplicaciones_operacion_id_fkey(id, factura_compra_id, monto, pago_proveedor_id, nota_credito_id, revertida_at), egresos(origen)',
+          `*, aplicaciones:pagos_proveedor_aplicaciones!pagos_proveedor_aplicaciones_operacion_id_fkey(id, factura_compra_id, monto, pago_proveedor_id, nota_credito_id, revertida_at), egresos!egresos_pago_proveedor_id_fkey(origen), ${SELECT_MEDIOS_PAGO}`,
         )
         .eq('proveedor_id', proveedorId)
         .order('fecha', { ascending: false })
@@ -912,6 +951,7 @@ export function usePagosProveedor(supabase: SupabaseClient, proveedorId: string)
       const pagos = (data ?? []) as (PagoProveedor & {
         aplicaciones: AplicacionDePago[] | null
         egresos: { origen: OrigenEgreso }[] | null
+        medios: MedioDePago[] | null
       })[]
       const revertidos = new Set(pagos.map((p) => p.revierte_pago_proveedor_id).filter(Boolean))
       const nombres = await nombresPorId(
@@ -922,6 +962,7 @@ export function usePagosProveedor(supabase: SupabaseClient, proveedorId: string)
         ...p,
         origen: egresos?.[0]?.origen ?? null,
         aplicaciones: p.aplicaciones ?? [],
+        medios: ordenarMedios(p.medios),
         usuario_nombre: nombres.get(p.usuario_id) ?? null,
         revertido: revertidos.has(p.id),
       }))
@@ -940,6 +981,49 @@ export function useRegistrarPagoProveedorV2(supabase: SupabaseClient) {
       return data as RegistrarPagoProveedorV2Resultado
     },
     onSuccess: (_data, input) => invalidarCuentaProveedor(queryClient, input.proveedorId),
+  })
+}
+
+// Pago con varios medios (docs/65) — solo Gestión. Total = suma de los medios; el RPC lo vuelve a
+// verificar contra `monto`. Sin medios y con NC = aplicar solo crédito.
+export type RegistrarPagoProveedorV3Input = {
+  proveedorId: string
+  monto: number
+  medios: MedioPagoForm[]
+  facturaIds?: string[]
+  notaCreditoIds?: string[]
+  origen: OrigenEgreso
+  fecha?: string | null
+  nota?: string | null
+}
+
+// Único punto de llamada a `registrar_pago_proveedor_v3`.
+export function registrarPagoProveedorV3(supabase: SupabaseClient, input: RegistrarPagoProveedorV3Input) {
+  return supabase.rpc('registrar_pago_proveedor_v3', {
+    p_proveedor_id: input.proveedorId,
+    p_medios: payloadMedios(input.medios),
+    p_factura_ids: input.facturaIds?.length ? input.facturaIds : null,
+    p_nota_credito_ids: input.notaCreditoIds?.length ? input.notaCreditoIds : null,
+    p_origen: input.origen,
+    p_cierre_caja_id: null,
+    p_fecha: input.fecha || null,
+    p_nota: input.nota?.trim() || null,
+    p_monto: input.monto,
+  })
+}
+
+// Igual que useRegistrarPagoProveedorV2: tira ErrorRegistrarPago y, si sale bien, invalida la cuenta
+// del proveedor y la cartera de cheques.
+export function useRegistrarPagoProveedorV3(supabase: SupabaseClient) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: RegistrarPagoProveedorV3Input) => {
+      const { data, error, status } = await registrarPagoProveedorV3(supabase, input)
+      if (error) throw new ErrorRegistrarPago(error, status)
+      return data as RegistrarPagoProveedorV2Resultado & { medios: string[] }
+    },
+    onSuccess: (_data, input) =>
+      Promise.all([invalidarCuentaProveedor(queryClient, input.proveedorId), queryClient.invalidateQueries({ queryKey: ['cheques-emitidos'] })]),
   })
 }
 

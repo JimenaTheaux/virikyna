@@ -1,5 +1,15 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { formatFechaHora, friendlyError } from '@virikyna/shared'
+import {
+  etiquetaMedio,
+  formatCurrency,
+  formatFechaCorta,
+  formatFechaHora,
+  friendlyError,
+  ordenarMedios,
+  SELECT_MEDIOS_PAGO,
+  type MedioDePago,
+} from '@virikyna/shared'
+import { supabase } from '../../lib/supabaseClient'
 import { Modal } from '../../components/Modal'
 import { Field, ErrorText, inputClass } from '../../components/FormField'
 import {
@@ -72,6 +82,26 @@ export function DetalleAuditoriaModal({ auditoria, ventaEstado, eliminado = fals
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [claveIds])
+
+  // docs/65: un pago a proveedor con varios medios muestra cada uno (la auditoría guarda solo la
+  // cabecera, con forma de pago "mixto").
+  const esPagoMixto = auditoria.tabla_afectada === 'pagos_proveedor' && despues?.forma_pago === 'mixto'
+  const [medios, setMedios] = useState<MedioDePago[]>([])
+  useEffect(() => {
+    if (!esPagoMixto) return
+    let cancelado = false
+    supabase
+      .from('pagos_proveedor')
+      .select(SELECT_MEDIOS_PAGO)
+      .eq('id', auditoria.registro_id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelado) setMedios(ordenarMedios((data as { medios: MedioDePago[] | null } | null)?.medios))
+      })
+    return () => {
+      cancelado = true
+    }
+  }, [esPagoMixto, auditoria.registro_id])
 
   function celda(k: string, v: unknown): ReactNode {
     const texto = CAMPOS_FACTURA_COMPRA_REF[k]
@@ -182,6 +212,25 @@ export function DetalleAuditoriaModal({ auditoria, ventaEstado, eliminado = fals
           </div>
         )}
 
+        {esPagoMixto && medios.length > 0 && (
+          <section aria-label="Medios del pago" className="flex flex-col gap-2">
+            <p className="font-sans text-label-bold text-ink">Medios del pago ({medios.length})</p>
+            <div className="overflow-auto rounded-lg border border-line">
+              <table className="w-full text-left font-sans text-label-md">
+                <tbody>
+                  {medios.map((m) => (
+                    <tr key={m.id} className="border-b border-line last:border-0">
+                      <td className="px-3 py-2 text-ink">{etiquetaMedio(m)}</td>
+                      <td className="px-3 py-2 text-ink-soft">{m.fecha_pago ? `Se cobra ${formatFechaCorta(m.fecha_pago)}` : ''}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink">{formatCurrency(Number(m.monto))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
         {auditoria.tabla_afectada === 'ventas' && auditoria.accion === 'alta' && !revertible && (
           <p className="font-sans text-label-md text-ink-soft">
             Esta venta ya está facturada o anulada — no es reversible desde el sistema.
@@ -203,7 +252,9 @@ export function DetalleAuditoriaModal({ auditoria, ventaEstado, eliminado = fals
             <p className="font-sans text-body-md text-ink">
               {revertible.tipo === 'venta'
                 ? 'La venta se anula y el stock vuelto se repone. Esta acción queda registrada como una acción nueva, nunca borra la original.'
-                : 'Esto genera una acción nueva que compensa a la original — nunca se borra ni se pisa lo que pasó.'}
+                : esPagoMixto
+                  ? `Se revierten los ${medios.length || 'distintos'} medios del pago (egresos, movimientos de cuenta y cheques) y sus aplicaciones. Esto genera una acción nueva que compensa a la original — nunca se borra ni se pisa lo que pasó.`
+                  : 'Esto genera una acción nueva que compensa a la original — nunca se borra ni se pisa lo que pasó.'}
             </p>
 
             {revertible.tipo === 'venta' && (

@@ -10,15 +10,18 @@ import {
   esNotaCredito,
   etiquetaAlicuotaIva,
   etiquetaComprobanteCompra,
+  etiquetaFormaPago,
+  FormaPagoConDetalle,
   formatCurrency,
   formatFechaCorta,
   friendlyError,
   nombresPorId,
+  SELECT_MEDIOS_PAGO,
   tipoCompraDe,
   VincularItemFacturaModal,
+  type MedioDePago,
 } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
-import { FORMA_PAGO_EGRESO_LABEL } from '../../lib/caja'
 import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { ErrorText } from '../../components/FormField'
@@ -35,7 +38,9 @@ type AplicacionDetalle = {
   revertida_at: string | null
   created_at: string
   operacion: Pick<PagoProveedor, 'fecha'> | null
-  pago: (Pick<PagoProveedor, 'forma_pago' | 'cheque_numero'> & { egresos: { origen: OrigenEgreso }[] | null }) | null
+  pago:
+    | (Pick<PagoProveedor, 'forma_pago' | 'cheque_numero'> & { egresos: { origen: OrigenEgreso }[] | null; medios: MedioDePago[] | null })
+    | null
   nc: ComprobanteRef | null
   factura: ComprobanteRef | null
   usuario: string | null
@@ -94,7 +99,7 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
         .select(
           `id, monto, usuario_id, revertida_at, created_at,
            operacion:pagos_proveedor!pagos_proveedor_aplicaciones_operacion_id_fkey(fecha),
-           pago:pagos_proveedor!pagos_proveedor_aplicaciones_pago_proveedor_id_fkey(forma_pago, cheque_numero, egresos(origen)),
+           pago:pagos_proveedor!pagos_proveedor_aplicaciones_pago_proveedor_id_fkey(forma_pago, cheque_numero, egresos!egresos_pago_proveedor_id_fkey(origen), ${SELECT_MEDIOS_PAGO}),
            nc:facturas_compra!pagos_proveedor_aplicaciones_nota_credito_id_fkey(tipo_comprobante, letra, punto_venta, numero_comprobante),
            factura:facturas_compra!pagos_proveedor_aplicaciones_factura_compra_id_fkey(tipo_comprobante, letra, punto_venta, numero_comprobante)`,
         )
@@ -133,9 +138,7 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
     if (a.pago) {
       // docs/57: de qué caja salió la plata (el egreso del pago).
       const origen = a.pago.egresos?.[0]?.origen
-      return `${FORMA_PAGO_EGRESO_LABEL[a.pago.forma_pago]}${a.pago.cheque_numero ? ` N° ${a.pago.cheque_numero}` : ''}${
-        origen ? ` · ${CAJA_ORIGEN_LABEL[origen]}` : ''
-      }`
+      return `${etiquetaFormaPago(a.pago)}${origen ? ` · ${CAJA_ORIGEN_LABEL[origen]}` : ''}`
     }
     return '—'
   }
@@ -358,7 +361,15 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
                       {a.operacion ? formatFechaCorta(a.operacion.fecha) : '—'}
                     </td>
                     <td className={`px-4 py-2 ${a.revertida_at ? 'line-through' : a.nc || nc ? 'text-success' : 'text-ink'}`}>
-                      {origenAplicacion(a)}
+                      {/* docs/65: un pago mixto se despliega con sus medios. */}
+                      {!nc && a.pago?.forma_pago === 'mixto' ? (
+                        <>
+                          <FormaPagoConDetalle pago={a.pago} />
+                          {a.pago.egresos?.[0]?.origen && <span className="text-ink-soft"> · {CAJA_ORIGEN_LABEL[a.pago.egresos[0].origen]}</span>}
+                        </>
+                      ) : (
+                        origenAplicacion(a)
+                      )}
                       {a.revertida_at && <span className="ml-2 no-underline">(revertida)</span>}
                     </td>
                     <td className="px-4 py-2 text-ink-soft">{a.usuario ?? '—'}</td>

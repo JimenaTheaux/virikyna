@@ -8,9 +8,12 @@ import {
   FORMA_PAGO_EGRESO_LABEL,
   FORMAS_PAGO_EGRESO,
   useRegistrarPagoProveedorV2,
+  useRegistrarPagoProveedorV3,
   validarPagoProveedor,
 } from '../../lib/facturasCompra'
+import { diferenciaMedios, validarMedios } from '../../lib/mediosPago'
 import { simularRepartoPago } from '../../lib/repartoPagoProveedor'
+import { MediosPagoEditor, ResumenMedios, useMediosPago } from './MediosPagoEditor'
 import { fechaHoyISO, formatCurrency } from '../../lib/format'
 import { friendlyError, mensajeErrorGuardado } from '../../lib/supabaseErrors'
 import { Modal } from './Modal'
@@ -37,6 +40,8 @@ const montoTexto = (n: number) => (Math.round(n * 100) / 100).toFixed(2).replace
 // Pago a proveedor desde la cuenta corriente (docs/31): uno o varios comprobantes, con o sin
 // notas de crédito. La vista previa del reparto sale de simularRepartoPago (espejo del RPC
 // registrar_pago_proveedor_v2); la escritura es una sola llamada al RPC, que vuelve a validar todo.
+// Desde Gestión (origen 'general') el pago puede tener varios medios (docs/65, v3); desde Local
+// sigue siendo un solo medio (v2) — los pagos con cheques se registran en Gestión.
 export function PagarProveedorModal({
   supabase,
   proveedorId,
@@ -73,9 +78,16 @@ export function PagarProveedorModal({
   const formId = useId()
   const avisoId = useId()
 
-  const mutation = useRegistrarPagoProveedorV2(supabase)
+  const variosMedios = origen === 'general'
+  const mutationV2 = useRegistrarPagoProveedorV2(supabase)
+  const mutationV3 = useRegistrarPagoProveedorV3(supabase)
+  const guardando = mutationV2.isPending || mutationV3.isPending
+  const { medios, cambiar: cambiarMedios } = useMediosPago(monto)
   const montoNum = monto.trim() === '' ? NaN : Number(monto)
   const soloCredito = hayNotas && montoNum === 0
+  // Con varios medios no se guarda hasta que sumen el total del pago.
+  const mediosNoCierran =
+    variosMedios && !soloCredito && Number.isFinite(montoNum) && diferenciaMedios(montoNum, medios).estado !== 'cierra'
 
   const reparto = useMemo(
     () =>
@@ -114,14 +126,22 @@ export function PagarProveedorModal({
     e.preventDefault()
     setError(null)
 
-    const invalido = validarPagoProveedor({
-      monto: montoNum,
-      formaPago,
-      permiteMontoCero: hayNotas,
-      chequeNumero,
-      chequeFechaSalida,
-      chequeFechaVencimiento,
-    })
+    const invalido = variosMedios
+      ? !Number.isFinite(montoNum) || montoNum < 0
+        ? 'Ingresá un monto válido.'
+        : montoNum === 0 && !hayNotas
+          ? 'Ingresá un monto mayor a cero.'
+          : soloCredito
+            ? null
+            : validarMedios(medios, montoNum, { fechaPagoProveedor: fecha })
+      : validarPagoProveedor({
+          monto: montoNum,
+          formaPago,
+          permiteMontoCero: hayNotas,
+          chequeNumero,
+          chequeFechaSalida,
+          chequeFechaVencimiento,
+        })
     if (invalido) {
       setError(invalido)
       return
@@ -136,19 +156,32 @@ export function PagarProveedorModal({
     }
 
     try {
-      await mutation.mutateAsync({
-        proveedorId,
-        monto: montoNum,
-        formaPago,
-        facturaIds,
-        notaCreditoIds,
-        origen,
-        fecha,
-        nota,
-        chequeNumero,
-        chequeFechaSalida,
-        chequeFechaVencimiento,
-      })
+      if (variosMedios) {
+        await mutationV3.mutateAsync({
+          proveedorId,
+          monto: montoNum,
+          medios: soloCredito ? [] : medios,
+          facturaIds,
+          notaCreditoIds,
+          origen,
+          fecha,
+          nota,
+        })
+      } else {
+        await mutationV2.mutateAsync({
+          proveedorId,
+          monto: montoNum,
+          formaPago,
+          facturaIds,
+          notaCreditoIds,
+          origen,
+          fecha,
+          nota,
+          chequeNumero,
+          chequeFechaSalida,
+          chequeFechaVencimiento,
+        })
+      }
       onPagado()
     } catch (err) {
       setError(
@@ -163,10 +196,11 @@ export function PagarProveedorModal({
     <Modal
       title="Registrar pago a proveedor"
       onClose={pedirCierre}
-      widthClassName="max-w-[640px]"
+      widthClassName={variosMedios ? 'max-w-[720px]' : 'max-w-[640px]'}
       cambiosSinGuardar={dirty}
       footer={
-        <div className="flex justify-end gap-3">
+        <div className="flex items-center justify-end gap-3">
+          {variosMedios && !soloCredito && <ResumenMedios medios={medios} total={montoNum} className="mr-auto" />}
           <button
             type="button"
             onClick={pedirCierre}
@@ -177,10 +211,10 @@ export function PagarProveedorModal({
           <button
             type="submit"
             form={formId}
-            disabled={mutation.isPending || Boolean(reparto.error)}
+            disabled={guardando || Boolean(reparto.error) || mediosNoCierran}
             className="rounded bg-accent px-4 py-3 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-60"
           >
-            {mutation.isPending ? 'Guardando...' : soloCredito ? 'Aplicar crédito' : 'Registrar pago'}
+            {guardando ? 'Guardando...' : soloCredito ? 'Aplicar crédito' : 'Registrar pago'}
           </button>
         </div>
       }
@@ -224,7 +258,7 @@ export function PagarProveedorModal({
 
         <div className="grid grid-cols-2 gap-stack-sm">
           <Field
-            label="Monto"
+            label={variosMedios ? 'Total del pago' : 'Monto'}
             hint={conSeleccion ? `A pagar: ${formatCurrency(aPagar)} — si pagás más, lo que sobre queda a cuenta` : undefined}
           >
             <input
@@ -247,6 +281,8 @@ export function PagarProveedorModal({
           <p className="rounded bg-badge-green-bg px-4 py-3 font-sans text-body-md text-badge-green-text">
             Se aplica solo crédito de notas de crédito — no sale plata ni se registra un egreso.
           </p>
+        ) : variosMedios ? (
+          <MediosPagoEditor medios={medios} onChange={cambiarMedios} total={montoNum} fechaPago={fecha} conResumen={false} />
         ) : (
           <>
             <Field label="Forma de pago">

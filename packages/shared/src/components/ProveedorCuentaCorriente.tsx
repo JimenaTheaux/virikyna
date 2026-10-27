@@ -8,7 +8,7 @@ import {
   CAJA_ORIGEN_LABEL,
   etiquetaComprobanteCompra,
   etiquetaCortaAlicuotaIva,
-  FORMA_PAGO_EGRESO_LABEL,
+  FORMA_PAGO_CABECERA_LABEL,
   invalidarCuentaProveedor,
   TIPO_COMPRA_LABEL,
   TIPO_COMPROBANTE_COMPRA_LABEL,
@@ -28,6 +28,7 @@ import { Field, inputClass, selectClass } from './FormField'
 import { ChipTipoCompra, EstadoBadge } from './EstadoBadge'
 import { RowActionsMenu, type RowActionsMenuItem } from './RowActionsMenu'
 import { PagarProveedorModal } from './PagarProveedorModal'
+import { FormaPagoConDetalle } from './FormaPagoConDetalle'
 import { AplicarACuentaModal } from './AplicarACuentaModal'
 import { EditarFacturaCompraModal } from './EditarFacturaCompraModal'
 import { AnularFacturaCompraModal } from './AnularFacturaCompraModal'
@@ -376,7 +377,7 @@ export function ProveedorCuentaCorriente({
             <>
               {formatCurrency(Number(ultimoPago.monto))}
               <span className="block font-sans text-label-md text-ink-soft">
-                {formatFechaCorta(ultimoPago.fecha)} · {FORMA_PAGO_EGRESO_LABEL[ultimoPago.forma_pago]}
+                {formatFechaCorta(ultimoPago.fecha)} · {FORMA_PAGO_CABECERA_LABEL[ultimoPago.forma_pago]}
               </span>
             </>
           ) : (
@@ -834,8 +835,16 @@ function TablaPagos({
                 {monto < 0 ? negativo(monto) : formatCurrency(monto)}
               </td>
               <td className="px-3 py-3 text-ink [overflow-wrap:anywhere]">
-                {monto === 0 ? 'Solo crédito NC' : FORMA_PAGO_EGRESO_LABEL[p.forma_pago]}
-                {p.cheque_numero && <span className="block text-ink-soft">N° {p.cheque_numero}</span>}
+                {monto === 0 ? (
+                  'Solo crédito NC'
+                ) : p.forma_pago === 'mixto' ? (
+                  <FormaPagoConDetalle pago={p} />
+                ) : (
+                  <>
+                    {FORMA_PAGO_CABECERA_LABEL[p.forma_pago]}
+                    {p.cheque_numero && <span className="block text-ink-soft">N° {p.cheque_numero}</span>}
+                  </>
+                )}
               </td>
               <td className="px-3 py-3 text-ink-soft [overflow-wrap:anywhere]">
                 {p.usuario_nombre ?? '—'}

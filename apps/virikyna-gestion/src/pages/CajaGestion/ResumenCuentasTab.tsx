@@ -26,7 +26,9 @@ export function ResumenCuentasTab() {
       supabase.from('cuentas_saldo').select('*').order('nombre'),
       supabase.from('proveedores_saldo').select('saldo_actual').gt('saldo_actual', 0),
       supabase.from('clientes_saldo').select('saldo_actual').gt('saldo_actual', 0),
-      supabase.from('pagos_proveedor').select('monto').in('forma_pago', ['cheque', 'echeq']),
+      // docs/65: todos los cheques y eCheqs, también los de pagos con varios medios. Las reversiones
+      // restan, así que la suma es lo que sigue en cartera.
+      supabase.from('cartera_cheques_emitidos').select('monto'),
     ])
 
     if (cuentasRes.error || proveedoresRes.error || clientesRes.error || chequesRes.error) {

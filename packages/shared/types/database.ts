@@ -25,6 +25,9 @@ export type LetraComprobanteCompra = 'A' | 'B' | 'R' | 'X'
 export type TipoCompra = 'articulos' | 'servicios'
 export type FormaPagoCompra = 'contado' | 'cuenta_corriente'
 export type FormaPagoEgreso = 'efectivo' | 'transferencia' | 'cheque' | 'echeq'
+// Cabecera de un pago a proveedor (docs/65): un medio, o 'mixto' si el pago tiene más de uno.
+// Egresos y medios nunca son 'mixto'.
+export type FormaPagoCabecera = FormaPagoEgreso | 'mixto'
 export type TipoCierre = 'x' | 'z'
 export type EstadoCierreZ = 'pendiente_validacion' | 'validado'
 export type OrigenEgreso = 'turno' | 'general'
@@ -287,16 +290,45 @@ export type PagoProveedor = {
   // cuando todo el pago cancela una única factura — no usar para calcular saldos.
   factura_compra_id: string | null
   monto: number // 0 = operación que solo aplicó notas de crédito (sin egreso)
-  forma_pago: FormaPagoEgreso
+  forma_pago: FormaPagoCabecera // 'mixto' = varios medios, el detalle está en pagos_proveedor_medios (docs/65)
   usuario_id: string
   revierte_pago_proveedor_id: string | null // Fase 8: si esta fila revierte a otra, apunta a la original
-  // Solo se completan cuando forma_pago es 'cheque' o 'echeq' (docs/15_cheques_proveedor.sql).
+  // Solo se completan cuando el pago tiene un único medio y es 'cheque' o 'echeq' (docs/15, docs/65).
   cheque_numero: string | null
   cheque_fecha_salida: string | null // DATE
   cheque_fecha_vencimiento: string | null // DATE
   fecha: string // DATE — docs/31, fecha del pago (default hoy AR)
   nota: string | null // docs/31
   created_at: string
+}
+
+// docs/65 — un medio de un pago a proveedor. Cada pago con monto tiene al menos uno; la reversión
+// de un pago espeja sus medios con monto negativo (revierte_medio_id).
+export type PagoProveedorMedio = {
+  id: string
+  pago_proveedor_id: string
+  medio: FormaPagoEgreso
+  monto: number
+  numero: string | null // cheque / eCheq
+  banco: string | null
+  fecha_salida: string | null // DATE
+  fecha_pago: string | null // DATE — cuándo se cobra el cheque
+  propio: boolean
+  orden: number
+  revierte_medio_id: string | null
+  created_at: string
+}
+
+// Vista cartera_cheques_emitidos (docs/65): un renglón por cheque/eCheq, con proveedor.
+export type ChequeEmitido = Pick<
+  PagoProveedorMedio,
+  'id' | 'pago_proveedor_id' | 'medio' | 'monto' | 'numero' | 'banco' | 'fecha_salida' | 'fecha_pago' | 'propio'
+> & {
+  proveedor_id: string
+  proveedor: string
+  fecha_pago_proveedor: string
+  es_reversion: boolean
+  revertido: boolean
 }
 
 // docs/31 — una fila = "este monto cancela este comprobante, y sale de un pago o de una NC".
