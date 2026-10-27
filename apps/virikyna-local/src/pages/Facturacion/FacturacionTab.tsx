@@ -3,7 +3,7 @@ import { Eye, ArrowLeftRight } from 'lucide-react'
 import type { EstadoComprobante, FormaPagoVenta } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { friendlyError, emitirFacturaCReal, textoParaBuscar } from '@virikyna/shared'
-import { formatCurrency, formatFechaCortaLocal, formatHora, rangoTimestampsAR } from '@virikyna/shared'
+import { formatCurrency, formatFechaCortaLocal, formatHora, hoyAR, rangoTimestampsAR } from '@virikyna/shared'
 import { EstadoBadge, RowActionsMenu } from '@virikyna/shared'
 import { FORMA_PAGO_LABEL, itemsComprobanteDesdeVenta, type DatosComprobante } from '@virikyna/shared'
 import {
@@ -19,6 +19,14 @@ import type { VentaConFactura } from './types'
 
 // Ítems embebidos en la misma consulta: renglón bajo cada venta y "Ver comprobante" sin otra consulta.
 type VentaFila = VentaConFactura & ConItemsVenta
+
+// Sin ninguna fecha elegida se traen los últimos 30 días (hora AR), no todo el historial: con los
+// ítems embebidos la respuesta crece y la API corta en 1000 filas de ventas. Igual que Gestión.
+const DIAS_POR_DEFECTO = 30
+
+function numeroDeTicket(busqueda: string): number | null {
+  return /^\d+$/.test(busqueda.trim()) ? Number(busqueda.trim()) : null
+}
 
 const ESTADO_LABEL: Record<'sin_facturar' | 'facturado', string> = {
   sin_facturar: 'Sin facturar',
@@ -58,10 +66,13 @@ export function FacturacionTab() {
       .in('estado', estadoFiltro === 'todas' ? ['sin_facturar', 'facturado'] : [estadoFiltro])
       .order('created_at', { ascending: false })
 
-    if (fechaDesde) query = query.gte('created_at', rangoTimestampsAR(fechaDesde, fechaDesde).desde)
+    const numeroBuscado = numeroDeTicket(busqueda)
+    // Sin fechas: últimos 30 días, salvo al buscar un N° de ticket — la venta original de una
+    // devolución puede ser vieja, y por número trae una sola fila.
+    const desde = fechaDesde || (fechaHasta || numeroBuscado !== null ? '' : hoyAR(-(DIAS_POR_DEFECTO - 1)))
+    if (desde) query = query.gte('created_at', rangoTimestampsAR(desde, desde).desde)
     if (fechaHasta) query = query.lte('created_at', rangoTimestampsAR(fechaHasta, fechaHasta).hasta)
     if (formaPagoFiltro !== 'todas') query = query.eq('forma_pago', formaPagoFiltro)
-    const numeroBuscado = /^\d+$/.test(busqueda.trim()) ? Number(busqueda.trim()) : null
     if (numeroBuscado !== null) query = query.eq('numero', numeroBuscado)
 
     const { data, error: dbError } = await query
@@ -86,7 +97,7 @@ export function FacturacionTab() {
     })
   }
 
-  const textoCliente = /^\d+$/.test(busqueda.trim()) ? '' : textoParaBuscar(busqueda)
+  const textoCliente = numeroDeTicket(busqueda) !== null ? '' : textoParaBuscar(busqueda)
   const ventasVisibles = textoCliente
     ? ventas.filter((v) =>
         textoParaBuscar(`${v.cliente?.razon_social ?? ''} ${v.cliente?.nombre_fantasia ?? ''}`).includes(textoCliente),
@@ -239,6 +250,12 @@ export function FacturacionTab() {
       {seleccion.size > 0 && (
         <p className="mt-2 text-right font-sans text-body-md text-ink-soft">
           {seleccion.size} seleccionado{seleccion.size === 1 ? '' : 's'} · {formatCurrency(totalSeleccionado)}
+        </p>
+      )}
+
+      {!fechaDesde && !fechaHasta && numeroDeTicket(busqueda) === null && (
+        <p className="mt-2 font-sans text-label-md text-ink-soft">
+          Mostrando los últimos {DIAS_POR_DEFECTO} días. Para ver ventas anteriores, elegí las fechas o buscá el N° de ticket.
         </p>
       )}
 
