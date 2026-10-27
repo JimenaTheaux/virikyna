@@ -1,6 +1,8 @@
 -- 64 — Alerta de stock solo para productos con mínimo definido
 --
--- ⏳ PENDIENTE de aplicar en producción (esperando OK). Antes: backup con etiqueta (pre-docs64).
+-- ✅ APLICADO en producción el 2026-10-27 (PARTE A), con backup previo virikyna_2026-10-27_pre-docs64-aplicar.
+-- Antes se re-verificó que productos_stock_bajo seguía como en docs/42. PARTE B ok (invoker, sin
+-- anon, filtra mínimo); alerta de 94 a 33 productos. PARTE C 7/7 antes de aplicar.
 -- Correr desde la raíz del repo con
 -- `supabase db query --linked -f docs/64_alerta_stock_con_minimo.sql` (o en el SQL Editor del
 -- proyecto ccpinvtleqlsukcqnili). La PARTE A se puede re-correr (CREATE OR REPLACE); la PARTE B solo

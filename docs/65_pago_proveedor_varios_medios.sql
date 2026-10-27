@@ -1,6 +1,9 @@
 -- 65 — Pago a proveedor con varios medios (efectivo, transferencia, eCheq, cheque físico)
 --
--- ⏳ PENDIENTE de aplicar en producción (esperando OK). Antes: backup con etiqueta (pre-docs65).
+-- ✅ APLICADO en producción el 2026-10-27 (A0 y A, en llamadas separadas), con backup previo
+-- virikyna_2026-10-27_pre-docs65-aplicar. Antes se re-verificó (diff) que v2, el contado y
+-- revertir_movimiento seguían iguales a lo probado. PARTE B ok: mixto en el enum, RLS, vista
+-- invoker, v3 sin anon, 6 pagos con 1 medio cada uno, ninguno con suma distinta.
 -- Probada el 2026-10-27 sobre una restauración local del backup virikyna_2026-10-27_pre-docs65-test
 -- (restaurar-prueba.ps1, docs/44): docs/64 + esta completa, PARTE B ok y PARTE C 12/12, dos veces
 -- seguidas (re-corrible). No se puede probar en BEGIN … ROLLBACK contra producción: 'mixto' (A0)
