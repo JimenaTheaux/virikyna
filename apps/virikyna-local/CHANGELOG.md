@@ -1,5 +1,19 @@
 # Novedades de Virikyna Local
 
+## 0.9.0 — octubre 2026
+
+> La versión 0.8.0 sigue funcionando: se pueden seguir creando y archivando notas, pero no se ven las respuestas. Conviene actualizar.
+
+### Notas
+- **Responder una nota.** Cada nota tiene **Responder**: la respuesta queda debajo, en letra chica, y también se puede responder una respuesta (se arma una conversación). Si una nota tiene muchas respuestas, aparece "Ver N respuestas" para desplegarlas.
+- **Editar.** Quien escribió una nota (o una respuesta) la puede corregir con **Editar**; queda marcada "· editada". Las notas de otra persona no se pueden editar.
+- **Desarchivar.** Las notas archivadas se ven con el botón **Ver archivadas (N)**, arriba a la derecha, y se pueden volver a activar con **Desarchivar**. Archivar o desarchivar una nota lo hace con todas sus respuestas.
+- Las notas ya no se pueden borrar: se archivan.
+
+### Facturación
+- **Se ve qué se vendió.** En **Ventas del día** y en **Facturación**, debajo de cada venta aparece en gris lo que se llevó ("2× PRODUCTO · 1× PRODUCTO"; si son muchos, "+N más"). Un clic en la venta despliega la lista completa con el importe de cada ítem.
+- **Facturación muestra los últimos 30 días.** Sin fechas elegidas, el listado trae las ventas de los últimos 30 días (lo avisa arriba de la tabla). Para ver ventas anteriores, elegir las fechas. Buscar por **N° de ticket** encuentra cualquier venta, aunque sea más vieja (para devoluciones y cambios).
+
 ## 0.8.0 — octubre 2026
 
 > La versión 0.7.1 sigue funcionando, pero ahí "Contado" no registra el pago. Conviene actualizar.
