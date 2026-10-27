@@ -103,9 +103,6 @@ export function AdminDashboard() {
 
       <div className="grid min-h-0 flex-1 grid-cols-3 gap-3">
         <div className="col-span-2 flex min-h-0 flex-col gap-3">
-          <div className="rounded-lg bg-surface p-3.5 shadow-sm">
-            <WeeklySalesChart porDia={porDia} altoBarras="h-12" />
-          </div>
           {errorProductos ? (
             <p className="rounded bg-error/10 px-4 py-2 font-sans text-body-md text-error">{errorProductos}</p>
           ) : (
@@ -119,6 +116,9 @@ export function AdminDashboard() {
           )}
         </div>
         <div className="flex min-h-0 flex-col gap-3">
+          <div className="rounded-lg bg-surface p-3.5 shadow-sm">
+            <WeeklySalesChart porDia={porDia} altoBarras="h-12" />
+          </div>
           <StockBajoCard supabase={supabase} className="min-h-0 flex-1 overflow-hidden" />
           <DefectuososCard supabase={supabase} to="/facturacion" variant="auto" />
         </div>

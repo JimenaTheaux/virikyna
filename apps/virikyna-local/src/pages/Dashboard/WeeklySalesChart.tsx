@@ -26,11 +26,12 @@ export function WeeklySalesChart({ porDia, altoBarras = 'h-32' }: Props) {
   return (
     <div className="flex h-full flex-col">
       <p className="font-sans text-label-bold uppercase text-ink-soft">Ventas de la semana</p>
-      <div className="mt-2 flex flex-1 items-end gap-3">
+      <div className="mt-2 flex flex-1 items-end gap-1.5">
         {serie.map((dia) => (
-          <div key={dia.fecha} className="flex flex-1 flex-col items-center gap-1" title={formatCurrency(dia.total)}>
-            <span className="font-sans text-label-md text-ink-soft">
-              {dia.total > 0 ? formatCurrencyCompact(dia.total) : ''}
+          <div key={dia.fecha} className="flex min-w-0 flex-1 flex-col items-center gap-1" title={formatCurrency(dia.total)}>
+            {/* Sin "$" ni espacios: la card vive en la columna angosta del dashboard. */}
+            <span className="whitespace-nowrap font-sans text-[11px] leading-none text-ink-soft">
+              {dia.total > 0 ? formatCurrencyCompact(dia.total).replace(/[$\s]/g, '') : ''}
             </span>
             <div className={`flex ${altoBarras} w-full items-end`}>
               <div

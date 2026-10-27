@@ -149,11 +149,14 @@ function DesbloquearModal({
   return (
     <Modal title={`Desbloquear venta N° ${emision.venta_numero}`} onClose={onCancel} widthClassName="max-w-[480px]" dialogo={{ onEscape: onCancel }}>
       <div className="flex flex-col gap-stack-md font-sans text-body-md text-ink">
+        <p role="alert" className="rounded border border-error bg-error/10 px-3 py-2 font-bold text-error">
+          Antes de desbloquear, verificá en ARCA que esta venta NO tenga factura emitida. Si la tiene, desbloquear
+          genera una factura duplicada.
+        </p>
         <p>
-          Desbloquear permite volver a emitir la Factura C de esta venta. Hacelo solo si en ARCA no hay ningún
-          comprobante para ella ({formatCurrency(emision.venta_total)}
-          {emision.registrado_at ? `, intento del ${formatFechaHora(emision.registrado_at)}` : ''}): si lo hay, se
-          emitiría una segunda factura real.
+          Desbloquear permite volver a emitir la Factura C de esta venta. Buscala en ARCA por importe
+          ({formatCurrency(emision.venta_total)}
+          {emision.registrado_at ? `, intento del ${formatFechaHora(emision.registrado_at)}` : ''}).
         </p>
         <label className="flex flex-col gap-1">
           <span className="text-label-md text-ink-soft">Qué revisaste (queda en el historial)</span>
