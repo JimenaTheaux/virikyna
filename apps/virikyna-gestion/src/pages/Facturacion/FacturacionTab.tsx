@@ -1,9 +1,10 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { EstadoComprobante, FormaPagoVenta } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { friendlyError, formatCurrency, emitirFacturaCReal, rangoTimestampsAR, hoyAR } from '@virikyna/shared'
+import { ConfirmarFacturaC, SELECT_CLIENTE_FACTURA } from '@virikyna/shared'
 import { formatFechaCortaLocal, formatHora, EstadoBadge } from '@virikyna/shared'
 import { FORMA_PAGO_LABEL, itemsComprobanteDesdeVenta, type DatosComprobante } from '@virikyna/shared'
 import {
@@ -40,7 +41,7 @@ async function fetchVentas(
 ): Promise<VentaFila[]> {
   let query = supabase
     .from('ventas')
-    .select(`*, factura_c:facturas_c(*), cliente:clientes(razon_social, nombre_fantasia, mail, celular), ${SELECT_ITEMS_VENTA_EMBEBIDOS}`)
+    .select(`*, factura_c:facturas_c(*), ${SELECT_CLIENTE_FACTURA}, ${SELECT_ITEMS_VENTA_EMBEBIDOS}`)
     .in('estado', estadoFiltro === 'todas' ? ['sin_facturar', 'facturado'] : [estadoFiltro])
     .order('created_at', { ascending: false })
 
@@ -94,6 +95,10 @@ export function FacturacionTab() {
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
   const { expandidas, toggle: toggleExpandida } = useVentasExpandidas()
   const [emitiendo, setEmitiendo] = useState(false)
+  // El ref corta un segundo clic que llegue antes de que `emitiendo` se vea en el render.
+  const emitiendoRef = useRef(false)
+  // Foto de lo que se confirmó: se emite exactamente esa lista, aunque la tabla cambie atrás.
+  const [aConfirmar, setAConfirmar] = useState<VentaFila[] | null>(null)
   const [resultadoEmision, setResultadoEmision] = useState<string | null>(null)
 
   const [verComprobante, setVerComprobante] = useState<DatosComprobante | null>(null)
@@ -125,12 +130,14 @@ export function FacturacionTab() {
   }
 
   // Solo las filas visibles: una venta tildada que después quedó oculta por el chip o el buscador
-  // no se factura sin que se vea.
-  const seleccionadas = visibles.filter((v) => seleccion.has(v.id))
+  // no se factura sin que se vea. Tampoco una que ya quedó facturada (desde otra pantalla).
+  const seleccionadas = visibles.filter((v) => seleccion.has(v.id) && v.estado === 'sin_facturar')
   const totalSeleccionado = seleccionadas.reduce((acc, v) => acc + v.total, 0)
 
-  async function emitirFacturas() {
-    if (seleccionadas.length === 0 || emitiendo) return
+  // Se llama solo desde la confirmación, con la lista que se confirmó.
+  async function emitirFacturas(lista: VentaFila[]) {
+    if (lista.length === 0 || emitiendoRef.current) return
+    emitiendoRef.current = true
     setEmitiendo(true)
     setResultadoEmision(null)
 
@@ -139,16 +146,19 @@ export function FacturacionTab() {
 
     // Secuencial y de a una — "1 Comprobante X = 1 Factura C", nunca se agrupan (regla
     // confirmada) — además ARCA solo acepta pedir un comprobante genuinamente por vez.
-    for (const venta of seleccionadas) {
-      const { ok: emitidaOk, mensaje } = await emitirFacturaCReal(supabase, venta)
-      if (emitidaOk) {
-        ok++
-      } else {
-        errores.push(mensaje)
+    try {
+      for (const venta of lista) {
+        const { ok: emitidaOk, mensaje } = await emitirFacturaCReal(supabase, venta)
+        if (emitidaOk) {
+          ok++
+        } else {
+          errores.push(mensaje)
+        }
       }
+    } finally {
+      emitiendoRef.current = false
+      setEmitiendo(false)
     }
-
-    setEmitiendo(false)
     setSeleccion(new Set())
     setResultadoEmision(
       errores.length === 0
@@ -284,7 +294,7 @@ export function FacturacionTab() {
           )}
           <button
             type="button"
-            onClick={emitirFacturas}
+            onClick={() => seleccionadas.length > 0 && setAConfirmar(seleccionadas)}
             disabled={seleccionadas.length === 0 || emitiendo}
             className="rounded bg-accent px-4 py-3 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-50"
           >
@@ -449,6 +459,19 @@ export function FacturacionTab() {
       </div>
 
       {verComprobante && <ComprobanteModal datos={verComprobante} onClose={() => setVerComprobante(null)} />}
+
+      {aConfirmar && (
+        <ConfirmarFacturaC
+          supabase={supabase}
+          ventas={aConfirmar}
+          onCancel={() => setAConfirmar(null)}
+          onConfirm={() => {
+            const lista = aConfirmar
+            setAConfirmar(null)
+            emitirFacturas(lista)
+          }}
+        />
+      )}
     </div>
   )
 }

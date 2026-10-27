@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, type ComponentType } from 'react'
+import { Fragment, useEffect, useRef, useState, type ComponentType } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { FileText } from 'lucide-react'
 import { friendlyError } from '../../lib/supabaseErrors'
@@ -6,6 +6,7 @@ import { formatCurrency, fechaHoyISO, formatFechaCortaLocal, formatHora, rangoTi
 import { emitirFacturaCReal } from '../../lib/arcaFacturacion'
 import type { Cliente, FacturaC, FormaPagoVenta, Venta, VentaPago } from '../../types/database'
 import { itemsComprobanteDesdeVenta, type DatosComprobante } from '../../lib/comprobante'
+import { ConfirmarFacturaC, SELECT_CLIENTE_FACTURA } from './ConfirmarFacturaC'
 import { EstadoBadge } from './EstadoBadge'
 import { RowActionsMenu, type RowActionsMenuItem } from './RowActionsMenu'
 import {
@@ -18,7 +19,7 @@ import {
 
 export type VentaConFactura = Venta & {
   factura_c: FacturaC | null
-  cliente: Pick<Cliente, 'razon_social' | 'nombre_fantasia' | 'mail' | 'celular'> | null
+  cliente: Pick<Cliente, 'razon_social' | 'nombre_fantasia' | 'mail' | 'celular' | 'cuit'> | null
 }
 
 type VentaConItems = VentaConFactura & ConItemsVenta
@@ -46,6 +47,9 @@ export function VentasDelDiaTab({
   const [error, setError] = useState<string | null>(null)
   const [resultado, setResultado] = useState<string | null>(null)
   const [emitiendoId, setEmitiendoId] = useState<string | null>(null)
+  // El ref corta un segundo clic que llegue antes de que el estado se vea en el render.
+  const emitiendoRef = useRef(false)
+  const [aConfirmar, setAConfirmar] = useState<VentaConItems | null>(null)
   const { expandidas, toggle: toggleExpandida } = useVentasExpandidas()
 
   const [verComprobante, setVerComprobante] = useState<DatosComprobante | null>(null)
@@ -58,7 +62,7 @@ export function VentasDelDiaTab({
     const { data, error: dbError } = await supabase
       .from('ventas')
       .select(
-        `*, factura_c:facturas_c(*), cliente:clientes(razon_social, nombre_fantasia, mail, celular), ${SELECT_ITEMS_VENTA_EMBEBIDOS}`,
+        `*, factura_c:facturas_c(*), ${SELECT_CLIENTE_FACTURA}, ${SELECT_ITEMS_VENTA_EMBEBIDOS}`,
       )
       .gte('created_at', rango.desde)
       .lte('created_at', rango.hasta)
@@ -121,16 +125,21 @@ export function VentasDelDiaTab({
     setVerComprobante(await armarComprobante(venta))
   }
 
+  // Se llama solo desde la confirmación (ConfirmarFacturaC).
   async function emitirFacturaC(venta: VentaConItems) {
-    if (emitiendoId) return
+    if (emitiendoRef.current) return
+    emitiendoRef.current = true
     setEmitiendoId(venta.id)
     setResultado(null)
 
-    const { mensaje } = await emitirFacturaCReal(supabase, venta)
-
-    setEmitiendoId(null)
-    setResultado(mensaje)
-    cargar()
+    try {
+      const { mensaje } = await emitirFacturaCReal(supabase, venta)
+      setResultado(mensaje)
+    } finally {
+      emitiendoRef.current = false
+      setEmitiendoId(null)
+      cargar()
+    }
   }
 
   return (
@@ -195,8 +204,9 @@ export function VentasDelDiaTab({
                 acciones.push({
                   label: emitiendoId === venta.id ? 'Emitiendo...' : 'Emitir Factura C',
                   icon: FileText,
-                  onClick: () => emitirFacturaC(venta),
-                  disabled: emitiendoId === venta.id,
+                  onClick: () => setAConfirmar(venta),
+                  // Una emisión por vez en toda la lista, no solo en esta fila.
+                  disabled: emitiendoId !== null,
                 })
               }
               const items = venta.items ?? []
@@ -244,6 +254,19 @@ export function VentasDelDiaTab({
       </div>
 
       {verComprobante && <ComprobanteModal datos={verComprobante} onClose={() => setVerComprobante(null)} />}
+
+      {aConfirmar && (
+        <ConfirmarFacturaC
+          supabase={supabase}
+          ventas={[aConfirmar]}
+          onCancel={() => setAConfirmar(null)}
+          onConfirm={() => {
+            const venta = aConfirmar
+            setAConfirmar(null)
+            emitirFacturaC(venta)
+          }}
+        />
+      )}
     </div>
   )
 }
