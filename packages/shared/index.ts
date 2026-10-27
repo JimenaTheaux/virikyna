@@ -36,6 +36,8 @@ export * from './src/components/VentasDelDiaTab'
 // Pestaña Devoluciones de Facturación (Local y Gestión); registrar una devolución es solo de Local.
 export * from './src/components/DevolucionesTab'
 export * from './src/components/DevolucionDetalleModal'
+// Notas internas con hilos (docs/61), misma pantalla en Local y Gestión con prop origen.
+export * from './src/components/notas/NotasInternas'
 // Comprobante X / Factura C (Local y Gestión): datos, PDF, JPG y modal de envío.
 export * from './lib/comprobante'
 export * from './lib/comprobantePdf'

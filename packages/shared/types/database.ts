@@ -439,8 +439,11 @@ export type NotaInterna = {
   mensaje: string
   autor_id: string // perfiles.id — quien la creó
   origen: OrigenNota
-  archivada: boolean
+  parent_id: string | null // docs/61: respuesta a otra nota (hilo anidado); null = nota principal
+  archivada: boolean // docs/61: archivar/desarchivar la principal hace lo mismo con todo el hilo
   archivada_at: string | null
+  archivada_por: string | null
+  editada_at: string | null // docs/61: solo el autor edita (RPC editar_nota)
   created_at: string
 }
 
@@ -472,8 +475,8 @@ export type CuentaSaldo = Cuenta & {
   saldo_actual: number
 }
 
-// Vista `notas_internas_con_autor` (docs/16_notas_internas.sql) — misma nota + nombre del autor,
-// para no depender de que el cliente tenga acceso directo a `perfiles` de otro usuario.
+// Vista `notas_internas_con_autor` (docs/16_notas_internas.sql, docs/61) — misma nota + nombre del
+// autor, para no depender de que el cliente tenga acceso directo a `perfiles` de otro usuario.
 export type NotaInternaConAutor = NotaInterna & {
   autor_nombre: string
 }

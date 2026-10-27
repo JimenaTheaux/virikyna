@@ -1,17 +1,20 @@
 import { useState, type FormEvent } from 'react'
-import { friendlyError } from '@virikyna/shared'
-import { supabase } from '../../lib/supabaseClient'
-import { Modal } from '../../components/Modal'
-import { ConfirmDialog } from '../../components/ConfirmDialog'
-import { Field, ErrorText, inputClass } from '../../components/FormField'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { OrigenNota } from '../../../types/database'
+import { friendlyError } from '../../../lib/supabaseErrors'
+import { Modal } from '../Modal'
+import { ConfirmDialog } from '../ConfirmDialog'
+import { Field, ErrorText, inputClass } from '../FormField'
 
 type Props = {
+  supabase: SupabaseClient
   autorId: string
+  origen: OrigenNota
   onClose: () => void
   onSaved: () => void
 }
 
-export function NuevaNotaModal({ autorId, onClose, onSaved }: Props) {
+export function NuevaNotaModal({ supabase, autorId, origen, onClose, onSaved }: Props) {
   const [mensaje, setMensaje] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -37,11 +40,11 @@ export function NuevaNotaModal({ autorId, onClose, onSaved }: Props) {
     }
 
     setSaving(true)
-    // origen fijo 'local': una nota creada desde Virikyna Local siempre es de este origen
+    // origen fijo por app: una nota creada desde Local es 'local' y desde Gestión 'gestion'
     // (docs/06_estructura_de_datos (1).md sección 15) — no hay selector, no depende del rol.
     const { error: dbError } = await supabase
       .from('notas_internas')
-      .insert({ mensaje: mensajeLimpio, autor_id: autorId, origen: 'local' })
+      .insert({ mensaje: mensajeLimpio, autor_id: autorId, origen })
     setSaving(false)
 
     if (dbError) {
