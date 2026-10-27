@@ -14,6 +14,8 @@ type Props<T extends string> = {
   // La opción elegida en teal lleno (accent-dark, texto blanco) en vez de la pestaña blanca: para
   // una elección que cambia el formulario entero (tipo de compra, docs/53) y no se puede pasar por alto.
   resaltado?: boolean
+  // En una barra de filtros (Inventario): la leyenda queda solo para el lector de pantalla.
+  ocultarLegend?: boolean
 }
 
 // Selector excluyente con aspecto de pestañas. Por debajo son radios nativos (visualmente ocultos),
@@ -27,12 +29,13 @@ export function ControlSegmentado<T extends string>({
   size = 'compact',
   disabled = false,
   resaltado = false,
+  ocultarLegend = false,
 }: Props<T>) {
   const name = useId()
   const touch = size === 'touch'
   return (
     <fieldset disabled={disabled} className="flex flex-col gap-2">
-      <legend className="mb-2 font-sans text-label-md text-ink">{legend}</legend>
+      <legend className={ocultarLegend ? 'sr-only' : 'mb-2 font-sans text-label-md text-ink'}>{legend}</legend>
       <div
         className={`${touch ? 'grid grid-cols-2' : 'inline-flex self-start'} gap-1 rounded border border-line bg-bg p-1 ${
           disabled ? 'opacity-60' : ''

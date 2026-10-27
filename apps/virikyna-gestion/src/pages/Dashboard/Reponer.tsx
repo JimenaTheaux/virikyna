@@ -34,7 +34,13 @@ export function Reponer({ filas, loading }: { filas: VentaPorProducto[]; loading
                 title={`Stock mínimo: ${formatCantidad(f.stockMinimo)}`}
               >
                 {formatCantidad(f.unidades)} vend. ·{' '}
-                <span className={f.stockActual <= 0 ? 'font-semibold text-error' : 'font-semibold text-badge-amber-text'}>
+                {/* Mismos colores que Inventario: rojo oscuro negativo, rojo agotado, ámbar el resto
+                    (acá ámbar = no cubre otro período, aunque no tenga mínimo cargado). */}
+                <span
+                  className={`font-semibold ${
+                    f.stockActual < 0 ? 'text-error-dark' : f.stockActual === 0 ? 'text-error' : 'text-badge-amber-text'
+                  }`}
+                >
                   {f.stockActual < 0
                     ? `agotado (${formatCantidad(f.stockActual)})`
                     : f.stockActual === 0

@@ -1,4 +1,4 @@
-import { formatCantidad, formatCurrency } from '@virikyna/shared'
+import { clasificarStock, formatCantidad, formatCurrency, type EstadoStock } from '@virikyna/shared'
 import type { Medida, VentaPorProducto } from './types'
 
 // Piezas que comparten las cards de productos (vendidos del día, Top, por marca) y el modal
@@ -72,17 +72,40 @@ export function Tendencia({ actual, anterior, medida }: { actual: number; anteri
   )
 }
 
-// Stock actual de un producto vendido, con aviso si quedó en el mínimo o debajo.
+// Colores de stock del Dashboard, los mismos que Inventario (docs/64): rojo oscuro negativo, rojo
+// sin stock, ámbar en el mínimo o debajo (solo si tiene mínimo cargado).
+export const COLOR_STOCK: Record<EstadoStock, string> = {
+  negativo: 'text-error-dark',
+  sin_stock: 'text-error',
+  bajo: 'text-badge-amber-text',
+  sin_minimo: 'text-ink-soft',
+  ok: 'text-ink-soft',
+}
+
+const AVISO_STOCK: Partial<Record<EstadoStock, string>> = {
+  negativo: 'stock negativo',
+  sin_stock: 'sin stock',
+  bajo: 'stock bajo',
+}
+
+// Stock actual de un producto vendido, con ⚠ si quedó sin stock o en su mínimo.
 export function CeldaStock({ fila: f }: { fila: VentaPorProducto }) {
-  const bajo = f.stockActual <= f.stockMinimo
+  const estado = clasificarStock(f.stockActual, f.stockMinimo)
+  const aviso = AVISO_STOCK[estado]
   return (
     <td
-      className={`px-2 py-1 text-right ${bajo ? 'font-semibold text-badge-amber-text' : 'text-ink-soft'}`}
-      title={bajo ? `En el mínimo o menos (mínimo ${formatCantidad(f.stockMinimo)})` : undefined}
+      className={`px-2 py-1 text-right ${aviso ? 'font-semibold' : ''} ${COLOR_STOCK[estado]}`}
+      title={
+        estado === 'bajo'
+          ? `En el mínimo o menos (mínimo ${formatCantidad(f.stockMinimo)})`
+          : aviso
+            ? `Sin stock${f.stockMinimo > 0 ? ` (mínimo ${formatCantidad(f.stockMinimo)})` : ''}`
+            : undefined
+      }
     >
-      {bajo && <span aria-hidden="true">⚠ </span>}
+      {aviso && <span aria-hidden="true">⚠ </span>}
       {formatCantidad(f.stockActual)}
-      {bajo && <span className="sr-only"> (stock bajo)</span>}
+      {aviso && <span className="sr-only"> ({aviso})</span>}
     </td>
   )
 }

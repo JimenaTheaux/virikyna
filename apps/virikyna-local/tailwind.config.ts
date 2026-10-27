@@ -25,6 +25,8 @@ export default {
         surface: '#FFFFFF',
         line: '#E6E2EA',
         error: '#C0392B',
+        // Stock negativo (docs/64): más grave que "sin stock" (rojo), se distingue sin depender del texto.
+        'error-dark': '#8E2A1F',
         success: '#4A6F6B',
         // Badges de estado en tablas de listado (sección 5.2) — nombrados por semántica, no por
         // color: ámbar = pendiente/atención, verde = ok/completo, rojo = error/anulado.

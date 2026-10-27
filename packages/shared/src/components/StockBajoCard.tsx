@@ -10,9 +10,9 @@ export type ProductoStockBajo = {
   stockTotal: number
 }
 
-// Stock bajo = suma de stock en todas las ubicaciones <= stock_minimo del producto (solo activos).
-// Suma, filtro y orden (más crítico primero) los hace la RPC (docs/26_stock_bajo.sql) — así no
-// depende del tope de 1000 filas de la API. Devuelve hasta `limite` productos + el total real.
+// Productos con mínimo cargado y stock <= mínimo (solo activos), más crítico primero. Desde docs/64
+// un mínimo 0 es "sin definir" y no alerta. Suma, filtro y orden los hace la RPC — así no depende
+// del tope de 1000 filas de la API. Devuelve hasta `limite` productos + el total real.
 export async function fetchProductosStockBajo(
   supabase: SupabaseClient,
   limite: number,
@@ -39,93 +39,134 @@ export async function fetchProductosStockBajo(
   }
 }
 
+// Contadores de activos (docs/64, resumen_stock_inventario): mismas definiciones que los chips de
+// Inventario — sin stock = stock <= 0; bajo = mínimo > 0 y 0 < stock <= mínimo.
+export async function fetchResumenStock(supabase: SupabaseClient): Promise<{ sinStock: number; bajo: number }> {
+  const { data, error } = await supabase.rpc('resumen_stock_inventario')
+  if (error) throw error
+  const fila = ((data ?? []) as { sin_stock: number; bajo: number }[])[0]
+  return { sinStock: fila?.sin_stock ?? 0, bajo: fila?.bajo ?? 0 }
+}
+
+// Links a Inventario con el chip de stock aplicado (?stock=, ver lib/estadoStock).
+const A_SIN_STOCK = '/inventario?stock=sin_stock'
+const A_STOCK_BAJO = '/inventario?stock=bajo'
+
 export interface StockBajoCardProps {
   supabase: SupabaseClient
   className?: string
   maxItems?: number
-  // 'compacta' (Dashboard de Gestión): un renglón "Stock bajo · N ›", sin listado.
+  // 'compacta' (Dashboard de Gestión): dos renglones "Sin stock · N ›" y "Stock bajo · N ›", sin listado.
   variant?: 'card' | 'compacta'
 }
 
-// Card "Stock bajo" del dashboard — misma consulta y mismo listado en Virikyna Local
-// (Admin y Cajero) y Virikyna Gestión, por eso vive acá en vez de repetirse por app.
+// Card de stock del dashboard — misma consulta y mismo listado en Virikyna Local (Admin y Cajero) y
+// Virikyna Gestión, por eso vive acá en vez de repetirse por app. ['stock-bajo'] es el prefijo de
+// las dos consultas, para invalidarlas juntas.
 export function StockBajoCard({ supabase, className = '', maxItems = 4, variant = 'card' }: StockBajoCardProps) {
   const compacta = variant === 'compacta'
-  // maxItems va en la key porque es el p_limite de la RPC — ['stock-bajo'] sigue sirviendo de
-  // prefijo para invalidar todas las variantes juntas. La compacta solo usa el total.
-  const limite = compacta ? 1 : maxItems
-  const { data, isPending } = useQuery({
-    queryKey: ['stock-bajo', limite],
-    queryFn: () => fetchProductosStockBajo(supabase, limite),
+  const resumen = useQuery({
+    queryKey: ['stock-bajo', 'resumen'],
+    queryFn: () => fetchResumenStock(supabase),
     staleTime: 60_000,
   })
-  const stockBajo = data?.productos ?? []
-  const total = data?.total ?? 0
+  const listado = useQuery({
+    queryKey: ['stock-bajo', maxItems],
+    queryFn: () => fetchProductosStockBajo(supabase, maxItems),
+    staleTime: 60_000,
+    enabled: !compacta,
+  })
+  const sinStock = resumen.data?.sinStock ?? 0
+  const bajo = resumen.data?.bajo ?? 0
+  const valor = (n: number) => (resumen.isPending || resumen.isError ? '—' : String(n))
 
   if (compacta) {
     return (
-      <IndicadorCompacto to="/inventario" label="Stock bajo" valor={isPending ? '—' : String(total)} alerta={total > 0} className={className} />
+      <>
+        <IndicadorCompacto to={A_SIN_STOCK} label="Sin stock" valor={valor(sinStock)} alerta={sinStock > 0} tono="rojo" className={className} />
+        <IndicadorCompacto to={A_STOCK_BAJO} label="Stock bajo" valor={valor(bajo)} alerta={bajo > 0} className={className} />
+      </>
     )
   }
 
+  const productos = listado.data?.productos ?? []
+  const totalListado = listado.data?.total ?? 0
+  const hayAlerta = sinStock > 0 || bajo > 0
   return (
-    <Link
-      to="/inventario"
-      className={`flex flex-col rounded-lg p-card shadow-sm transition ${
-        total > 0
-          ? 'border border-amarillo bg-amarillo/20 hover:bg-amarillo/30'
-          : 'bg-surface hover:bg-accent-light'
+    <div
+      className={`flex flex-col rounded-lg p-card shadow-sm ${
+        hayAlerta ? 'border border-amarillo bg-amarillo/20' : 'bg-surface'
       } ${className}`}
     >
-      <p className="font-sans text-label-bold uppercase text-ink-soft">Stock bajo</p>
-      <p className="mt-2 font-display text-headline-md text-accent-darker">
-        {isPending
-          ? '—'
-          : total === 0
-            ? 'Todo en orden'
-            : `${total} producto${total === 1 ? '' : 's'}`}
+      <p className="font-sans text-label-bold uppercase text-ink-soft">Stock</p>
+      <p className="mt-2 flex flex-wrap items-baseline gap-x-2 font-display text-headline-md text-accent-darker">
+        {resumen.isPending || resumen.isError ? (
+          '—'
+        ) : !hayAlerta ? (
+          'Todo en orden'
+        ) : (
+          <>
+            <Link to={A_SIN_STOCK} className="hover:underline">
+              Sin stock ({sinStock})
+            </Link>
+            <span aria-hidden="true" className="text-ink-soft">
+              ·
+            </span>
+            <Link to={A_STOCK_BAJO} className="hover:underline">
+              Stock bajo ({bajo})
+            </Link>
+          </>
+        )}
       </p>
-      <ul className="mt-3 flex-1 space-y-1 overflow-hidden">
-        {stockBajo.map((producto) => (
-          <li key={producto.id} className="font-sans text-label-md text-ink-soft">
-            {producto.nombre} ({producto.stockTotal}/{producto.stockMinimo})
-          </li>
-        ))}
-      </ul>
-      {total > stockBajo.length && (
-        <p className="mt-1 font-sans text-label-md text-accent-dark">
-          +{total - stockBajo.length} más — ver Inventario
-        </p>
+      {productos.length > 0 && (
+        <>
+          <p className="mt-3 font-sans text-label-md font-semibold text-ink-soft">Con mínimo cargado</p>
+          <ul className="mt-1 flex-1 space-y-1 overflow-hidden">
+            {productos.map((producto) => (
+              <li key={producto.id} className="font-sans text-label-md text-ink-soft">
+                {producto.nombre} ({producto.stockTotal}/{producto.stockMinimo})
+              </li>
+            ))}
+          </ul>
+        </>
       )}
-    </Link>
+      {totalListado > productos.length && (
+        <Link to={A_STOCK_BAJO} className="mt-1 font-sans text-label-md text-accent-dark hover:text-accent-darker">
+          +{totalListado - productos.length} más — ver Inventario
+        </Link>
+      )}
+    </div>
   )
 }
 
 // Renglón chico con link — variante 'compacta' de StockBajoCard y DefectuososCard. Con algo
-// pendiente lleva un punto ámbar además del número (no solo color).
+// pendiente lleva un punto de color además del número (no solo color): ámbar, o rojo para sin stock.
 export function IndicadorCompacto({
   to,
   label,
   valor,
   alerta,
+  tono = 'ambar',
   className = '',
 }: {
   to: string
   label: string
   valor: string
   alerta: boolean
+  tono?: 'ambar' | 'rojo'
   className?: string
 }) {
+  const color = tono === 'rojo' ? { punto: 'bg-error', texto: 'text-error' } : { punto: 'bg-badge-amber-text', texto: 'text-badge-amber-text' }
   return (
     <Link
       to={to}
       className={`flex items-center justify-between gap-2 rounded px-2 py-1 font-sans text-label-md transition hover:bg-accent-light ${className}`}
     >
       <span className="flex min-w-0 items-center gap-1.5 text-ink-soft">
-        <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${alerta ? 'bg-badge-amber-text' : 'bg-line'}`} />
+        <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${alerta ? color.punto : 'bg-line'}`} />
         <span className="truncate">{label}</span>
       </span>
-      <span className={`shrink-0 font-semibold ${alerta ? 'text-badge-amber-text' : 'text-ink'}`}>
+      <span className={`shrink-0 font-semibold ${alerta ? color.texto : 'text-ink'}`}>
         {valor} <span aria-hidden="true">›</span>
       </span>
     </Link>

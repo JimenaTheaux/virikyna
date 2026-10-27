@@ -7,6 +7,9 @@ type Props = {
   placeholder?: string
   autoFocus?: boolean
   size?: TamanoControl
+  // "x" dentro del campo para vaciarlo (listado de Inventario). La venta no la usa: ahí el campo
+  // se vacía solo al agregar.
+  limpiable?: boolean
 }
 
 // Buscador único de productos: acepta lector físico (el campo toma foco al montar y el escaneo
@@ -18,6 +21,7 @@ export function ProductoBuscador({
   placeholder = 'Buscar por nombre, marca o código de barras…',
   autoFocus = true,
   size = 'compact',
+  limpiable = false,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -50,8 +54,25 @@ export function ProductoBuscador({
             if (e.key === 'Enter') e.preventDefault()
           }}
           placeholder={placeholder}
-          className={`${size === 'touch' ? 'h-12' : 'h-10'} w-full rounded border border-line bg-surface pl-9 pr-3 font-sans text-body-md text-ink outline-none focus:border-accent`}
+          className={`${size === 'touch' ? 'h-12' : 'h-10'} w-full rounded border border-line bg-surface pl-9 ${
+            limpiable ? 'pr-10' : 'pr-3'
+          } font-sans text-body-md text-ink outline-none focus:border-accent`}
         />
+        {limpiable && value && (
+          <button
+            type="button"
+            onClick={() => {
+              onChange('')
+              inputRef.current?.focus()
+            }}
+            aria-label="Limpiar búsqueda"
+            className={`absolute right-1 top-1/2 flex -translate-y-1/2 items-center justify-center rounded text-ink-soft hover:bg-accent-light hover:text-accent-darker ${
+              size === 'touch' ? 'h-11 w-11' : 'h-8 w-8'
+            }`}
+          >
+            <span aria-hidden="true">✕</span>
+          </button>
+        )}
       </div>
       <ScanButton onDetect={onChange} onFocusCampo={() => inputRef.current?.focus()} size={size} />
     </div>
