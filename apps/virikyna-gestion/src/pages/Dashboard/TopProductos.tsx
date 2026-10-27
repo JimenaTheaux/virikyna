@@ -1,74 +1,15 @@
 import { useState } from 'react'
 import { formatCantidad, formatCurrency } from '@virikyna/shared'
+import { separarVendidos, Tendencia, ToggleMedida, valorDe } from './columnas'
+import { ProductosVendidosModal } from './ProductosVendidosModal'
 import type { Medida, VentaPorProducto } from './types'
 
 const TOP = 10
 const TOP_CORTO = 5
 
-export function valorDe(fila: Pick<VentaPorProducto, 'unidades' | 'importe'>, medida: Medida): number {
-  return medida === 'unidades' ? fila.unidades : fila.importe
-}
-
-export function formatMedida(valor: number, medida: Medida): string {
-  return medida === 'unidades' ? formatCantidad(valor) : formatCurrency(valor)
-}
-
-// Mismo aspecto que el selector de período (pastillas): Unid. / $.
-export function ToggleMedida({ medida, onChange }: { medida: Medida; onChange: (m: Medida) => void }) {
-  return (
-    <div role="group" aria-label="Ordenar por" className="flex gap-1 rounded-full bg-bg p-0.5">
-      {(
-        [
-          ['unidades', 'Unid.'],
-          ['importe', '$'],
-        ] as const
-      ).map(([id, label]) => (
-        <button
-          key={id}
-          type="button"
-          aria-pressed={medida === id}
-          aria-label={id === 'unidades' ? 'Unidades' : 'Importe'}
-          onClick={() => onChange(id)}
-          className={`rounded-full px-3 py-1 font-sans text-label-bold transition ${
-            medida === id ? 'bg-surface text-accent-darker shadow-sm' : 'text-ink-soft hover:text-accent-darker'
-          }`}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-// ↑ / ↓ con el % contra el período anterior. Flecha + número, no solo color.
-export function Tendencia({ actual, anterior, medida }: { actual: number; anterior: number; medida: Medida }) {
-  const titulo = `Período anterior: ${formatMedida(anterior, medida)}`
-  if (anterior <= 0) {
-    return (
-      <span title={titulo} className="font-sans text-label-md text-ink-soft">
-        {actual > 0 ? 'Nuevo' : '—'}
-      </span>
-    )
-  }
-  const pct = Math.round(((actual - anterior) / anterior) * 100)
-  if (pct === 0) {
-    return (
-      <span title={titulo} className="whitespace-nowrap font-sans text-label-md text-ink-soft">
-        = 0%
-      </span>
-    )
-  }
-  const sube = pct > 0
-  return (
-    <span title={titulo} className={`whitespace-nowrap font-sans text-label-md font-semibold ${sube ? 'text-success' : 'text-error'}`}>
-      <span aria-hidden="true">{sube ? '↑' : '↓'}</span> {Math.abs(pct)}%
-      <span className="sr-only">{sube ? ' más' : ' menos'} que el período anterior</span>
-    </span>
-  )
-}
-
 // Top del período (rango): ordenado por la medida elegida, con tendencia contra el anterior.
-// Arranca en 5 para que Semana entre sin scroll en 1366×768; "Ver top 10" lo abre.
+// Arranca en 5 para que Semana entre sin scroll en 1366×768; "Ver top 10" lo abre y "Ver todos"
+// muestra el ranking completo (y lo devuelto de más, que acá no aparece) en un modal.
 export function TopProductos({
   filas,
   medida,
@@ -81,9 +22,11 @@ export function TopProductos({
   comparacion: string
 }) {
   const [verDiez, setVerDiez] = useState(false)
+  const [verTodos, setVerTodos] = useState(false)
   const ordenadas = [...filas].filter((f) => valorDe(f, medida) > 0).sort((a, b) => valorDe(b, medida) - valorDe(a, medida))
   const cuantos = verDiez ? TOP : TOP_CORTO
   const top = ordenadas.slice(0, cuantos)
+  const { vendidos, devueltos } = separarVendidos(filas)
   return (
     <div className="flex min-w-0 flex-col gap-2 rounded-lg bg-surface p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
@@ -142,15 +85,36 @@ export function TopProductos({
           </tbody>
         </table>
       )}
-      {ordenadas.length > TOP_CORTO && (
-        <button
-          type="button"
-          aria-expanded={verDiez}
-          onClick={() => setVerDiez((v) => !v)}
-          className="self-start rounded px-2 py-0.5 font-sans text-label-md font-semibold text-accent-dark hover:bg-accent-light"
-        >
-          {verDiez ? `Ver top ${TOP_CORTO}` : `Ver top ${TOP}`}
-        </button>
+      <div className="flex flex-wrap gap-2">
+        {ordenadas.length > TOP_CORTO && (
+          <button
+            type="button"
+            aria-expanded={verDiez}
+            onClick={() => setVerDiez((v) => !v)}
+            className="rounded px-2 py-0.5 font-sans text-label-md font-semibold text-accent-dark hover:bg-accent-light"
+          >
+            {verDiez ? `Ver top ${TOP_CORTO}` : `Ver top ${TOP}`}
+          </button>
+        )}
+        {(vendidos.length > 0 || devueltos.length > 0) && (
+          <button
+            type="button"
+            onClick={() => setVerTodos(true)}
+            className="rounded px-2 py-0.5 font-sans text-label-md font-semibold text-accent-dark hover:bg-accent-light"
+          >
+            Ver todos ({vendidos.length})
+          </button>
+        )}
+      </div>
+      {verTodos && (
+        <ProductosVendidosModal
+          filas={filas}
+          titulo="Productos vendidos en el período"
+          enRango
+          medidaInicial={medida}
+          comparacion={comparacion}
+          onClose={() => setVerTodos(false)}
+        />
       )}
     </div>
   )

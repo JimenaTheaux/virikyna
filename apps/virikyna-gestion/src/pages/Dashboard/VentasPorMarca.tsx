@@ -1,4 +1,4 @@
-import { formatMedida, valorDe } from './TopProductos'
+import { formatMedida, valorDe } from './columnas'
 import type { Medida, VentaPorProducto } from './types'
 
 const MARCAS_VISIBLES = 4

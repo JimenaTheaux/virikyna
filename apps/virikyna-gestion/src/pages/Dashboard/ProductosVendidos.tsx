@@ -1,12 +1,16 @@
+import { useState } from 'react'
 import { formatCantidad, formatCurrency } from '@virikyna/shared'
+import { CeldaStock, separarVendidos } from './columnas'
+import { ProductosVendidosModal } from './ProductosVendidosModal'
 import type { VentaPorProducto } from './types'
 
 // Un solo día: lo vendido (unidades netas > 0), del mayor importe al menor. Alto acotado con scroll
 // interno y encabezado fijo, para que un día con muchas ventas no empuje la pantalla. Lo devuelto
-// ese día de una venta de otro día (neto < 0) va aparte, en "Devoluciones del día".
+// ese día de una venta de otro día (neto < 0) va aparte, en "Devoluciones del día". "Ver todos"
+// abre lo mismo en grande, con buscador y orden.
 export function ProductosVendidos({ filas: todas, titulo }: { filas: VentaPorProducto[]; titulo: string }) {
-  const filas = todas.filter((f) => f.unidades > 0)
-  const devueltas = todas.filter((f) => f.unidades < 0)
+  const [verTodos, setVerTodos] = useState(false)
+  const { vendidos: filas, devueltos: devueltas } = separarVendidos(todas)
   const unidades = filas.reduce((acc, f) => acc + f.unidades, 0)
   return (
     <div className="flex min-w-0 flex-col gap-2 rounded-lg bg-surface p-4 shadow-sm">
@@ -36,27 +40,17 @@ export function ProductosVendidos({ filas: todas, titulo }: { filas: VentaPorPro
               </tr>
             </thead>
             <tbody>
-              {filas.map((f) => {
-                const bajo = f.stockActual <= f.stockMinimo
-                return (
-                  <tr key={f.productoId} className="border-b border-table-divider last:border-0 even:bg-table-row-alt">
-                    <td className="truncate px-2 py-1 text-ink" title={f.marca ? `${f.nombre} · ${f.marca}` : f.nombre}>
-                      {f.nombre}
-                      {f.marca && <span className="text-ink-soft"> · {f.marca}</span>}
-                    </td>
-                    <td className="px-2 py-1 text-right font-semibold text-ink">{formatCantidad(f.unidades)}</td>
-                    <td className="whitespace-nowrap px-2 py-1 text-right text-ink">{formatCurrency(f.importe)}</td>
-                    <td
-                      className={`px-2 py-1 text-right ${bajo ? 'font-semibold text-badge-amber-text' : 'text-ink-soft'}`}
-                      title={bajo ? `En el mínimo o menos (mínimo ${formatCantidad(f.stockMinimo)})` : undefined}
-                    >
-                      {bajo && <span aria-hidden="true">⚠ </span>}
-                      {formatCantidad(f.stockActual)}
-                      {bajo && <span className="sr-only"> (stock bajo)</span>}
-                    </td>
-                  </tr>
-                )
-              })}
+              {filas.map((f) => (
+                <tr key={f.productoId} className="border-b border-table-divider last:border-0 even:bg-table-row-alt">
+                  <td className="truncate px-2 py-1 text-ink" title={f.marca ? `${f.nombre} · ${f.marca}` : f.nombre}>
+                    {f.nombre}
+                    {f.marca && <span className="text-ink-soft"> · {f.marca}</span>}
+                  </td>
+                  <td className="px-2 py-1 text-right font-semibold text-ink">{formatCantidad(f.unidades)}</td>
+                  <td className="whitespace-nowrap px-2 py-1 text-right text-ink">{formatCurrency(f.importe)}</td>
+                  <CeldaStock fila={f} />
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -77,6 +71,24 @@ export function ProductosVendidos({ filas: todas, titulo }: { filas: VentaPorPro
             ))}
           </ul>
         </div>
+      )}
+      {(filas.length > 0 || devueltas.length > 0) && (
+        <button
+          type="button"
+          onClick={() => setVerTodos(true)}
+          className="self-start rounded px-2 py-0.5 font-sans text-label-md font-semibold text-accent-dark hover:bg-accent-light"
+        >
+          Ver todos ({filas.length})
+        </button>
+      )}
+      {verTodos && (
+        <ProductosVendidosModal
+          filas={todas}
+          titulo={titulo}
+          enRango={false}
+          medidaInicial="importe"
+          onClose={() => setVerTodos(false)}
+        />
       )}
     </div>
   )
