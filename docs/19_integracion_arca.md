@@ -8,6 +8,8 @@ FASE 4.
 > final) tienen CAE de homologación, **sin validez fiscal**, y no figuran en ARCA. Desde docs/59
 > los botones emiten en **producción** (también los cajeros), `facturas_c.ambiente` dice en qué
 > ambiente se emitió cada una, y `scripts/reemitir-facturas-c.ts` las re-emite en producción.
+> Detalle completo, lo pendiente (condición frente al IVA, comprobante impreso) y cómo verificar:
+> **`docs/60_incidente_factura_c_homologacion.md`**.
 
 ## 1. Arquitectura
 
