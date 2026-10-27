@@ -14,6 +14,9 @@ import {
   MAYUSCULAS,
   nombreConMarca,
   NotaRedondeoPrecio,
+  avisoStockMinimo,
+  STOCK_MINIMO_AYUDA,
+  STOCK_MINIMO_LABEL,
 } from '@virikyna/shared'
 import { CodigoBarrasBox } from '@virikyna/shared'
 import { buscarProductoPorCodigoBarras } from '../../lib/productos'
@@ -79,6 +82,11 @@ export function ProductoFormSheet({
   const [stockMinimo, setStockMinimo] = useState(String(producto?.stock_minimo ?? 0))
   const [estado, setEstado] = useState<EstadoProducto>(producto?.estado ?? 'activo')
   const [stock, setStock] = useState(producto?.stock_ubicaciones ?? [])
+  const avisoMinimo = avisoStockMinimo({
+    minimo: Number(stockMinimo) || 0,
+    stockActual: stock.reduce((acc, s) => acc + Number(s.cantidad), 0),
+    esAlta: !producto,
+  })
   const [ajusteUbicacion, setAjusteUbicacion] = useState<UbicacionStock | null>(null)
   const [error, setError] = useState<string | null>(null)
   // Eliminar (docs/48): solo admin y solo un producto ya guardado. Inactivar (si tiene historial)
@@ -414,7 +422,7 @@ export function ProductoFormSheet({
           )}
         </div>
 
-        <Field label="Stock mínimo" hint="Dispara la alerta de stock bajo.">
+        <Field label={STOCK_MINIMO_LABEL} hint={STOCK_MINIMO_AYUDA}>
           <input
             type="number"
             inputMode="numeric"
@@ -425,6 +433,11 @@ export function ProductoFormSheet({
             className={inputClass}
           />
         </Field>
+        {avisoMinimo && (
+          <p role="status" className="-mt-2 rounded bg-badge-amber-bg px-3 py-2 font-sans text-label-md text-badge-amber-text">
+            {avisoMinimo}
+          </p>
+        )}
 
         {producto && (
           <Field label="Estado">

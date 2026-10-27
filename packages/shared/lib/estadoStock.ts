@@ -17,6 +17,20 @@ export function clasificarStock(stock: number, minimo: number): EstadoStock {
   return 'ok'
 }
 
+// Texto del campo "Stock mínimo" en los formularios de producto de las tres apps.
+export const STOCK_MINIMO_LABEL = 'Stock mínimo (alerta)'
+export const STOCK_MINIMO_AYUDA = 'Cantidad a partir de la cual avisa que hay que reponer. Dejá 0 si no querés alerta.'
+
+// Aviso suave (no bloquea) contra un error que pasó al dar de alta (20 y 21/10/2026): la cantidad que
+// entraba se escribió en el mínimo. El alta no tiene campo de stock (entra con la factura o un ajuste),
+// así que ahí cualquier mínimo > 0 se pregunta; en una edición, si es igual al stock que hay.
+export function avisoStockMinimo({ minimo, stockActual, esAlta }: { minimo: number; stockActual: number; esAlta: boolean }): string | null {
+  if (!(minimo > 0)) return null
+  if (esAlta) return '¿Seguro? El stock mínimo no es la cantidad que entra: el stock se suma con la factura o con un ajuste.'
+  if (minimo === stockActual) return '¿Seguro? El mínimo es igual al stock cargado.'
+  return null
+}
+
 export type FiltroStock = 'todos' | 'sin_stock' | 'negativo' | 'bajo' | 'sin_minimo'
 export type FiltroEstado = 'activos' | 'inactivos' | 'todos'
 

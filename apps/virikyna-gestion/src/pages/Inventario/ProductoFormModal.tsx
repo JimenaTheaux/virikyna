@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useId, useState, type FormEvent } from 'react'
 import type { PostgrestError } from '@supabase/supabase-js'
 import type { Auditoria, CambioMargenProducto, EstadoProducto, Proveedor, UbicacionStock } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
@@ -16,6 +16,9 @@ import {
   MAYUSCULAS,
   nombreConMarca,
   NotaRedondeoPrecio,
+  avisoStockMinimo,
+  STOCK_MINIMO_AYUDA,
+  STOCK_MINIMO_LABEL,
 } from '@virikyna/shared'
 import { Modal } from '../../components/Modal'
 import { CodigoBarrasBox } from '@virikyna/shared'
@@ -69,6 +72,12 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, codigo
   const [stockMinimo, setStockMinimo] = useState(String(producto?.stock_minimo ?? 0))
   const [estado, setEstado] = useState<EstadoProducto>(producto?.estado ?? 'activo')
   const [stock, setStock] = useState(producto?.stock_ubicaciones ?? [])
+  const idAyudaMinimo = useId()
+  const avisoMinimo = avisoStockMinimo({
+    minimo: Number(stockMinimo) || 0,
+    stockActual: stock.reduce((acc, s) => acc + Number(s.cantidad), 0),
+    esAlta: !producto,
+  })
   const [ajusteUbicacion, setAjusteUbicacion] = useState<UbicacionStock | null>(null)
   const [error, setError] = useState<string | null>(null)
   // Eliminar (docs/48): solo admin y solo un producto ya guardado. Inactivar (si tiene historial)
@@ -371,13 +380,14 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, codigo
                 ))}
               </select>
             </Field>
-            <Field compact label="Stock mínimo">
+            <Field compact label={STOCK_MINIMO_LABEL}>
               <input
                 type="number"
                 min="0"
                 step="1"
                 value={stockMinimo}
                 onChange={(e) => setStockMinimo(e.target.value)}
+                aria-describedby={`${idAyudaMinimo}`}
                 className={inputCompacto}
               />
             </Field>
@@ -392,6 +402,15 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, codigo
                   <option value="inactivo">Inactivo</option>
                 </select>
               </Field>
+            )}
+          </div>
+          {/* Ayuda del stock mínimo a todo el ancho (la columna del campo es angosta). */}
+          <div id={idAyudaMinimo} className="-mt-1 flex flex-col gap-1">
+            <p className="font-sans text-label-md text-ink-soft">{STOCK_MINIMO_AYUDA}</p>
+            {avisoMinimo && (
+              <p role="status" className="rounded bg-badge-amber-bg px-3 py-1.5 font-sans text-label-md text-badge-amber-text">
+                {avisoMinimo}
+              </p>
             )}
           </div>
 

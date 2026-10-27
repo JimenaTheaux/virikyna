@@ -3,6 +3,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  avisoStockMinimo,
   cantidadFiltrosAplicados,
   clasificarStock,
   escribirFiltrosInventario,
@@ -78,6 +79,14 @@ test('URL: solo lo distinto del default, valores desconocidos vuelven al default
   assert.deepEqual(leerFiltrosInventario(escrito), { ...FILTROS_INVENTARIO_DEFAULT, stock: 'bajo', marca: 'LEGO' })
   assert.deepEqual(leerFiltrosInventario(new URLSearchParams('estado=raro&stock=x')), FILTROS_INVENTARIO_DEFAULT)
   assert.equal(escribirFiltrosInventario(escrito, FILTROS_INVENTARIO_DEFAULT).toString(), 'tab=x')
+})
+
+test('avisoStockMinimo: alta con mínimo, edición con mínimo = stock, nada en el resto', () => {
+  assert.equal(avisoStockMinimo({ minimo: 0, stockActual: 0, esAlta: true }), null)
+  assert.match(avisoStockMinimo({ minimo: 5, stockActual: 0, esAlta: true }) ?? '', /no es la cantidad que entra/)
+  assert.equal(avisoStockMinimo({ minimo: 6, stockActual: 6, esAlta: false }), '¿Seguro? El mínimo es igual al stock cargado.')
+  assert.equal(avisoStockMinimo({ minimo: 3, stockActual: 6, esAlta: false }), null)
+  assert.equal(avisoStockMinimo({ minimo: 0, stockActual: 0, esAlta: false }), null)
 })
 
 test('cantidadFiltrosAplicados', () => {
