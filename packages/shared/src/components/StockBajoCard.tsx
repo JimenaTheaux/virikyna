@@ -139,29 +139,28 @@ export function StockBajoCard({ supabase, className = '', maxItems = 4, variant 
   )
 }
 
-// Renglón chico con link — variante 'compacta' de StockBajoCard y DefectuososCard. Con algo
-// pendiente lleva un punto de color además del número (no solo color): ámbar, o rojo para sin stock.
+// Renglón chico con link (o botón, con onClick: abre un modal) — variante 'compacta' de
+// StockBajoCard, DefectuososCard y AlertaPreciosCard. Con algo pendiente lleva un punto de color
+// además del número (no solo color): ámbar, o rojo para sin stock.
 export function IndicadorCompacto({
   to,
+  onClick,
   label,
   valor,
   alerta,
   tono = 'ambar',
   className = '',
 }: {
-  to: string
   label: string
   valor: string
   alerta: boolean
   tono?: 'ambar' | 'rojo'
   className?: string
-}) {
+} & ({ to: string; onClick?: never } | { to?: never; onClick: () => void })) {
   const color = tono === 'rojo' ? { punto: 'bg-error', texto: 'text-error' } : { punto: 'bg-badge-amber-text', texto: 'text-badge-amber-text' }
-  return (
-    <Link
-      to={to}
-      className={`flex items-center justify-between gap-2 rounded px-2 py-1 font-sans text-label-md transition hover:bg-accent-light ${className}`}
-    >
+  const clases = `flex items-center justify-between gap-2 rounded px-2 py-1 font-sans text-label-md transition hover:bg-accent-light ${className}`
+  const contenido = (
+    <>
       <span className="flex min-w-0 items-center gap-1.5 text-ink-soft">
         <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${alerta ? color.punto : 'bg-line'}`} />
         <span className="truncate">{label}</span>
@@ -169,6 +168,15 @@ export function IndicadorCompacto({
       <span className={`shrink-0 font-semibold ${alerta ? color.texto : 'text-ink'}`}>
         {valor} <span aria-hidden="true">›</span>
       </span>
+    </>
+  )
+  return onClick ? (
+    <button type="button" onClick={onClick} className={`w-full text-left ${clases}`}>
+      {contenido}
+    </button>
+  ) : (
+    <Link to={to} className={clases}>
+      {contenido}
     </Link>
   )
 }

@@ -4,19 +4,6 @@ export type VentaDelDia = {
   cantidad: number
 }
 
-// Fila de dashboard_ventas_por_producto (docs/61): netas de devoluciones, importe prorrateado al
-// precio cobrado de cada venta.
-export type VentaPorProducto = {
-  productoId: string
-  nombre: string
-  marca: string | null
-  unidades: number
-  importe: number
-  stockActual: number
-  stockMinimo: number
-  unidadesAnterior: number
-  importeAnterior: number
-}
-
-// Toggle del Top 10 / resumen por marca.
-export type Medida = 'unidades' | 'importe'
+// VentaPorProducto y Medida viven en @virikyna/shared (dashboard/ventasPorProducto), compartidos
+// con el Dashboard de Local.
+export type { Medida, VentaPorProducto } from '@virikyna/shared'

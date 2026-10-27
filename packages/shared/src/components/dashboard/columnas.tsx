@@ -1,5 +1,7 @@
-import { clasificarStock, formatCantidad, formatCurrency, type EstadoStock } from '@virikyna/shared'
-import type { Medida, VentaPorProducto } from './types'
+import { formatCantidad } from '../../../lib/cargaInicial'
+import { formatCurrency } from '../../../lib/format'
+import { clasificarStock, type EstadoStock } from '../../../lib/estadoStock'
+import type { Medida, VentaPorProducto } from './ventasPorProducto'
 
 // Piezas que comparten las cards de productos (vendidos del día, Top, por marca) y el modal
 // "Ver todos" — en un módulo aparte para que card y modal no se importen entre sí.

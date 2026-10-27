@@ -1,8 +1,15 @@
 import { useState } from 'react'
-import { formatCantidad, formatCurrency } from '@virikyna/shared'
-import { separarVendidos, Tendencia, ToggleMedida, valorDe } from './columnas'
-import { ProductosVendidosModal } from './ProductosVendidosModal'
-import type { Medida, VentaPorProducto } from './types'
+import {
+  formatCantidad,
+  formatCurrency,
+  ProductosVendidosModal,
+  separarVendidos,
+  Tendencia,
+  ToggleMedida,
+  valorDe,
+  type Medida,
+  type VentaPorProducto,
+} from '@virikyna/shared'
 
 const TOP = 10
 const TOP_CORTO = 5

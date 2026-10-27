@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom'
-import { formatCantidad } from '@virikyna/shared'
-import type { VentaPorProducto } from './types'
+import { formatCantidad, type VentaPorProducto } from '@virikyna/shared'
 
 const MAX_REPONER = 4
 

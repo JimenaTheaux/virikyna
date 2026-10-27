@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
-import { formatCantidad, formatCurrency, textoParaBuscar } from '@virikyna/shared'
-import { Modal } from '../../components/Modal'
+import { formatCantidad } from '../../../lib/cargaInicial'
+import { formatCurrency } from '../../../lib/format'
+import { textoParaBuscar } from '../../../lib/texto'
+import { Modal } from '../Modal'
 import { CeldaStock, separarVendidos, Tendencia, valorDe } from './columnas'
-import type { Medida, VentaPorProducto } from './types'
+import type { Medida, VentaPorProducto } from './ventasPorProducto'
 
 type Orden = Medida | 'nombre'
 

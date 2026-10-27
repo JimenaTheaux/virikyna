@@ -1,5 +1,4 @@
-import { formatMedida, valorDe } from './columnas'
-import type { Medida, VentaPorProducto } from './types'
+import { formatMedida, valorDe, type Medida, type VentaPorProducto } from '@virikyna/shared'
 
 const MARCAS_VISIBLES = 4
 

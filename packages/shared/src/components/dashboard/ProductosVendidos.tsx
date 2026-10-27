@@ -1,19 +1,31 @@
 import { useState } from 'react'
-import { formatCantidad, formatCurrency } from '@virikyna/shared'
+import { formatCantidad } from '../../../lib/cargaInicial'
+import { formatCurrency } from '../../../lib/format'
 import { CeldaStock, separarVendidos } from './columnas'
 import { ProductosVendidosModal } from './ProductosVendidosModal'
-import type { VentaPorProducto } from './types'
+import type { VentaPorProducto } from './ventasPorProducto'
 
 // Un solo día: lo vendido (unidades netas > 0), del mayor importe al menor. Alto acotado con scroll
 // interno y encabezado fijo, para que un día con muchas ventas no empuje la pantalla. Lo devuelto
 // ese día de una venta de otro día (neto < 0) va aparte, en "Devoluciones del día". "Ver todos"
-// abre lo mismo en grande, con buscador y orden.
-export function ProductosVendidos({ filas: todas, titulo }: { filas: VentaPorProducto[]; titulo: string }) {
+// abre lo mismo en grande, con buscador y orden. Gestión y Local (Admin y Cajero) usan la misma
+// card; en Local la tabla ocupa el alto que queda (alturaTabla = 'min-h-0 flex-1').
+export function ProductosVendidos({
+  filas: todas,
+  titulo,
+  className = '',
+  alturaTabla = 'max-h-[8.5rem]',
+}: {
+  filas: VentaPorProducto[]
+  titulo: string
+  className?: string
+  alturaTabla?: string
+}) {
   const [verTodos, setVerTodos] = useState(false)
   const { vendidos: filas, devueltos: devueltas } = separarVendidos(todas)
   const unidades = filas.reduce((acc, f) => acc + f.unidades, 0)
   return (
-    <div className="flex min-w-0 flex-col gap-2 rounded-lg bg-surface p-4 shadow-sm">
+    <div className={`flex min-w-0 flex-col gap-2 rounded-lg bg-surface p-4 shadow-sm ${className}`}>
       <div className="flex items-baseline justify-between gap-3">
         <p className="font-sans text-label-bold uppercase text-ink-soft">{titulo}</p>
         <p className="font-sans text-label-md text-ink-soft">
@@ -23,7 +35,7 @@ export function ProductosVendidos({ filas: todas, titulo }: { filas: VentaPorPro
       {filas.length === 0 ? (
         <p className="py-2 font-sans text-body-md text-ink-soft">Sin ventas en el día.</p>
       ) : (
-        <div className="max-h-[8.5rem] overflow-auto">
+        <div className={`${alturaTabla} overflow-auto`}>
           <table className="w-full table-fixed text-left font-sans text-table-row">
             <colgroup>
               <col />
