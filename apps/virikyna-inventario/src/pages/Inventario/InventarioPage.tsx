@@ -108,13 +108,15 @@ export function InventarioPage() {
               IVA
             </button>
           )}
+          {/* Con texto: solo el ícono "%" no se entendía (pedido de Alicia, 2026-10-27). */}
           <button
             type="button"
             onClick={() => setActualizandoPrecios(true)}
-            aria-label="Actualización masiva de precios"
-            className="flex flex-shrink-0 items-center justify-center rounded border border-line bg-surface px-4 py-3.5 text-accent-dark hover:bg-accent-light"
+            aria-label="Precios: actualización masiva"
+            className="flex flex-shrink-0 items-center justify-center gap-1 rounded border border-line bg-surface px-3 py-3.5 font-sans text-label-bold text-accent-dark hover:bg-accent-light"
           >
-            <IconPorcentaje className="h-6 w-6" />
+            <IconPorcentaje className="h-5 w-5" />
+            Precios
           </button>
         </div>
       </div>
@@ -190,6 +192,7 @@ export function InventarioPage() {
                   {producto.estado === 'activo' ? 'Activo' : 'Inactivo'}
                 </EstadoBadge>
                 {producto.precio_manual !== null && <span>Precio manual</span>}
+                {Number(producto.iva_porcentaje) === 0 && <span>Sin IVA</span>}
               </span>
             </ProductoLinea>
           </button>

@@ -57,8 +57,9 @@ export function ActualizarPreciosSheet({ productos, proveedores, onClose, onSave
     }
   }
 
+  // Descarta la vista previa y el error anterior (ej. "Tildá al menos un producto" ya tildados).
   function cambiar(accion: () => void) {
-    if (vista) a.volver()
+    a.volver()
     accion()
   }
 

@@ -23,19 +23,29 @@ export function useSeleccionProductos<P extends ProductoSeleccionable>(productos
   const [busqueda, setBusqueda] = useState('')
   const [visibles, setVisibles] = useState(PAGINA_LISTA)
   const [fijados, setFijados] = useState<Set<string>>(new Set(seleccionInicial))
+  // "Ver solo los tildados" filtra por los fijados (lo tildado al activarlo), no por la selección
+  // viva: destildar uno por error no lo hace desaparecer de la lista y se puede volver a tildar.
+  const [soloTildados, setSoloTildados] = useState(false)
 
   const productosFiltrados = useMemo(() => {
     const q = textoParaBuscar(busqueda)
+    const base = soloTildados ? productos.filter((p) => fijados.has(p.id)) : productos
     const filtrados = !q
-      ? productos
-      : productos.filter(
+      ? base
+      : base.filter(
           (p) => coincideBusquedaProducto(p, q) || textoParaBuscar(p.proveedor?.razon_social).includes(q),
         )
     return fijadosPrimero(filtrados, fijados)
-  }, [productos, busqueda, fijados])
+  }, [productos, busqueda, fijados, soloTildados])
 
   function buscar(texto: string) {
     setBusqueda(texto)
+    setFijados(new Set(seleccion))
+    setVisibles(PAGINA_LISTA)
+  }
+
+  function verSoloTildados(valor: boolean) {
+    setSoloTildados(valor)
     setFijados(new Set(seleccion))
     setVisibles(PAGINA_LISTA)
   }
@@ -54,6 +64,8 @@ export function useSeleccionProductos<P extends ProductoSeleccionable>(productos
     toggle,
     busqueda,
     buscar,
+    soloTildados,
+    verSoloTildados,
     productosVisibles: productosFiltrados.slice(0, visibles),
     sinResultados: productosFiltrados.length === 0,
     restantes: productosFiltrados.length - visibles,

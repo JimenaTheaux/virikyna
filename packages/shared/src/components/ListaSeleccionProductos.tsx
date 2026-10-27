@@ -8,6 +8,8 @@ type Props<P extends ProductoSeleccionable> = {
     seleccion: Set<string>
     busqueda: string
     buscar: (texto: string) => void
+    soloTildados: boolean
+    verSoloTildados: (valor: boolean) => void
     productosVisibles: P[]
     sinResultados: boolean
     restantes: number
@@ -19,6 +21,10 @@ type Props<P extends ProductoSeleccionable> = {
   inputClassName: string
   // 'touch' (Inventario): filas de 48px y checkbox más grande.
   size?: 'compact' | 'touch'
+  // Texto del contador (por defecto "N seleccionados"; IVA: "N exentos (sin IVA)").
+  contador?: (n: number) => string
+  // Con texto, muestra el filtro "ver solo los tildados" (IVA: "Ver solo los exentos").
+  filtroTildados?: string
 }
 
 // Foco visible con contraste AA (accent-dark, 5,2:1 sobre blanco).
@@ -31,13 +37,26 @@ export function ListaSeleccionProductos<P extends ProductoSeleccionable>({
   onToggle,
   inputClassName,
   size = 'compact',
+  contador: textoContador = (n) => `${n} seleccionado${n === 1 ? '' : 's'}`,
+  filtroTildados,
 }: Props<P>) {
   const id = useId()
   const touch = size === 'touch'
   const contador = (
     <p aria-live="polite" className={`font-sans text-label-bold text-ink ${touch ? '' : 'pb-2'}`}>
-      {sel.seleccion.size} seleccionado{sel.seleccion.size === 1 ? '' : 's'}
+      {textoContador(sel.seleccion.size)}
     </p>
+  )
+  const filtro = filtroTildados && (
+    <label className={`flex cursor-pointer items-center gap-2 font-sans text-label-md text-ink ${touch ? 'min-h-12' : ''}`}>
+      <input
+        type="checkbox"
+        checked={sel.soloTildados}
+        onChange={(e) => sel.verSoloTildados(e.target.checked)}
+        className={`${touch ? 'h-5 w-5' : 'h-4 w-4'} accent-accent-dark ${FOCO}`}
+      />
+      {filtroTildados}
+    </label>
   )
   const buscador = (
     <input
@@ -45,6 +64,11 @@ export function ListaSeleccionProductos<P extends ProductoSeleccionable>({
       type="search"
       value={sel.busqueda}
       onChange={(e) => sel.buscar(e.target.value)}
+      // Enter (o "Ir" en el teclado del celular) solo busca: no envía el formulario de la acción
+      // masiva, que sin nada tildado mostraba "Tildá al menos un producto".
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.preventDefault()
+      }}
       placeholder="Nombre, marca, código o proveedor"
       className={touch ? inputClassName : `${inputClassName} w-72 py-2`}
     />
@@ -58,6 +82,7 @@ export function ListaSeleccionProductos<P extends ProductoSeleccionable>({
             Buscar producto
           </label>
           {buscador}
+          {filtro}
           {contador}
         </>
       ) : (
@@ -66,7 +91,10 @@ export function ListaSeleccionProductos<P extends ProductoSeleccionable>({
             <label htmlFor={`${id}-buscar`} className="font-sans text-label-md text-ink">
               Buscar producto
             </label>
-            {buscador}
+            <div className="flex items-center gap-4">
+              {buscador}
+              {filtro}
+            </div>
           </div>
           {contador}
         </div>

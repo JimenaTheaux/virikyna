@@ -2,18 +2,23 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { formatCurrency } from '../../lib/format'
 import type { ProductoParaPrecios } from '../../lib/useActualizarPrecios'
-import { estadoFilaIva, OPCIONES_ACCION_IVA, textoAccionIva, useMarcarIva } from '../../lib/useMarcarIva'
+import {
+  contadorExentos,
+  estadoFilaIva,
+  resumenCambiosIva,
+  textoAccionIva,
+  textoIvaNuevo,
+  useMarcarIva,
+} from '../../lib/useMarcarIva'
 import { Modal } from './Modal'
 import { ConfirmDialog } from './ConfirmDialog'
 import { ErrorText, inputClass } from './FormField'
 import { EstadoBadge } from './EstadoBadge'
-import { ControlSegmentado } from './ControlSegmentado'
 import { ListaSeleccionProductos } from './ListaSeleccionProductos'
 
 type Props = {
   supabase: SupabaseClient
   productos: ProductoParaPrecios[]
-  seleccionInicial: string[]
   onClose: () => void
   onSaved: (cantidad: number) => void
 }
@@ -21,13 +26,13 @@ type Props = {
 const FOCO = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-dark'
 const inputAccesible = `${inputClass} focus:border-accent-dark focus:ring-1 focus:ring-accent-dark`
 
-// Acción masiva "Lleva IVA" de escritorio (docs/47), compartida por Virikyna Local y Gestión. Solo la
+// IVA de productos de escritorio (docs/47, docs/62), compartido por Virikyna Local y Gestión. Solo la
 // abre un admin (ProductosTab no muestra el botón a un cajero; el RPC igual lo valida). La lógica
-// vive en useMarcarIva, la misma del sheet de Virikyna Inventario. Mismo esquema que Actualizar
-// precios: datos arriba, "Ver vista previa" genera la tabla, y "Marcar…" pide confirmación con la
-// cantidad antes de aplicar. Cualquier cambio descarta la vista previa.
-export function MarcarIvaModal({ supabase, productos, seleccionInicial, onClose, onSaved }: Props) {
-  const a = useMarcarIva({ supabase, productos, seleccionInicial, onSaved })
+// vive en useMarcarIva, la misma del sheet de Virikyna Inventario. Tildado = exento: abre con los
+// exentos tildados, "Ver vista previa" muestra solo lo que cambia, y "Cambiar IVA…" pide
+// confirmación antes de aplicar. Cualquier cambio descarta la vista previa.
+export function MarcarIvaModal({ supabase, productos, onClose, onSaved }: Props) {
+  const a = useMarcarIva({ supabase, productos, onSaved })
   const [dirty, setDirty] = useState(false)
   const [confirmCerrar, setConfirmCerrar] = useState(false)
   const vista = a.vistaPrevia
@@ -45,9 +50,10 @@ export function MarcarIvaModal({ supabase, productos, seleccionInicial, onClose,
     else onClose()
   }
 
+  // Descarta la vista previa y el error anterior (ej. "Tildá al menos un producto" ya tildados).
   function cambiar(accion: () => void) {
     setDirty(true)
-    if (vista) a.volver()
+    a.volver()
     accion()
   }
 
@@ -82,25 +88,28 @@ export function MarcarIvaModal({ supabase, productos, seleccionInicial, onClose,
               aria-describedby={vista ? undefined : `${id}-sin-vista`}
               className={`rounded bg-accent-dark px-5 py-3 font-sans text-label-bold text-white transition hover:bg-accent-darker disabled:cursor-not-allowed disabled:opacity-50 ${FOCO}`}
             >
-              {a.saving ? 'Aplicando...' : vista ? textoAccionIva(n, vista.llevaIva) : 'Aplicar'}
+              {a.saving ? 'Aplicando...' : vista ? textoAccionIva(n) : 'Aplicar'}
             </button>
           </div>
         </div>
       }
     >
       <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
-        <ControlSegmentado
-          legend="Acción"
-          opciones={OPCIONES_ACCION_IVA}
-          value={a.accion}
-          onChange={(v) => cambiar(() => a.setAccion(v))}
-        />
+        <p className="font-sans text-body-md text-ink">
+          <strong>Tildado = exento (sin IVA).</strong> Tildá los productos que no llevan IVA y destildá los que sí.
+        </p>
         <p className="font-sans text-label-md text-ink-soft">
           Con IVA: costo × margen 1 × margen 2 × IVA 21%. Sin IVA: costo × margen 1 × margen 2. Un producto con
           precio manual no cambia de precio hasta que tenga costo cargado.
         </p>
 
-        <ListaSeleccionProductos sel={a} onToggle={(pid) => cambiar(() => a.toggle(pid))} inputClassName={inputAccesible} />
+        <ListaSeleccionProductos
+          sel={a}
+          onToggle={(pid) => cambiar(() => a.toggle(pid))}
+          inputClassName={inputAccesible}
+          contador={contadorExentos}
+          filtroTildados="Ver solo los exentos"
+        />
 
         <button
           type="submit"
@@ -114,11 +123,7 @@ export function MarcarIvaModal({ supabase, productos, seleccionInicial, onClose,
             Vista previa
           </h3>
           <p role="status" aria-live="polite" className="font-sans text-body-md text-ink">
-            {vista
-              ? `${n} producto${n === 1 ? '' : 's'}: ${vista.cambian} cambia${vista.cambian === 1 ? '' : 'n'} a ${
-                  vista.llevaIva ? 'con' : 'sin'
-                } IVA.`
-              : ''}
+            {vista ? `${resumenCambiosIva(vista)}.` : ''}
           </p>
           {!vista && (
             <p id={`${id}-sin-vista`} className="font-sans text-label-md text-ink-soft">
@@ -131,13 +136,15 @@ export function MarcarIvaModal({ supabase, productos, seleccionInicial, onClose,
                 <caption className="sr-only">Precio de venta actual y nuevo por producto</caption>
                 <colgroup>
                   <col />
+                  <col className="w-[9.5rem]" />
                   <col className="w-[7.5rem]" />
                   <col className="w-[7.5rem]" />
-                  <col className="w-[13rem]" />
+                  <col className="w-[12rem]" />
                 </colgroup>
                 <thead>
                   <tr className="bg-accent-light text-table-head uppercase text-accent-dark">
                     <th scope="col" className="px-3 py-2.5">Producto</th>
+                    <th scope="col" className="px-3 py-2.5">IVA</th>
                     <th scope="col" className="px-3 py-2.5 text-right">Precio actual</th>
                     <th scope="col" className="px-3 py-2.5 text-right">Precio nuevo</th>
                     <th scope="col" className="px-3 py-2.5 text-right">Cambio</th>
@@ -151,6 +158,7 @@ export function MarcarIvaModal({ supabase, productos, seleccionInicial, onClose,
                         <th scope="row" className="px-3 py-3 font-normal text-ink [overflow-wrap:anywhere]">
                           {f.nombre}
                         </th>
+                        <td className="px-3 py-3 text-ink">{textoIvaNuevo(f.llevaIva)}</td>
                         <td className="px-3 py-3 text-right text-ink">{formatCurrency(f.precioActual)}</td>
                         <td className="px-3 py-3 text-right font-semibold text-accent-darker">{formatCurrency(f.precioNuevo)}</td>
                         <td className="px-3 py-3 text-right">
@@ -172,10 +180,8 @@ export function MarcarIvaModal({ supabase, productos, seleccionInicial, onClose,
 
       {a.confirmando && vista && (
         <ConfirmDialog
-          title={textoAccionIva(n, vista.llevaIva)}
-          mensaje={`Se ${vista.llevaIva ? 'agrega' : 'saca'} el IVA a ${vista.cambian} de ${n} producto${
-            n === 1 ? '' : 's'
-          } (los demás ya estaban así). Los de precio manual no cambian de precio.`}
+          title={textoAccionIva(n)}
+          mensaje={`${resumenCambiosIva(vista)}. Los de precio manual no cambian de precio.`}
           confirmLabel="Confirmar"
           onCancel={a.cancelarConfirmacion}
           onConfirm={a.aplicar}

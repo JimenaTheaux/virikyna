@@ -1,14 +1,15 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import {
   BottomSheet,
-  ControlSegmentado,
+  contadorExentos,
   ErrorText,
   EstadoBadge,
   estadoFilaIva,
   formatCurrency,
   ListaSeleccionProductos,
-  OPCIONES_ACCION_IVA,
+  resumenCambiosIva,
   textoAccionIva,
+  textoIvaNuevo,
   useMarcarIva,
 } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
@@ -25,9 +26,9 @@ type Props = {
 const FOCO = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-dark'
 const inputAccesible = `${inputClass} focus:border-accent-dark focus:ring-1 focus:ring-accent-dark`
 
-// "Lleva IVA" masivo en el celular (docs/47), solo admin (InventarioPage no lo ofrece a un cajero;
-// el RPC igual lo valida). Misma lógica que el modal de escritorio (useMarcarIva + MarcarIvaModal)
-// y mismo flujo que ActualizarPreciosSheet: elegir, ver la vista previa en tarjetas y confirmar.
+// IVA de productos en el celular (docs/47, docs/62), solo admin (InventarioPage no lo ofrece a un
+// cajero; el RPC igual lo valida). Misma lógica que el modal de escritorio (useMarcarIva +
+// MarcarIvaModal): tildado = exento, abre con los exentos tildados; vista previa en tarjetas.
 export function MarcarIvaSheet({ productos, onClose, onSaved }: Props) {
   const a = useMarcarIva({ supabase, productos, onSaved })
   const [dirty, setDirty] = useState(false)
@@ -47,9 +48,10 @@ export function MarcarIvaSheet({ productos, onClose, onSaved }: Props) {
     else onClose()
   }
 
+  // Descarta la vista previa y el error anterior (ej. "Tildá al menos un producto" ya tildados).
   function cambiar(accion: () => void) {
     setDirty(true)
-    if (vista) a.volver()
+    a.volver()
     accion()
   }
 
@@ -84,20 +86,16 @@ export function MarcarIvaSheet({ productos, onClose, onSaved }: Props) {
               aria-describedby={vista ? undefined : `${id}-sin-vista`}
               className={`min-h-12 rounded bg-accent-dark px-3 font-sans text-label-bold text-white transition active:bg-accent-darker disabled:opacity-50 ${FOCO}`}
             >
-              {a.saving ? 'Aplicando...' : vista ? textoAccionIva(n, vista.llevaIva) : 'Aplicar'}
+              {a.saving ? 'Aplicando...' : vista ? textoAccionIva(n) : 'Aplicar'}
             </button>
           </div>
         </div>
       }
     >
       <form id={formId} onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
-        <ControlSegmentado
-          legend="Acción"
-          opciones={OPCIONES_ACCION_IVA}
-          value={a.accion}
-          onChange={(v) => cambiar(() => a.setAccion(v))}
-          size="touch"
-        />
+        <p className="font-sans text-body-md text-ink">
+          <strong>Tildado = exento (sin IVA).</strong> Tildá los que no llevan IVA y destildá los que sí.
+        </p>
         <p className="font-sans text-label-md text-ink-soft">
           Un producto con precio manual no cambia de precio hasta que tenga costo cargado.
         </p>
@@ -107,6 +105,8 @@ export function MarcarIvaSheet({ productos, onClose, onSaved }: Props) {
           onToggle={(pid) => cambiar(() => a.toggle(pid))}
           inputClassName={inputAccesible}
           size="touch"
+          contador={contadorExentos}
+          filtroTildados="Ver solo los exentos"
         />
 
         <section aria-labelledby={`${id}-vp`} className="flex flex-col gap-2 border-t border-line pt-stack-md">
@@ -114,11 +114,7 @@ export function MarcarIvaSheet({ productos, onClose, onSaved }: Props) {
             Vista previa
           </h3>
           <p role="status" aria-live="polite" className="font-sans text-body-md text-ink">
-            {vista
-              ? `${n} producto${n === 1 ? '' : 's'}: ${vista.cambian} cambia${vista.cambian === 1 ? '' : 'n'} a ${
-                  vista.llevaIva ? 'con' : 'sin'
-                } IVA.`
-              : ''}
+            {vista ? `${resumenCambiosIva(vista)}.` : ''}
           </p>
           {!vista && (
             <p id={`${id}-sin-vista`} className="font-sans text-label-md text-ink-soft">
@@ -132,6 +128,7 @@ export function MarcarIvaSheet({ productos, onClose, onSaved }: Props) {
                 return (
                   <li key={f.id} className="rounded-lg border border-line bg-surface p-4 font-sans">
                     <p className="text-body-md text-ink [overflow-wrap:anywhere]">{f.nombre}</p>
+                    <p className="text-label-bold text-ink">{textoIvaNuevo(f.llevaIva)}</p>
                     <p className="mt-1 flex items-baseline justify-between gap-2 tabular-nums">
                       <span className="text-label-md text-ink-soft">
                         <span className="sr-only">Precio actual </span>
@@ -159,10 +156,8 @@ export function MarcarIvaSheet({ productos, onClose, onSaved }: Props) {
 
       {a.confirmando && vista && (
         <ConfirmDialog
-          title={textoAccionIva(n, vista.llevaIva)}
-          mensaje={`Se ${vista.llevaIva ? 'agrega' : 'saca'} el IVA a ${vista.cambian} de ${n} producto${
-            n === 1 ? '' : 's'
-          } (los demás ya estaban así). Los de precio manual no cambian de precio.`}
+          title={textoAccionIva(n)}
+          mensaje={`${resumenCambiosIva(vista)}. Los de precio manual no cambian de precio.`}
           confirmLabel="Confirmar"
           onCancel={a.cancelarConfirmacion}
           onConfirm={a.aplicar}

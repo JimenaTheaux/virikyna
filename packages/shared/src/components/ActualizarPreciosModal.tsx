@@ -69,11 +69,12 @@ export function ActualizarPreciosModal({ supabase, productos, proveedores, selec
     }
   }
 
-  // Todo cambio en los datos invalida la vista previa (y deshabilita "Aplicar"). También marca dirty:
-  // el modo (ControlSegmentado) son botones y onChangeCapture no los ve.
+  // Todo cambio en los datos invalida la vista previa (y deshabilita "Aplicar") y borra el error
+  // anterior (si no, "Tildá al menos un producto" quedaba a la vista ya con productos tildados).
+  // También marca dirty: el modo (ControlSegmentado) son botones y onChangeCapture no los ve.
   function cambiar(accion: () => void) {
     setDirty(true)
-    if (vista) a.volver()
+    a.volver()
     accion()
   }
 
