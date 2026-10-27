@@ -45,9 +45,10 @@ export function MarcarIvaModal({ supabase, productos, seleccionInicial, onClose,
     else onClose()
   }
 
+  // Descarta la vista previa y el error anterior (ej. "Tildá al menos un producto" ya tildados).
   function cambiar(accion: () => void) {
     setDirty(true)
-    if (vista) a.volver()
+    a.volver()
     accion()
   }
 

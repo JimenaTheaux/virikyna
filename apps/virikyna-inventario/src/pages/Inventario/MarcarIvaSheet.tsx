@@ -47,9 +47,10 @@ export function MarcarIvaSheet({ productos, onClose, onSaved }: Props) {
     else onClose()
   }
 
+  // Descarta la vista previa y el error anterior (ej. "Tildá al menos un producto" ya tildados).
   function cambiar(accion: () => void) {
     setDirty(true)
-    if (vista) a.volver()
+    a.volver()
     accion()
   }
 

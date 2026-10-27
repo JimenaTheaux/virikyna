@@ -45,6 +45,11 @@ export function ListaSeleccionProductos<P extends ProductoSeleccionable>({
       type="search"
       value={sel.busqueda}
       onChange={(e) => sel.buscar(e.target.value)}
+      // Enter (o "Ir" en el teclado del celular) solo busca: no envía el formulario de la acción
+      // masiva, que sin nada tildado mostraba "Tildá al menos un producto".
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.preventDefault()
+      }}
       placeholder="Nombre, marca, código o proveedor"
       className={touch ? inputClassName : `${inputClassName} w-72 py-2`}
     />
