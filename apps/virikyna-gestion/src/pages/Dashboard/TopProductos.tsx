@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { formatCantidad, formatCurrency } from '@virikyna/shared'
 import type { Medida, VentaPorProducto } from './types'
 
 const TOP = 10
+const TOP_CORTO = 5
 
 export function valorDe(fila: Pick<VentaPorProducto, 'unidades' | 'importe'>, medida: Medida): number {
   return medida === 'unidades' ? fila.unidades : fila.importe
@@ -65,7 +67,8 @@ export function Tendencia({ actual, anterior, medida }: { actual: number; anteri
   )
 }
 
-// Top 10 del período (rango): ordenado por la medida elegida, con tendencia contra el anterior.
+// Top del período (rango): ordenado por la medida elegida, con tendencia contra el anterior.
+// Arranca en 5 para que Semana entre sin scroll en 1366×768; "Ver top 10" lo abre.
 export function TopProductos({
   filas,
   medida,
@@ -77,12 +80,15 @@ export function TopProductos({
   onMedida: (m: Medida) => void
   comparacion: string
 }) {
-  const top = [...filas].sort((a, b) => valorDe(b, medida) - valorDe(a, medida)).slice(0, TOP)
+  const [verDiez, setVerDiez] = useState(false)
+  const ordenadas = [...filas].filter((f) => valorDe(f, medida) > 0).sort((a, b) => valorDe(b, medida) - valorDe(a, medida))
+  const cuantos = verDiez ? TOP : TOP_CORTO
+  const top = ordenadas.slice(0, cuantos)
   return (
     <div className="flex min-w-0 flex-col gap-2 rounded-lg bg-surface p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-sans text-label-bold uppercase text-ink-soft">Top {TOP} productos</p>
+          <p className="font-sans text-label-bold uppercase text-ink-soft">Top {cuantos} productos</p>
           <p className="truncate font-sans text-label-md text-ink-soft">Tendencia vs. {comparacion}</p>
         </div>
         <ToggleMedida medida={medida} onChange={onMedida} />
@@ -135,6 +141,16 @@ export function TopProductos({
             ))}
           </tbody>
         </table>
+      )}
+      {ordenadas.length > TOP_CORTO && (
+        <button
+          type="button"
+          aria-expanded={verDiez}
+          onClick={() => setVerDiez((v) => !v)}
+          className="self-start rounded px-2 py-0.5 font-sans text-label-md font-semibold text-accent-dark hover:bg-accent-light"
+        >
+          {verDiez ? `Ver top ${TOP_CORTO}` : `Ver top ${TOP}`}
+        </button>
       )}
     </div>
   )

@@ -1,7 +1,7 @@
 import { formatMedida, valorDe } from './TopProductos'
 import type { Medida, VentaPorProducto } from './types'
 
-const MARCAS_VISIBLES = 8
+const MARCAS_VISIBLES = 4
 
 // Resumen por marca (no hay categorías de producto: la marca es el agrupador, decisión 2026-10-26).
 // Barras horizontales finas de una sola serie — el título nombra la medida, sin leyenda.

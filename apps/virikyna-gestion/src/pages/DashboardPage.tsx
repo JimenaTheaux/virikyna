@@ -98,10 +98,11 @@ export function DashboardPage() {
   // <main> del layout, que deja lugar abajo para el footer fijo.
   return (
     <div className="flex flex-col gap-stack-md">
-      <div className="flex flex-wrap items-end justify-between gap-stack-md">
-        <div>
+      {/* Título y período en una línea: en 1366×768 Hoy y Semana entran sin scroll. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-stack-md gap-y-2">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3">
           <h1 className="font-display text-headline-lg text-accent-darker">Dashboard</h1>
-          <p className="mt-1 font-sans text-body-md text-ink-soft">{mostrado.descripcion}</p>
+          <p className="font-sans text-body-md text-ink-soft">{mostrado.descripcion}</p>
         </div>
         <PeriodoFiltro periodo={periodo} onTipo={elegirTipo} onRango={elegirRango} />
       </div>

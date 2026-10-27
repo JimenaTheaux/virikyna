@@ -1,5 +1,7 @@
-import { Field, inputClass } from '../../components/FormField'
 import { OPCIONES_PERIODO, MAX_DIAS_RANGO, type Periodo, type TipoPeriodo } from './periodo'
+
+const fechaClass =
+  'rounded border border-line bg-surface px-2 py-1 font-sans text-label-md text-ink outline-none focus:border-accent'
 
 type Props = {
   periodo: Periodo
@@ -11,7 +13,7 @@ type Props = {
 // (DashboardPage), no en estado local.
 export function PeriodoFiltro({ periodo, onTipo, onRango }: Props) {
   return (
-    <div className="flex flex-wrap items-end gap-stack-md">
+    <div className="flex flex-wrap items-center gap-2">
       <div role="group" aria-label="Período" className="flex flex-wrap gap-1 rounded-full bg-surface p-1 shadow-sm">
         {OPCIONES_PERIODO.map((op) => (
           <button
@@ -28,25 +30,30 @@ export function PeriodoFiltro({ periodo, onTipo, onRango }: Props) {
         ))}
       </div>
 
+      {/* Fechas en línea, a la altura de las pastillas (1366×768: el encabezado no crece). */}
       {periodo.tipo === 'rango' && (
-        <div className="flex flex-wrap items-end gap-stack-md">
-          <Field label="Desde" compact>
+        <div
+          title={`Máximo ${MAX_DIAS_RANGO} días`}
+          className="flex flex-wrap items-center gap-2 rounded-full bg-surface px-3 py-1 shadow-sm"
+        >
+          <label className="flex items-center gap-1.5 font-sans text-label-md text-ink-soft">
+            Desde
             <input
               type="date"
               value={periodo.actual.desde}
               onChange={(e) => e.target.value && onRango(e.target.value, periodo.actual.hasta)}
-              className={inputClass}
+              className={fechaClass}
             />
-          </Field>
-          <Field label="Hasta" compact>
+          </label>
+          <label className="flex items-center gap-1.5 font-sans text-label-md text-ink-soft">
+            Hasta
             <input
               type="date"
               value={periodo.actual.hasta}
               onChange={(e) => e.target.value && onRango(periodo.actual.desde, e.target.value)}
-              className={inputClass}
+              className={fechaClass}
             />
-          </Field>
-          <span className="pb-3 font-sans text-label-md text-ink-soft">Máximo {MAX_DIAS_RANGO} días</span>
+          </label>
         </div>
       )}
     </div>

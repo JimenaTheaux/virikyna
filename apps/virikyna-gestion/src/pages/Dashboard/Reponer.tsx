@@ -2,20 +2,21 @@ import { Link } from 'react-router-dom'
 import { formatCantidad } from '@virikyna/shared'
 import type { VentaPorProducto } from './types'
 
-const MAX_REPONER = 6
+const MAX_REPONER = 4
 
-// Lateral del gráfico: lo más vendido del período que quedó con stock ≤ mínimo.
+// Lateral del gráfico: lo vendido en el período cuyo stock no alcanza para otro período igual —
+// stock ≤ máx(mínimo, unidades vendidas). Agotados (stock ≤ 0) primero, después los más vendidos.
 export function Reponer({ filas, loading }: { filas: VentaPorProducto[]; loading: boolean }) {
   const aReponer = filas
-    .filter((f) => f.unidades > 0 && f.stockActual <= f.stockMinimo)
-    .sort((a, b) => b.unidades - a.unidades)
+    .filter((f) => f.unidades > 0 && f.stockActual <= Math.max(f.stockMinimo, f.unidades))
+    .sort((a, b) => Number(b.stockActual <= 0) - Number(a.stockActual <= 0) || b.unidades - a.unidades)
   const visibles = aReponer.slice(0, MAX_REPONER)
 
   return (
     <div className="flex min-w-0 flex-col gap-2 rounded-lg bg-surface p-4 shadow-sm">
       <div>
         <p className="font-sans text-label-bold uppercase text-ink-soft">Reponer</p>
-        <p className="font-sans text-label-md text-ink-soft">Más vendidos con stock en el mínimo o menos</p>
+        <p className="font-sans text-label-md text-ink-soft">Su stock no cubre otro período igual</p>
       </div>
       {loading ? (
         <p className="font-sans text-body-md text-ink-soft">—</p>
@@ -28,12 +29,18 @@ export function Reponer({ filas, loading }: { filas: VentaPorProducto[]; loading
               <span className="min-w-0 truncate text-ink" title={f.marca ? `${f.nombre} · ${f.marca}` : f.nombre}>
                 {f.nombre}
               </span>
-              <span className="shrink-0 whitespace-nowrap text-ink-soft">
+              <span
+                className="shrink-0 whitespace-nowrap text-ink-soft"
+                title={`Stock mínimo: ${formatCantidad(f.stockMinimo)}`}
+              >
                 {formatCantidad(f.unidades)} vend. ·{' '}
                 <span className={f.stockActual <= 0 ? 'font-semibold text-error' : 'font-semibold text-badge-amber-text'}>
-                  stock {formatCantidad(f.stockActual)}
+                  {f.stockActual < 0
+                    ? `agotado (${formatCantidad(f.stockActual)})`
+                    : f.stockActual === 0
+                      ? 'agotado'
+                      : `stock ${formatCantidad(f.stockActual)}`}
                 </span>
-                /{formatCantidad(f.stockMinimo)}
               </span>
             </li>
           ))}
