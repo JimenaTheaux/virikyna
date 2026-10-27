@@ -4,9 +4,10 @@
 // `ambiente: "produccion"` se usa homologación (para pruebas: dummy, consultas). Los botones de
 // emitir (arcaFacturacion.ts) mandan siempre "produccion" desde docs/59 — hasta entonces no lo
 // mandaban y las 43 Factura C del 19/10 al 26/10 salieron en homologación, sin validez fiscal.
-// Esta función solo habla con ARCA; no toca facturas_c ni el estado de la venta — eso lo hacen
-// los RPC `emitir_factura_c` / `reemitir_factura_c_produccion` (docs/59), que asumen que el CAE
-// ya se consiguió antes de llamarlos.
+// `emitir` reserva la venta antes de hablar con ARCA y guarda el CAE apenas lo consigue (docs/66):
+// antes, dos pantallas emitiendo la misma venta conseguían dos CAE reales, y si la app se cerraba
+// entre la respuesta de ARCA y el guardado el comprobante quedaba huérfano. `reemitir` sigue
+// devolviendo el CAE para que lo guarde quien llama (reemitir_factura_c_produccion, docs/59).
 //
 // SDK elegido: @aledj02/afip.js, fork de @afipsdk/afip.js que acepta cert/key como texto
 // (no como paths de archivo) y no cachea el TA (ticket de acceso de WSAA) en disco. Eso
@@ -88,6 +89,28 @@ type Body =
 // ARCA acepta, para Concepto 1 (productos), una fecha de comprobante de hasta 5 días antes de
 // la emisión. Se valida acá para dar un mensaje claro antes de pedir número.
 const DIAS_ATRAS_MAXIMO = 5
+
+// Con la venta reservada (docs/66), la función no puede tardar más que el vencimiento de la reserva
+// (5 minutos, en reservar_emision_factura_c): si no, otra pantalla la toma mientras esta sigue viva.
+// Si llegar a pedir el CAE tardó más de esto, no se pide; y el pedido mismo tiene su propio límite.
+const LIMITE_ANTES_DE_PEDIR_CAE_MS = 60 * 1000
+const LIMITE_PEDIDO_CAE_MS = 60 * 1000
+
+const MENSAJE_REVISAR = 'Posible factura ya emitida en ARCA para esta venta. Revisar con admin.'
+
+// Errores después de los cuales la reserva NO se libera: o no se sabe si ARCA emitió, o la venta
+// quedó para revisar. La reserva vence sola y el próximo intento compara contra ARCA.
+class SinLiberar extends Error {}
+class EmisionIncierta extends SinLiberar {}
+class ParaRevisar extends SinLiberar {
+  constructor() {
+    super(MENSAJE_REVISAR)
+  }
+}
+
+type Reserva =
+  | { resultado: 'reservada'; token: string; pendiente_ultimo_arca?: number | null; pendiente_ambiente?: Ambiente | null }
+  | { resultado: 'en_curso' | 'revisar' | 'ya_facturada' | 'no_encontrada' }
 
 // Sin esto, el navegador/webview bloquea el preflight OPTIONS antes de que el POST
 // llegue a esta función — supabase-js lo reporta como "Failed to send a request to
@@ -217,6 +240,10 @@ type VentaAFacturar = {
 }
 
 // Pide el próximo número y el CAE a ARCA. `fecha` es la fecha del comprobante (YYYY-MM-DD).
+// `antesDePedirCae` corre con el último número autorizado, justo antes de pedir el CAE: si tira,
+// no se pide. Un error de ARCA con código ("(10016) …", lo arma el SDK desde la respuesta) o un
+// Resultado distinto de "A" es un rechazo: no se emitió nada. Cualquier otro error al pedir el CAE
+// (red, timeout) es EmisionIncierta: ARCA pudo haberlo emitido igual.
 async function emitirComprobante(
   // deno-lint-ignore no-explicit-any
   afip: any,
@@ -224,8 +251,10 @@ async function emitirComprobante(
   venta: VentaAFacturar,
   fecha: string,
   ambiente: Ambiente,
+  antesDePedirCae?: (ultimoNumero: number) => Promise<void>,
 ) {
   const ultimoNumero = await afip.ElectronicBilling.getLastVoucher(Number(puntoVenta), CBTE_TIPO_FACTURA_C)
+  if (antesDePedirCae) await antesDePedirCae(ultimoNumero)
   const proximoNumero = ultimoNumero + 1
 
   const cuitCliente = venta.cliente?.cuit?.replace(/\D/g, '') ?? ''
@@ -255,7 +284,25 @@ async function emitirComprobante(
     CondicionIVAReceptorId: condicionIvaReceptor,
   }
 
-  const resultadoCrudo = await afip.ElectronicBilling.createVoucher(data, true)
+  let timer: number | undefined
+  // deno-lint-ignore no-explicit-any
+  let resultadoCrudo: any
+  try {
+    resultadoCrudo = await Promise.race([
+      afip.ElectronicBilling.createVoucher(data, true),
+      new Promise((_, reject) => {
+        timer = setTimeout(
+          () => reject(new EmisionIncierta(`ARCA no respondió en ${LIMITE_PEDIDO_CAE_MS / 1000} segundos`)),
+          LIMITE_PEDIDO_CAE_MS,
+        )
+      }),
+    ])
+  } catch (err) {
+    if (err instanceof SinLiberar || /^\(\d+\) /.test(mensajeError(err))) throw err
+    throw new EmisionIncierta(mensajeError(err))
+  } finally {
+    clearTimeout(timer)
+  }
   const detalle = Array.isArray(resultadoCrudo.FeDetResp.FECAEDetResponse)
     ? resultadoCrudo.FeDetResp.FECAEDetResponse[0]
     : resultadoCrudo.FeDetResp.FECAEDetResponse
@@ -263,7 +310,9 @@ async function emitirComprobante(
   // El SDK ya tira error si ARCA rechaza con observaciones; esto cubre cualquier otra
   // respuesta sin aprobación o sin CAE, para que nunca se guarde un comprobante vacío.
   if (detalle?.Resultado !== 'A' || !/^\d{14}$/.test(String(detalle?.CAE ?? ''))) {
-    throw new Error(`ARCA no aprobó el comprobante (Resultado: ${detalle?.Resultado ?? '—'}, CAE: ${detalle?.CAE ?? '—'})`)
+    const mensaje = `ARCA no aprobó el comprobante (Resultado: ${detalle?.Resultado ?? '—'}, CAE: ${detalle?.CAE ?? '—'})`
+    // Aprobado pero sin un CAE válido: no se sabe qué quedó en ARCA.
+    throw detalle?.Resultado === 'A' ? new EmisionIncierta(mensaje) : new Error(mensaje)
   }
 
   return {
@@ -378,9 +427,100 @@ Deno.serve(async (req) => {
     if (ventaError || !venta) return jsonResponse({ error: 'Venta no encontrada' }, 404)
     if (venta.factura_c) return jsonResponse({ error: 'Esta venta ya tiene una Factura C emitida' }, 400)
 
+    // Reserva (docs/66): una sola pantalla por venta habla con ARCA. Las RPC van con el usuario que
+    // llama, así auditoría y "Revisar emisión" muestran quién fue.
+    const { data: reserva, error: reservaError } = await callerClient.rpc('reservar_emision_factura_c', {
+      p_venta_id: venta.id,
+    })
+    if (reservaError) return jsonResponse({ ok: false, error: `No se pudo reservar la venta: ${reservaError.message}` }, 500)
+    const r = reserva as Reserva
+    if (r.resultado === 'en_curso') return jsonResponse({ ok: false, error: 'Ya se está emitiendo desde otra pantalla.' }, 409)
+    if (r.resultado === 'revisar') return jsonResponse({ ok: false, error: MENSAJE_REVISAR }, 409)
+    if (r.resultado === 'ya_facturada') return jsonResponse({ error: 'Esta venta ya tiene una Factura C emitida' }, 400)
+    if (r.resultado !== 'reservada') return jsonResponse({ error: 'Venta no encontrada' }, 404)
+
+    const token = r.token
+    const reservadaEn = Date.now()
+    const marcarRevisar = async (ultimoActual: number) => {
+      const { data: marcada, error } = await callerClient.rpc('marcar_revisar_emision_factura_c', {
+        p_venta_id: venta.id,
+        p_token: token,
+        p_ultimo_actual: ultimoActual,
+      })
+      if (error || !marcada) console.error(`No se pudo marcar para revisar la venta ${venta.id}:`, error?.message)
+    }
+
     try {
-      return jsonResponse(await emitirComprobante(afip, puntoVenta, venta, fechaArgentina(), ambiente))
+      const resultado = await emitirComprobante(afip, puntoVenta, venta, fechaArgentina(), ambiente, async (ultimo) => {
+        // Se tomó una reserva vencida cuyo intento llegó a pedir el CAE en producción: si ARCA tiene
+        // otro último número, ese intento pudo haber emitido. Uno de homologación no tiene validez
+        // fiscal, no hay nada que cuidar.
+        if (r.pendiente_ultimo_arca != null && r.pendiente_ambiente === 'produccion') {
+          const actual =
+            ambiente === 'produccion'
+              ? ultimo
+              : await crearAfip('produccion').ElectronicBilling.getLastVoucher(
+                  Number(obtenerPuntoVenta('produccion')),
+                  CBTE_TIPO_FACTURA_C,
+                )
+          if (actual !== r.pendiente_ultimo_arca) {
+            await marcarRevisar(actual)
+            throw new ParaRevisar()
+          }
+        }
+        if (Date.now() - reservadaEn > LIMITE_ANTES_DE_PEDIR_CAE_MS) {
+          throw new Error('ARCA tardó demasiado en responder y no se pidió el CAE. Probá de nuevo.')
+        }
+        const { data: registrado, error } = await callerClient.rpc('registrar_ultimo_arca_emision_factura_c', {
+          p_venta_id: venta.id,
+          p_token: token,
+          p_ambiente: ambiente,
+          p_ultimo: ultimo,
+        })
+        if (error || !registrado) {
+          throw new Error(`No se pudo registrar la reserva de la venta: ${error?.message ?? 'la tomó otra pantalla'}`)
+        }
+      })
+
+      // Se guarda acá y no en el cliente: si la app se cierra ahora, el CAE no se pierde.
+      const { error: guardarError } = await callerClient.rpc('emitir_factura_c', {
+        p_venta_id: venta.id,
+        p_cae: resultado.cae,
+        p_numero_factura: resultado.numeroFactura,
+        p_punto_venta: resultado.puntoVenta,
+        p_ambiente: resultado.ambiente,
+      })
+      if (guardarError) {
+        console.error(
+          `CAE emitido sin guardar — venta ${venta.id}, ${resultado.puntoVenta}-${resultado.numeroFactura}, CAE ${resultado.cae}:`,
+          guardarError.message,
+        )
+        // Queda bloqueada: no se vuelve a emitir hasta que un admin la revise.
+        await marcarRevisar(Number(resultado.numeroFactura))
+        return jsonResponse(
+          {
+            ok: false,
+            error: `ARCA emitió el CAE ${resultado.cae} (comprobante ${resultado.puntoVenta}-${resultado.numeroFactura}) pero no se pudo guardar (${guardarError.message}). Anotalo a mano.`,
+          },
+          502,
+        )
+      }
+      return jsonResponse({ ...resultado, guardada: true })
     } catch (err) {
+      if (err instanceof ParaRevisar) return jsonResponse({ ok: false, error: err.message }, 409)
+      if (err instanceof EmisionIncierta) {
+        return jsonResponse(
+          {
+            ok: false,
+            error: `No se sabe si ARCA emitió la factura (${err.message}). No la vuelvas a emitir ahora: en 5 minutos el sistema lo controla solo.`,
+          },
+          502,
+        )
+      }
+      if (!(err instanceof SinLiberar)) {
+        const { error } = await callerClient.rpc('liberar_emision_factura_c', { p_venta_id: venta.id, p_token: token })
+        if (error) console.error(`No se pudo liberar la reserva de la venta ${venta.id}:`, error.message)
+      }
       return jsonResponse({ ok: false, error: mensajeError(err) }, 502)
     }
   }

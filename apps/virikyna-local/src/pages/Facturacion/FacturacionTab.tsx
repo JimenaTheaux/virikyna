@@ -4,7 +4,8 @@ import type { EstadoComprobante, FormaPagoVenta } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { friendlyError, emitirFacturaCReal, textoParaBuscar, ConfirmarFacturaC, SELECT_CLIENTE_FACTURA } from '@virikyna/shared'
 import { formatCurrency, formatFechaCortaLocal, formatHora, hoyAR, rangoTimestampsAR } from '@virikyna/shared'
-import { EstadoBadge, RowActionsMenu } from '@virikyna/shared'
+import { EstadoBadge, RowActionsMenu, AvisoEmisionesARevisar, useEmisionesARevisar } from '@virikyna/shared'
+import { usePerfil } from '../../auth/AuthContext'
 import { FORMA_PAGO_LABEL, itemsComprobanteDesdeVenta, type DatosComprobante } from '@virikyna/shared'
 import {
   clasesFilaConItems,
@@ -108,9 +109,16 @@ export function FacturacionTab() {
       )
     : ventas
 
+  // Bloqueadas para revisar (docs/66): no se pueden tildar hasta que un admin las desbloquee.
+  const { rol } = usePerfil()
+  const { lista: aRevisar, recargar: recargarARevisar } = useEmisionesARevisar(supabase, ventas)
+  const idsARevisar = new Set(aRevisar.map((e) => e.venta_id))
+
   // Solo las filas que se ven y siguen sin facturar: una venta tildada que quedó oculta por el
   // buscador (o que ya se facturó desde otra pantalla) no se factura sin que se vea. Igual que Gestión.
-  const seleccionadas = ventasVisibles.filter((v) => seleccion.has(v.id) && v.estado === 'sin_facturar')
+  const seleccionadas = ventasVisibles.filter(
+    (v) => seleccion.has(v.id) && v.estado === 'sin_facturar' && !idsARevisar.has(v.id),
+  )
   const totalSeleccionado = seleccionadas.reduce((acc, v) => acc + v.total, 0)
 
   // Se llama solo desde la confirmación, con la lista que se confirmó.
@@ -278,6 +286,15 @@ export function FacturacionTab() {
           {resultadoEmision}
         </p>
       )}
+      <AvisoEmisionesARevisar
+        supabase={supabase}
+        lista={aRevisar}
+        esAdmin={rol === 'admin'}
+        onDesbloqueada={() => {
+          recargarARevisar()
+          cargar()
+        }}
+      />
 
       <div className="mt-stack-md flex-1 overflow-auto rounded-xl shadow-sm">
         {/* table-fixed + colgroup: columnas de contenido corto con ancho fijo (en rem, medido sobre
@@ -336,7 +353,7 @@ export function FacturacionTab() {
                   >
                     {/* Checkbox y ⋮ no expanden la fila (el portal del menú también burbujea por React). */}
                     <td rowSpan={rowSpan} className={`cursor-default ${celdaDoble}`} onClick={(e) => e.stopPropagation()}>
-                      {venta.estado === 'sin_facturar' && (
+                      {venta.estado === 'sin_facturar' && !idsARevisar.has(venta.id) && (
                         <input
                           type="checkbox"
                           checked={seleccion.has(venta.id)}
@@ -357,9 +374,13 @@ export function FacturacionTab() {
                     <td className={`text-ink-soft [overflow-wrap:anywhere] ${celda}`}>{FORMA_PAGO_LABEL[venta.forma_pago]}</td>
                     <td className={`whitespace-nowrap font-sans font-semibold text-ink ${celda}`}>{formatCurrency(venta.total)}</td>
                     <td rowSpan={rowSpan} className={celdaDoble}>
-                      <EstadoBadge variant={venta.estado === 'facturado' ? 'green' : 'amber'}>
-                        {ESTADO_LABEL[venta.estado === 'facturado' ? 'facturado' : 'sin_facturar']}
-                      </EstadoBadge>
+                      {idsARevisar.has(venta.id) ? (
+                        <EstadoBadge variant="red">Revisar emisión</EstadoBadge>
+                      ) : (
+                        <EstadoBadge variant={venta.estado === 'facturado' ? 'green' : 'amber'}>
+                          {ESTADO_LABEL[venta.estado === 'facturado' ? 'facturado' : 'sin_facturar']}
+                        </EstadoBadge>
+                      )}
                     </td>
                     <td rowSpan={rowSpan} className={`cursor-default text-right ${celdaDoble}`} onClick={(e) => e.stopPropagation()}>
                       <RowActionsMenu

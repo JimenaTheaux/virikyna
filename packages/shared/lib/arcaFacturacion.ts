@@ -1,7 +1,7 @@
 // Emisión real de Factura C contra ARCA (WSFEv1), vía la Edge Function arca-emitir-factura
 // (ver supabase/functions/arca-emitir-factura/index.ts). Reemplaza el mock de CAE que usaban
-// Virikyna Local y Virikyna Gestión — la función solo consigue el CAE, este helper es el que
-// además lo persiste con el RPC emitir_factura_c (docs/06_estructura_de_datos.md, docs/59).
+// Virikyna Local y Virikyna Gestión. Desde docs/66 la función reserva la venta y guarda el CAE
+// ella misma (`guardada: true`); el RPC emitir_factura_c de acá queda para una función anterior.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { friendlyError } from './supabaseErrors'
@@ -9,7 +9,15 @@ import { friendlyError } from './supabaseErrors'
 export type AmbienteArca = 'homologacion' | 'produccion'
 
 type RespuestaArca =
-  | { ok: true; cae: string; caeFchVto: string; numeroFactura: string; puntoVenta: string; ambiente: AmbienteArca }
+  | {
+      ok: true
+      cae: string
+      caeFchVto: string
+      numeroFactura: string
+      puntoVenta: string
+      ambiente: AmbienteArca
+      guardada?: boolean
+    }
   | { ok: false; error: string }
 
 async function llamarArcaEmitirFactura(
@@ -47,6 +55,10 @@ export async function emitirFacturaCReal(
   const resultado = await llamarArcaEmitirFactura(supabase, venta.id, ambiente)
   if (!resultado.ok) {
     return { ok: false, mensaje: `N° ${venta.numero}: ${resultado.error}` }
+  }
+
+  if (resultado.guardada) {
+    return { ok: true, mensaje: `Factura C emitida para N° ${venta.numero} — CAE ${resultado.cae}.` }
   }
 
   const { error: rpcError } = await supabase.rpc('emitir_factura_c', {

@@ -4,7 +4,7 @@ import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-quer
 import type { EstadoComprobante, FormaPagoVenta } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { friendlyError, formatCurrency, emitirFacturaCReal, rangoTimestampsAR, hoyAR } from '@virikyna/shared'
-import { ConfirmarFacturaC, SELECT_CLIENTE_FACTURA } from '@virikyna/shared'
+import { ConfirmarFacturaC, SELECT_CLIENTE_FACTURA, AvisoEmisionesARevisar, useEmisionesARevisar } from '@virikyna/shared'
 import { formatFechaCortaLocal, formatHora, EstadoBadge } from '@virikyna/shared'
 import { FORMA_PAGO_LABEL, itemsComprobanteDesdeVenta, type DatosComprobante } from '@virikyna/shared'
 import {
@@ -117,6 +117,10 @@ export function FacturacionTab() {
   const loading = ventasQuery.isPending
   const error = ventasQuery.error ? friendlyError(ventasQuery.error as never) : null
 
+  // Bloqueadas para revisar (docs/66): no se pueden tildar hasta que se desbloqueen.
+  const { lista: aRevisar, recargar: recargarARevisar } = useEmisionesARevisar(supabase, ventasQuery.dataUpdatedAt)
+  const idsARevisar = new Set(aRevisar.map((e) => e.venta_id))
+
   const cantidadConNotas = ventas.filter((v) => tieneNota(v.nota)).length
   const visibles = filtrarVentas(ventas, soloConNotas, q)
 
@@ -131,7 +135,7 @@ export function FacturacionTab() {
 
   // Solo las filas visibles: una venta tildada que después quedó oculta por el chip o el buscador
   // no se factura sin que se vea. Tampoco una que ya quedó facturada (desde otra pantalla).
-  const seleccionadas = visibles.filter((v) => seleccion.has(v.id) && v.estado === 'sin_facturar')
+  const seleccionadas = visibles.filter((v) => seleccion.has(v.id) && v.estado === 'sin_facturar' && !idsARevisar.has(v.id))
   const totalSeleccionado = seleccionadas.reduce((acc, v) => acc + v.total, 0)
 
   // Se llama solo desde la confirmación, con la lista que se confirmó.
@@ -321,6 +325,16 @@ export function FacturacionTab() {
           {resultadoEmision}
         </p>
       )}
+      {/* Gestión es solo para admin (AuthContext). */}
+      <AvisoEmisionesARevisar
+        supabase={supabase}
+        lista={aRevisar}
+        esAdmin
+        onDesbloqueada={() => {
+          recargarARevisar()
+          queryClient.invalidateQueries({ queryKey: ['facturacion'] })
+        }}
+      />
 
       <div className="mt-stack-md flex-1 overflow-auto rounded-xl shadow-sm">
         {/* Estilo "G" (docs/08, sección 5.2): table-fixed + colgroup, columnas cortas con ancho fijo
@@ -383,7 +397,7 @@ export function FacturacionTab() {
                   >
                     {/* Checkbox y "Ver" no expanden la fila. */}
                     <td rowSpan={rowSpan} className={`cursor-default ${celdaDoble}`} onClick={(e) => e.stopPropagation()}>
-                      {venta.estado === 'sin_facturar' && (
+                      {venta.estado === 'sin_facturar' && !idsARevisar.has(venta.id) && (
                         <input
                           type="checkbox"
                           checked={seleccion.has(venta.id)}
@@ -425,9 +439,13 @@ export function FacturacionTab() {
                     <td className={`text-ink-soft [overflow-wrap:anywhere] ${celda}`}>{FORMA_PAGO_LABEL[venta.forma_pago]}</td>
                     <td className={`whitespace-nowrap font-semibold text-ink ${celda}`}>{formatCurrency(venta.total)}</td>
                     <td rowSpan={rowSpan} className={celdaDoble}>
-                      <EstadoBadge variant={venta.estado === 'facturado' ? 'green' : 'amber'}>
-                        {ESTADO_LABEL[venta.estado === 'facturado' ? 'facturado' : 'sin_facturar']}
-                      </EstadoBadge>
+                      {idsARevisar.has(venta.id) ? (
+                        <EstadoBadge variant="red">Revisar emisión</EstadoBadge>
+                      ) : (
+                        <EstadoBadge variant={venta.estado === 'facturado' ? 'green' : 'amber'}>
+                          {ESTADO_LABEL[venta.estado === 'facturado' ? 'facturado' : 'sin_facturar']}
+                        </EstadoBadge>
+                      )}
                     </td>
                     <td rowSpan={rowSpan} className={`cursor-default text-right ${celdaDoble}`} onClick={(e) => e.stopPropagation()}>
                       <button
