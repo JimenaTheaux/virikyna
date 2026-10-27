@@ -1,7 +1,9 @@
 -- 61 — Notas con hilos y edición + ventas por producto para el Dashboard de Gestión
 --
--- ⏳ SIN APLICAR en producción. Probada el 2026-10-26 (PARTE A + PARTE C en una transacción abortada,
--- contra la base real, backup previo virikyna_2026-10-26_pre-docs61): PARTE C 23/23.
+-- ✅ APLICADO en producción el 2026-10-27 (PARTE A), con backup previo virikyna_2026-10-27_pre-docs61-aplicar.
+-- Antes se re-verificó que notas_internas, sus policies y venta_items seguían como en el relevamiento.
+-- PARTE B ok (3 columnas, 3 policies sin DELETE, 2 triggers nuevos, vista filtra, sin anon, 2 índices).
+-- PARTE C 23/23 antes (2026-10-26, backup virikyna_2026-10-26_pre-docs61) y después de aplicar.
 -- Correr desde la raíz del repo con
 -- `supabase db query --linked -f docs/61_notas_hilos_y_ventas_por_producto.sql` (o en el SQL Editor
 -- del proyecto ccpinvtleqlsukcqnili), después de 59. Antes: backup con etiqueta (pre-docs61).
