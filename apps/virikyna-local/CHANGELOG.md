@@ -1,5 +1,20 @@
 # Novedades de Virikyna Local
 
+## 0.11.0 — octubre 2026
+
+> La versión 0.10.0 sigue funcionando y ya está protegida contra la Factura C duplicada. Conviene actualizar para ver el aviso de precios a etiquetar y el Dashboard nuevo.
+
+### Dashboard
+- **Aviso de cambios de precio.** Una fila arriba dice cuántos productos tienen un precio distinto al de su etiqueta en el local ("Cambios de precio · N pendientes de etiquetar"). **Ver y marcar** abre la lista: fecha, producto, marca, el precio de la etiqueta y el precio actual, y de dónde vino el cambio (factura, cambio manual, alta). Un producto nuevo aparece como "Sin etiqueta".
+- **Marcar etiquetas.** Después de cambiar la etiqueta en el local, tildar el producto y tocar **Etiqueta actualizada**: sale de pendientes. **Marcar todas** marca las que se ven (pide confirmación). Si el precio cambió de nuevo mientras tanto, ese producto no se marca. Lo pueden hacer administradoras y cajeros.
+- **Imprimir listado** imprime la lista de pendientes (o lo que se filtró con el buscador) para ir cambiando etiquetas en el local. La pestaña **Últimos 30 días** muestra todos los cambios y quién marcó cada etiqueta.
+- **Productos vendidos hoy.** Lista de lo vendido en el día con unidades, importe y stock que queda; **Ver todos** abre la lista completa con buscador y orden.
+- **Más compacto.** Entra entero en la pantalla sin bajar: arriba la caja y el aviso de precios, después las ventas, tickets y ticket promedio de hoy; a la izquierda los productos vendidos; a la derecha las ventas de la semana, el stock y los defectuosos.
+
+### Facturación
+- **Una venta, una sola Factura C.** Si dos pantallas emiten la misma venta a la vez, solo una le pide la factura a ARCA; la otra avisa "Ya se está emitiendo desde otra pantalla." La factura queda guardada aunque se cierre el programa justo después de emitir.
+- **Ventas para revisar.** Si un intento de emisión se cortó a la mitad y no se sabe si ARCA llegó a emitir, la venta queda bloqueada con el aviso "No se pueden emitir hasta que un administrador lo revise". Una administradora la busca en ARCA y, si no tiene factura, la **desbloquea** dejando una nota de qué revisó.
+
 ## 0.10.0 — octubre 2026
 
 > Conviene actualizar hoy: en la 0.9.0, un pago a proveedor hecho desde Virikyna Gestión con varios medios (por ejemplo transferencia + cheques) se ve con la forma de pago rota.

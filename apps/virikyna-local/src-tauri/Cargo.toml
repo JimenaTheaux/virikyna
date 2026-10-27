@@ -1,6 +1,6 @@
 [package]
 name = "virikyna-local"
-version = "0.10.0"
+version = "0.11.0"
 description = "Virikyna Local — app de caja"
 edition = "2021"
 
