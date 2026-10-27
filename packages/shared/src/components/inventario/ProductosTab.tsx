@@ -28,9 +28,9 @@ export type ActualizarPreciosRender = (args: {
   onSaved: (cantidad: number) => void
 }) => ReactNode
 
+// Sin selección inicial: el modal de IVA abre con los exentos tildados (docs/62).
 export type MarcarIvaRender = (args: {
   productos: ProductoConRelaciones[]
-  seleccionInicial: string[]
   onClose: () => void
   onSaved: (cantidad: number) => void
 }) => ReactNode
@@ -128,7 +128,7 @@ export function ProductosTab({ supabase, renderFormulario, renderActualizarPreci
               onClick={() => setMarcandoIva(true)}
               className="h-10 whitespace-nowrap rounded border border-line bg-surface px-4 font-sans text-label-bold text-ink-soft transition hover:border-accent hover:text-accent-darker"
             >
-              IVA{seleccion.size > 0 ? ` (${seleccion.size})` : ''}
+              IVA
             </button>
           )}
           <button
@@ -218,6 +218,7 @@ export function ProductosTab({ supabase, renderFormulario, renderActualizarPreci
                 <td className={`${celda} whitespace-nowrap text-right font-semibold tabular-nums text-accent-darker`}>
                   {formatCurrency(producto.precio_venta)}
                   {producto.precio_manual !== null && <span className="block font-normal text-ink-soft">manual</span>}
+                  {Number(producto.iva_porcentaje) === 0 && <span className="block font-normal text-ink-soft">sin IVA</span>}
                 </td>
                 <td className={`${celda} text-right tabular-nums text-ink`}>{formatCantidad(stockTotal(producto))}</td>
                 <td className={celda}>
@@ -269,11 +270,9 @@ export function ProductosTab({ supabase, renderFormulario, renderActualizarPreci
       {marcandoIva &&
         renderMarcarIva?.({
           productos,
-          seleccionInicial: Array.from(seleccion),
           onClose: () => setMarcandoIva(false),
           onSaved: (cantidad) => {
             setMarcandoIva(false)
-            setSeleccion(new Set())
             setResultadoPrecios(`IVA cambiado en ${cantidad} producto${cantidad === 1 ? '' : 's'}.`)
             cargar()
           },
