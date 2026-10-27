@@ -34,15 +34,15 @@ export function WeeklySalesChart({ titulo, dias, serie: datos, hoy }: Props) {
 
   const max = Math.max(...serie.map((d) => d.total), 1)
 
-  // Alto fijo (barras h-36, ~230 px en total): no se estira con la card ni con la ventana.
+  // Alto fijo (barras h-24, ~150 px en total): no se estira con la card ni con la ventana.
   return (
     <div>
       <p className="font-sans text-label-bold uppercase text-ink-soft">{titulo}</p>
-      <div className={`mt-stack-md flex items-end ${dias.length > MAX_BARRAS_CON_MONTO ? 'gap-1' : 'gap-3'}`}>
+      <div className={`mt-2 flex items-end ${dias.length > MAX_BARRAS_CON_MONTO ? 'gap-1' : 'gap-3'}`}>
         {serie.map((dia) => (
           <div
             key={dia.fecha}
-            className="flex min-w-0 flex-1 flex-col items-center gap-2"
+            className="flex min-w-0 flex-1 flex-col items-center gap-1"
             title={`${formatFechaCorta(dia.fecha)}: ${formatCurrency(dia.total)}`}
           >
             {conMonto && (
@@ -50,7 +50,7 @@ export function WeeklySalesChart({ titulo, dias, serie: datos, hoy }: Props) {
                 {dia.total > 0 ? formatCurrencyCompact(dia.total) : ''}
               </span>
             )}
-            <div className="flex h-36 w-full items-end">
+            <div className="flex h-24 w-full items-end">
               <div
                 className={`w-full rounded-t ${dia.esHoy ? 'bg-accent-darker' : 'bg-accent'}`}
                 style={{ height: `${Math.max((dia.total / max) * 100, dia.total > 0 ? 4 : 1)}%` }}

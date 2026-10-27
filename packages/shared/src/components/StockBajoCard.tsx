@@ -43,20 +43,30 @@ export interface StockBajoCardProps {
   supabase: SupabaseClient
   className?: string
   maxItems?: number
+  // 'compacta' (Dashboard de Gestión): un renglón "Stock bajo · N ›", sin listado.
+  variant?: 'card' | 'compacta'
 }
 
 // Card "Stock bajo" del dashboard — misma consulta y mismo listado en Virikyna Local
 // (Admin y Cajero) y Virikyna Gestión, por eso vive acá en vez de repetirse por app.
-export function StockBajoCard({ supabase, className = '', maxItems = 4 }: StockBajoCardProps) {
+export function StockBajoCard({ supabase, className = '', maxItems = 4, variant = 'card' }: StockBajoCardProps) {
+  const compacta = variant === 'compacta'
   // maxItems va en la key porque es el p_limite de la RPC — ['stock-bajo'] sigue sirviendo de
-  // prefijo para invalidar todas las variantes juntas.
+  // prefijo para invalidar todas las variantes juntas. La compacta solo usa el total.
+  const limite = compacta ? 1 : maxItems
   const { data, isPending } = useQuery({
-    queryKey: ['stock-bajo', maxItems],
-    queryFn: () => fetchProductosStockBajo(supabase, maxItems),
+    queryKey: ['stock-bajo', limite],
+    queryFn: () => fetchProductosStockBajo(supabase, limite),
     staleTime: 60_000,
   })
   const stockBajo = data?.productos ?? []
   const total = data?.total ?? 0
+
+  if (compacta) {
+    return (
+      <IndicadorCompacto to="/inventario" label="Stock bajo" valor={isPending ? '—' : String(total)} alerta={total > 0} className={className} />
+    )
+  }
 
   return (
     <Link
@@ -87,6 +97,37 @@ export function StockBajoCard({ supabase, className = '', maxItems = 4 }: StockB
           +{total - stockBajo.length} más — ver Inventario
         </p>
       )}
+    </Link>
+  )
+}
+
+// Renglón chico con link — variante 'compacta' de StockBajoCard y DefectuososCard. Con algo
+// pendiente lleva un punto ámbar además del número (no solo color).
+export function IndicadorCompacto({
+  to,
+  label,
+  valor,
+  alerta,
+  className = '',
+}: {
+  to: string
+  label: string
+  valor: string
+  alerta: boolean
+  className?: string
+}) {
+  return (
+    <Link
+      to={to}
+      className={`flex items-center justify-between gap-2 rounded px-2 py-1 font-sans text-label-md transition hover:bg-accent-light ${className}`}
+    >
+      <span className="flex min-w-0 items-center gap-1.5 text-ink-soft">
+        <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${alerta ? 'bg-badge-amber-text' : 'bg-line'}`} />
+        <span className="truncate">{label}</span>
+      </span>
+      <span className={`shrink-0 font-semibold ${alerta ? 'text-badge-amber-text' : 'text-ink'}`}>
+        {valor} <span aria-hidden="true">›</span>
+      </span>
     </Link>
   )
 }

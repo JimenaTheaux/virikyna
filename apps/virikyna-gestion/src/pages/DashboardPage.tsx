@@ -1,13 +1,16 @@
-import { useRef } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { IconCajaGestion, IconInventario, IconProveedores } from '../components/icons'
+import { useRef, useState, type ReactNode } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { formatCurrency, friendlyError, hoyAR, StockBajoCard, DefectuososCard } from '@virikyna/shared'
-import { useVentasPorDia } from './Dashboard/queries'
+import { useVentasPorDia, useVentasPorProducto } from './Dashboard/queries'
 import { WeeklySalesChart } from './Dashboard/WeeklySalesChart'
 import { AperturasAlerta } from './Dashboard/AperturasAlerta'
 import { PeriodoFiltro } from './Dashboard/PeriodoFiltro'
+import { Reponer } from './Dashboard/Reponer'
+import { ProductosVendidos } from './Dashboard/ProductosVendidos'
+import { TopProductos } from './Dashboard/TopProductos'
+import { VentasPorMarca } from './Dashboard/VentasPorMarca'
 import { diasDelRango, periodoDesdeParams, type TipoPeriodo } from './Dashboard/periodo'
-import type { VentaDelDia } from './Dashboard/types'
+import type { Medida, VentaDelDia } from './Dashboard/types'
 import { supabase } from '../lib/supabaseClient'
 
 // Suma de las filas por día (ya agregadas por la RPC) que caen dentro de un rango.
@@ -17,11 +20,15 @@ function totalesDe(filas: VentaDelDia[], { desde, hasta }: { desde: string; hast
     .reduce((acc, f) => ({ total: acc.total + f.total, cantidad: acc.cantidad + f.cantidad }), { total: 0, cantidad: 0 })
 }
 
-const ACCESOS_RAPIDOS = [
-  { to: '/inventario', label: 'Inventario', Icon: IconInventario },
-  { to: '/proveedores', label: 'Proveedores', Icon: IconProveedores },
-  { to: '/caja-gestion', label: 'Caja Gestión', Icon: IconCajaGestion },
-]
+// KPI compacto (~70 px): etiqueta + cifra de 22 px; el período va una sola vez, bajo el título.
+function Kpi({ label, children, className = '' }: { label: string; children: ReactNode; className?: string }) {
+  return (
+    <div className={`min-w-0 rounded-lg bg-surface p-3.5 shadow-sm ${className}`}>
+      <p className="font-sans text-label-md font-bold uppercase text-ink-soft">{label}</p>
+      <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 font-display text-headline-md text-accent-darker">{children}</div>
+    </div>
+  )
+}
 
 // Vista única — Virikyna Gestión es exclusiva de Admin, sin variante Cajero
 // (docs/04_modulos_y_funciones.md, módulo 2).
@@ -31,6 +38,7 @@ export function DashboardPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const periodo = periodoDesdeParams(searchParams)
   const fechaHoy = hoyAR(0)
+  const [medida, setMedida] = useState<Medida>('unidades')
 
   // Una sola llamada cubre el período, el anterior (comparación) y los días del gráfico.
   const ventasQuery = useVentasPorDia(periodo.consulta.desde, periodo.consulta.hasta)
@@ -45,6 +53,12 @@ export function DashboardPage() {
   if (!ventasQuery.isPlaceholderData) periodoDeLosDatos.current = periodo
   const mostrado = periodoDeLosDatos.current
 
+  // Por producto (docs/61): mismo período actual y anterior que los KPIs.
+  const productosQuery = useVentasPorProducto(periodo.actual, periodo.anterior)
+  const productos = productosQuery.data ?? []
+  const errorProductos = productosQuery.error ? friendlyError(productosQuery.error as never) : null
+  const unDia = periodo.actual.desde === periodo.actual.hasta
+
   const actual = totalesDe(filas, mostrado.actual)
   const anterior = totalesDe(filas, mostrado.anterior)
   const ticketPromedio = actual.cantidad > 0 ? actual.total / actual.cantidad : 0
@@ -52,12 +66,14 @@ export function DashboardPage() {
   const variacion =
     anterior.total > 0
       ? {
-          texto: `${actual.total >= anterior.total ? '+' : ''}${(((actual.total - anterior.total) / anterior.total) * 100).toFixed(0)}% vs. ${mostrado.comparacion}`,
+          texto: `${actual.total >= anterior.total ? '↑' : '↓'} ${Math.abs(Math.round(((actual.total - anterior.total) / anterior.total) * 100))}%`,
+          detalle: `vs. ${mostrado.comparacion} (${formatCurrency(anterior.total)})`,
           subida: actual.total >= anterior.total,
         }
       : actual.total > 0
         ? {
-            texto: `Sin ventas ${mostrado.comparacion === 'ayer' ? 'ayer' : `en ${mostrado.comparacion}`} para comparar`,
+            texto: 'sin comparación',
+            detalle: `Sin ventas ${mostrado.comparacion === 'ayer' ? 'ayer' : `en ${mostrado.comparacion}`} para comparar`,
             subida: true,
           }
         : null
@@ -76,6 +92,7 @@ export function DashboardPage() {
   }
 
   const actualizando = ventasQuery.isPlaceholderData ? 'opacity-60' : ''
+  const actualizandoProductos = productosQuery.isPlaceholderData ? 'opacity-60' : ''
 
   // Todas las alturas salen del contenido (nada de h-full / flex-1): si no entra, scrollea el
   // <main> del layout, que deja lugar abajo para el footer fijo.
@@ -84,72 +101,68 @@ export function DashboardPage() {
       <div className="flex flex-wrap items-end justify-between gap-stack-md">
         <div>
           <h1 className="font-display text-headline-lg text-accent-darker">Dashboard</h1>
-          <p className="mt-1 font-sans text-body-md text-ink-soft">Panorama del negocio.</p>
+          <p className="mt-1 font-sans text-body-md text-ink-soft">{mostrado.descripcion}</p>
         </div>
         <PeriodoFiltro periodo={periodo} onTipo={elegirTipo} onRango={elegirRango} />
       </div>
 
       {error && <p className="rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>}
+      {errorProductos && (
+        <p className="rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{errorProductos}</p>
+      )}
 
       <AperturasAlerta />
 
       <div className={`grid grid-cols-2 gap-gutter-grid transition-opacity xl:grid-cols-4 ${actualizando}`}>
-        <div className="col-span-2 min-w-0 rounded-lg bg-surface p-card-sm shadow-sm">
-          <p className="font-sans text-label-bold uppercase text-ink-soft">Ventas</p>
-          <p className="mt-2 font-display text-display-card text-accent-darker">
-            {loading ? '—' : formatCurrency(actual.total)}
-          </p>
-          <p className="mt-2 font-sans text-label-md text-ink-soft">{mostrado.descripcion}</p>
+        <Kpi label="Ventas">
+          <span>{loading ? '—' : formatCurrency(actual.total)}</span>
           {!loading && variacion && (
-            <p className={`mt-1 font-sans text-label-bold ${variacion.subida ? 'text-success' : 'text-error'}`}>
+            <span
+              title={variacion.detalle}
+              className={`font-sans text-label-bold ${variacion.subida ? 'text-success' : 'text-error'}`}
+            >
               {variacion.texto}
-            </p>
+              <span className="sr-only"> {variacion.detalle}</span>
+            </span>
           )}
-        </div>
-        <div className="min-w-0 rounded-lg bg-surface p-card-sm shadow-sm">
-          <p className="font-sans text-label-bold uppercase text-ink-soft">Tickets</p>
-          <p className="mt-2 font-display text-headline-md text-accent-darker">{loading ? '—' : actual.cantidad}</p>
-          <p className="mt-1 font-sans text-label-md text-ink-soft">{mostrado.descripcion}</p>
-        </div>
-        <div className="min-w-0 rounded-lg bg-surface p-card-sm shadow-sm">
-          <p className="font-sans text-label-bold uppercase text-ink-soft">Ticket promedio</p>
-          <p className="mt-2 font-display text-headline-md text-accent-darker">
-            {loading ? '—' : formatCurrency(ticketPromedio)}
-          </p>
-          <p className="mt-1 font-sans text-label-md text-ink-soft">{mostrado.descripcion}</p>
+        </Kpi>
+        <Kpi label="Tickets">{loading ? '—' : actual.cantidad}</Kpi>
+        <Kpi label="Ticket promedio">{loading ? '—' : formatCurrency(ticketPromedio)}</Kpi>
+        {/* Alertas de inventario: indicador chico con link, sin listado (el detalle está en Inventario). */}
+        <div className="flex min-w-0 flex-col justify-center gap-0.5 rounded-lg bg-surface p-1.5 shadow-sm">
+          <StockBajoCard supabase={supabase} variant="compacta" />
+          <DefectuososCard supabase={supabase} to="/inventario" variant="compacta" />
         </div>
       </div>
 
-      {/* items-start: el gráfico y las alertas de la derecha se alinean arriba y cada uno mide lo
-          que su contenido — ninguno se estira para igualar al otro. Debajo de xl (ventana chica)
-          las alertas pasan abajo del gráfico, una al lado de la otra. */}
+      {/* Dos columnas que apilan cada una lo suyo (sin filas compartidas, así ninguna card deja
+          hueco por la altura de la vecina): gráfico + tabla | Reponer + Por marca. Debajo de xl,
+          todo en una columna. */}
       <div className="grid grid-cols-1 items-start gap-gutter-grid xl:grid-cols-3">
-        <div className={`min-w-0 rounded-lg bg-surface p-card-sm shadow-sm transition-opacity xl:col-span-2 ${actualizando}`}>
-          <WeeklySalesChart
-            titulo={mostrado.tipo === 'hoy' ? 'Últimos 7 días' : 'Ventas por día'}
-            dias={diasDelRango(mostrado.grafico)}
-            serie={filas}
-            hoy={fechaHoy}
-          />
+        <div className="flex min-w-0 flex-col gap-gutter-grid xl:col-span-2">
+          <div className={`min-w-0 rounded-lg bg-surface p-4 shadow-sm transition-opacity ${actualizando}`}>
+            <WeeklySalesChart
+              titulo={mostrado.tipo === 'hoy' || mostrado.actual.desde === mostrado.actual.hasta ? 'Últimos 7 días' : 'Ventas por día'}
+              dias={diasDelRango(mostrado.grafico)}
+              serie={filas}
+              hoy={mostrado.actual.desde === mostrado.actual.hasta ? mostrado.actual.hasta : fechaHoy}
+            />
+          </div>
+          <div className={`min-w-0 transition-opacity ${actualizandoProductos}`}>
+            {unDia ? (
+              <ProductosVendidos
+                filas={productos}
+                titulo={periodo.tipo === 'hoy' ? 'Productos vendidos hoy' : 'Productos vendidos'}
+              />
+            ) : (
+              <TopProductos filas={productos} medida={medida} onMedida={setMedida} comparacion={periodo.comparacion} />
+            )}
+          </div>
         </div>
-
-        <div className="grid min-w-0 grid-cols-1 items-start gap-gutter-grid sm:grid-cols-2 xl:grid-cols-1">
-          <StockBajoCard supabase={supabase} />
-          <DefectuososCard supabase={supabase} to="/inventario" />
+        <div className={`flex min-w-0 flex-col gap-gutter-grid transition-opacity ${actualizandoProductos}`}>
+          <Reponer filas={productos} loading={productosQuery.isPending} />
+          {!unDia && <VentasPorMarca filas={productos} medida={medida} />}
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-gutter-grid sm:grid-cols-3">
-        {ACCESOS_RAPIDOS.map(({ to, label, Icon }) => (
-          <Link
-            key={to}
-            to={to}
-            className="flex items-center gap-3 rounded-lg bg-surface px-card-sm py-stack-md shadow-sm transition hover:bg-accent-light"
-          >
-            <Icon className="h-6 w-6 text-accent-dark" />
-            <span className="font-sans text-label-bold text-ink">{label}</span>
-          </Link>
-        ))}
       </div>
     </div>
   )

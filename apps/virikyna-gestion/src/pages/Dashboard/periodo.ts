@@ -105,12 +105,14 @@ export function calcularPeriodo(tipo: TipoPeriodo, rango?: Rango): Periodo {
   if (tipo === 'rango' && rango) {
     const dias = diasEntre(rango.desde, rango.hasta)
     const anteriorDesde = sumarDias(rango.desde, -dias)
+    // Un solo día: una barra sola no dice nada — como en "Hoy", los 7 días que terminan en él.
+    const grafico = dias === 1 ? { desde: sumarDias(rango.desde, -6), hasta: rango.hasta } : rango
     return {
       tipo,
       actual: rango,
       anterior: { desde: anteriorDesde, hasta: sumarDias(rango.desde, -1) },
-      grafico: rango,
-      consulta: { desde: anteriorDesde, hasta: rango.hasta },
+      grafico,
+      consulta: { desde: grafico.desde < anteriorDesde ? grafico.desde : anteriorDesde, hasta: rango.hasta },
       descripcion:
         dias === 1
           ? formatFechaCorta(rango.desde)

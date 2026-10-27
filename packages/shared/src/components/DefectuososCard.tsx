@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { nombreConMarca } from '../../lib/productoTexto'
+import { IndicadorCompacto } from './StockBajoCard'
 
 export type DefectuosoPendiente = { productoId: string; nombre: string; cantidad: number } // nombre = nombre · marca actuales
 
@@ -37,11 +38,13 @@ export interface DefectuososCardProps {
   to: string // pantalla a la que lleva el click (cada app tiene su propia ruta)
   className?: string
   maxItems?: number
+  // 'compacta' (Dashboard de Gestión): un renglón "Defectuosos · N ›", sin listado.
+  variant?: 'card' | 'compacta'
 }
 
 // Alerta para la dueña: mercadería devuelta como defectuosa, separada del stock, pendiente de
 // revisión. Misma consulta y listado en Virikyna Local y Virikyna Gestión, por eso vive acá.
-export function DefectuososCard({ supabase, to, className = '', maxItems = 3 }: DefectuososCardProps) {
+export function DefectuososCard({ supabase, to, className = '', maxItems = 3, variant = 'card' }: DefectuososCardProps) {
   const [loading, setLoading] = useState(true)
   const [items, setItems] = useState<DefectuosoPendiente[]>([])
 
@@ -59,6 +62,18 @@ export function DefectuososCard({ supabase, to, className = '', maxItems = 3 }: 
   }, [supabase])
 
   const unidades = items.reduce((acc, i) => acc + i.cantidad, 0)
+
+  if (variant === 'compacta') {
+    return (
+      <IndicadorCompacto
+        to={to}
+        label="Defectuosos a revisar"
+        valor={loading ? '—' : String(unidades)}
+        alerta={unidades > 0}
+        className={className}
+      />
+    )
+  }
 
   return (
     <Link
