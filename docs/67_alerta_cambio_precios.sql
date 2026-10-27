@@ -1,7 +1,9 @@
 -- 67 — Alerta de cambios de precio: historial de precios y etiquetas pendientes
 --
--- ⏳ PENDIENTE de aplicar en producción (esperando OK). Antes: backup con etiqueta (pre-docs67):
---    backup-virikyna.ps1 -Etiqueta pre-docs67   (docs/44; no seguir sin [OK] en la última línea)
+-- ✅ APLICADO en producción el 2026-10-27 19:30 (PARTE A), con backup previo
+-- virikyna_2026-10-27_pre-docs67. Antes: guarda md5 OK (las 3 funciones iguales al relevamiento) y
+-- ensayo A + C en un solo ROLLBACK, 22/22. Después: PARTE B ok (346 filas de historial, 2195
+-- etiquetas, 156 pendientes: 127 altas sin etiqueta + 29 cambios; RPCs sin anon) y PARTE C 22/22.
 -- Correr desde la raíz del repo con
 -- `supabase db query --linked -f docs/67_alerta_cambio_precios.sql` (o en el SQL Editor del
 -- proyecto ccpinvtleqlsukcqnili). La PARTE A es una sola transacción: el backfill y la

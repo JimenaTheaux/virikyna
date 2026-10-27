@@ -2572,3 +2572,63 @@ SQL, verificaciones y tests en `docs/57_pago_contado.sql`. No toca tablas ni vis
 **`editar_factura_compra`.** La forma de pago es una etiqueta (cambiarla no crea ni borra pagos) y no se puede cambiar si el comprobante tiene pagos o NC aplicados vigentes.
 
 **Apps.** El default del formulario pasa a cuenta corriente (Local, Gestión, Inventario; una copia conserva la forma de pago del original). Contado pide confirmación ("Se registrará pago a … · Desde: Caja Local/Caja Gestión · Usuario") y en una NC el selector queda fijo en cuenta corriente. `cargar_factura_compra` con `contado` (apps viejas) sigue sin registrar pago.
+
+## 32. Alerta de stock solo con mínimo definido
+
+SQL, verificaciones y tests en `docs/64_alerta_stock_con_minimo.sql`. Aplicada el 2026-10-27. No toca tablas.
+
+**Regla.** `productos.stock_minimo = 0` significa "sin definir" (sin migrar a NULL: las apps instaladas mandan `Number(x) || 0`). Solo un producto con mínimo > 0 puede estar en "stock bajo".
+
+**`productos_stock_bajo`.** Misma firma y orden (docs/42); ahora exige `stock_minimo > 0`. Al aplicar, la alerta bajó de 94 a 33 productos (los otros 61 estaban en 0 sin mínimo cargado).
+
+**RPC `resumen_stock_inventario()` → una fila `(activos, sin_stock, negativo, bajo, sin_minimo)`** — contadores de productos **activos** para la card del Dashboard y los chips de Inventario, con las definiciones de `packages/shared/lib/estadoStock.ts`: `sin_stock` (stock ≤ 0), `negativo` (< 0, subconjunto de sin_stock), `bajo` (mínimo > 0 y 0 < stock ≤ mínimo), `sin_minimo` (mínimo = 0). SQL invoker (aplica la RLS de productos), sin anon.
+
+## 33. Pago a proveedor con varios medios y cartera de cheques
+
+SQL, verificaciones y tests en `docs/65_pago_proveedor_varios_medios.sql`. Aplicada el 2026-10-27 (A0 y A en llamadas separadas: un valor nuevo de enum no se usa antes del COMMIT).
+
+**Modelo.** Un pago = cabecera (`pagos_proveedor`) + N medios (`pagos_proveedor_medios`), sin límite y con tipos repetidos. `forma_pago_egreso` suma `'mixto'` para la cabecera de un pago con más de un medio; con un solo medio la cabecera lleva ese medio (y, si es un cheque, las columnas `cheque_*` de docs/15, que leen las apps instaladas).
+
+**Tabla `pagos_proveedor_medios`.** Pago, medio (efectivo, transferencia, eCheq, cheque), monto y, para cheques: número, banco, fecha de salida, fecha de pago, `propio` (preparado; hoy solo cheques propios). Una reversión agrega filas espejo (monto negativo, `revierte_medio_id`). RLS: misma lectura que `pagos_proveedor`; escritura solo por RPC. Backfill: cada pago anterior quedó con 1 medio.
+
+**`egresos.pago_proveedor_medio_id`.** De qué medio salió cada egreso (NULL en los anteriores). El índice único de docs/31 pasa a ser un egreso original por medio.
+
+**RPC `registrar_pago_proveedor_v3(proveedor, medios jsonb, facturas, NC, origen, cierre, fecha, nota, monto)`.** Mismo reparto que v2 (NC primero, después el pago, más viejos primero, sobrante a cuenta) sobre la suma de los medios. Por medio: un egreso y, si es transferencia o efectivo con `origen = 'general'`, un movimiento de cuenta (regla de docs/58). Los cheques no mueven cuentas: quedan en la cartera.
+
+**Cambios.** `registrar_pago_proveedor_v2` mantiene firma y validaciones y delega en v3 con 1 medio (v1 y el contado de docs/57 siguen llamando a v2). `revertir_movimiento` (rama `pagos_proveedor`) revierte todos los egresos del pago y espeja todos sus medios.
+
+**Vista `cartera_cheques_emitidos`** (security_invoker): un renglón por cheque/eCheq con proveedor, vencimiento y si está revertido.
+
+**Apps.** Gestión registra pagos con varios medios y muestra la cartera de cheques en Caja Gestión. Local sigue con un medio por pago y muestra "Mixto (N medios)" desplegable (v0.10.0).
+
+## 34. Reserva de la venta antes de pedir la Factura C
+
+SQL, verificaciones y tests en `docs/66_reserva_emision_factura_c.sql`. Aplicada el 2026-10-27 (backup `virikyna_2026-10-27_pre-docs66-aplicar`); después, deploy de `arca-emitir-factura` v19.
+
+**Problema.** La Edge Function controlaba "sin factura" con un SELECT común y el CAE lo guardaba el cliente: dos pantallas sobre la misma venta obtenían dos CAE reales y la segunda fallaba al guardar (comprobante huérfano, sin Nota de Crédito para anularlo).
+
+**Tabla `emisiones_factura_c_en_curso`.** Una fila por venta reservada: `token` (cambia en cada toma), `tomada_at/por`, último número de ARCA registrado antes de pedir el CAE (`ambiente`, `ultimo_arca`, `registrado_at/por`) y la marca de revisión (`revisar_at`, `revisar_detectado_por`, `ultimo_arca_actual`). Aparte de `ventas` para no llenar `auditoria` (trg_auditoria_ventas). RLS: lectura para activos; escritura solo por RPC.
+
+**RPCs** (SECURITY DEFINER, sin anon):
+- `reservar_emision_factura_c(venta)` → `reservada` (con token; al tomar una vencida, `pendiente_ultimo_arca`), `en_curso`, `revisar`, `ya_facturada`, `no_encontrada`. Toma la venta `FOR UPDATE`: dos llamadas simultáneas se serializan. Una reserva vence a los 5 minutos.
+- `registrar_ultimo_arca_emision_factura_c`, `liberar_emision_factura_c`, `marcar_revisar_emision_factura_c`: exigen el token vigente.
+- `emitir_factura_c`: idempotente por CAE (las apps instaladas lo vuelven a llamar después de que la función guardó) y borra la reserva.
+- `listar_emisiones_factura_c_a_revisar()` (activos) y `desbloquear_emision_factura_c(venta, nota)` (solo admin, nota obligatoria, queda en `auditoria`).
+
+**Edge Function.** Reserva → 409 si está `en_curso` o `revisar`, antes de hablar con ARCA. Si toma una reserva vencida de producción y ARCA tiene otro último número, marca para revisar y no emite. Guarda el CAE ella misma. Ante un error ambiguo (red, timeout) no libera: la reserva vence. La acción `reemitir` (docs/59) no reserva.
+
+**Apps.** Facturación muestra "Revisar emisión" con las ventas bloqueadas; el admin desbloquea con nota y un aviso de verificar antes en ARCA.
+
+## 35. Alerta de cambios de precio: historial y etiquetas pendientes
+
+SQL, verificaciones y tests en `docs/67_alerta_cambio_precios.sql`. Aplicada el 2026-10-27 (backup `virikyna_2026-10-27_pre-docs67`; guarda md5 de las 3 funciones reemplazadas OK).
+
+**Tabla `productos_precios_historial`.** Una fila por cambio de `precio_venta` y por alta: `precio_anterior` (NULL en un alta), `precio_nuevo`, `origen` (`manual | factura | masivo | margen | iva | reversion | alta`), `usuario_id`, `created_at`. Triggers `trg_precio_historial_upd` (AFTER UPDATE cuando cambia el precio) y `trg_precio_historial_ins` (AFTER INSERT): AFTER porque `precio_venta` es GENERATED. No respeta `virikyna.suppress_audit`. Origen: la RPC lo fija con `set_config('virikyna.origen_precio', …, true)`; si no, el trigger lo deduce. No registra un cambio de `redondear_precio_venta` (reescribe la columna GENERATED sin UPDATE).
+
+**Tabla `productos_etiqueta`.** Una fila por producto con el `precio_etiquetado` en el local, `marcado_por/at` (NULL = inicialización). **Pendiente** = producto activo con precio distinto del etiquetado, o sin fila (alta nunca etiquetada).
+
+**Reemplazadas** (definición de producción + `set_config` del origen): `cargar_factura_compra`, `aplicar_costo_vinculo_item`, `actualizar_precios_masivo`.
+
+**RPCs** (sin anon): `alerta_precios_pendientes()` → contador de las cards; `precios_cambiados(p_solo_pendientes, p_desde)` → filas del modal (pendientes o historial, default 30 días); `marcar_etiquetas(p_producto_ids, p_precios)` → admin y cajero; si el precio cambió desde que se vio en pantalla, ese producto no se marca.
+
+**Inicialización.** Backfill del historial desde `auditoria` (346 filas: 158 altas, 141 factura, 40 manual, 7 margen). Lo cambiado en los últimos 7 días quedó pendiente: 156 al aplicar (127 altas sin etiqueta, 29 cambios); el resto, etiquetado al precio actual (2195 filas).

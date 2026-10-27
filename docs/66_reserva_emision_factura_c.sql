@@ -1,8 +1,12 @@
 -- 66 — Reserva de la venta antes de pedir CAE: una venta, una sola Factura C aunque se emita desde dos pantallas
 --
--- ⏳ SIN APLICAR en producción. Backup con etiqueta tomado el 2026-10-27 15:48:
--- virikyna_2026-10-27_pre-docs66-reserva-fc. Probada entera (A + B + C) sobre la restauración local de ese
--- backup (restaurar-prueba.ps1, :54329): PARTE C 9/9, dos corridas seguidas sin errores (re-corrible).
+-- ✅ APLICADO en producción el 2026-10-27 19:13 (PARTE A), con backup previo
+-- virikyna_2026-10-27_pre-docs66-aplicar. Antes se verificó que emitir_factura_c en prod era idéntica a
+-- docs/59 y que las RPC nuevas no existían. PARTE B ok (7 funciones SECURITY DEFINER sin anon, RLS, 0
+-- filas); PARTE C 9/9 en producción. Después: deploy de arca-emitir-factura v19. Prueba de simultaneidad
+-- sin emitir: dos transacciones (abortadas) sobre la misma venta, la segunda esperó 4,1 s el lock.
+-- Antes se había probado entera (A + B + C) sobre la restauración local del backup
+-- virikyna_2026-10-27_pre-docs66-reserva-fc (restaurar-prueba.ps1, :54329): PARTE C 9/9, dos corridas.
 --
 -- Correr desde la raíz del repo, por partes, con `supabase db query --linked -f <archivo>` (o en el SQL
 -- Editor del proyecto ccpinvtleqlsukcqnili), después de 65. La PARTE A se puede re-correr; la PARTE B solo
