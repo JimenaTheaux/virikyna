@@ -1,26 +1,44 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { IconCierreCaja, IconConfiguracion, IconInventario, IconProveedores } from '../../components/icons'
-import { fechaISO, formatCurrency, StockBajoCard, DefectuososCard } from '@virikyna/shared'
-import { friendlyError } from '@virikyna/shared'
+import { useEffect, useState, type ReactNode } from 'react'
+import {
+  AlertaPreciosCard,
+  DefectuososCard,
+  fechaISO,
+  formatCurrency,
+  friendlyError,
+  hoyAR,
+  ProductosVendidos,
+  StockBajoCard,
+  useVentasPorProducto,
+} from '@virikyna/shared'
 import { fetchDevolucionesUltimosDias, fetchVentasUltimosDias } from './queries'
 import { WeeklySalesChart } from './WeeklySalesChart'
 import { AbrirCajaCard } from './AbrirCajaCard'
 import { supabase } from '../../lib/supabaseClient'
 import type { VentaDelDia } from './types'
 
-const ACCESOS_RAPIDOS = [
-  { to: '/inventario', label: 'Inventario', Icon: IconInventario },
-  { to: '/proveedores', label: 'Proveedores', Icon: IconProveedores },
-  { to: '/cierre-caja', label: 'Cierre de Caja', Icon: IconCierreCaja },
-  { to: '/configuracion', label: 'Configuración', Icon: IconConfiguracion },
-]
+// KPI compacto (~70 px): etiqueta + cifra de 22 px, el detalle en una línea chica debajo.
+function Kpi({ label, children, detalle }: { label: string; children: ReactNode; detalle?: ReactNode }) {
+  return (
+    <div className="min-w-0 rounded-lg bg-surface p-3.5 shadow-sm">
+      <p className="font-sans text-label-md font-bold uppercase text-ink-soft">{label}</p>
+      <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 font-display text-headline-md text-accent-darker">{children}</div>
+      {detalle && <p className="mt-0.5 truncate font-sans text-label-md text-ink-soft">{detalle}</p>}
+    </div>
+  )
+}
 
+// Orden por prioridad (1366×768 sin scroll, ventana de Tauri maximizada): lo accionable arriba
+// (caja, alerta de precios), las cifras del día al medio y los listados abajo, que se acomodan al
+// alto que queda (scroll interno). Sin accesos rápidos: repetían el menú lateral.
 export function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [porDia, setPorDia] = useState<Map<string, VentaDelDia>>(new Map())
   const [devolucionesNetoHoy, setDevolucionesNetoHoy] = useState(0)
+
+  // Productos vendidos hoy (docs/61, día argentino como la RPC).
+  const hoy = hoyAR(0)
+  const productosQuery = useVentasPorProducto(supabase, { desde: hoy, hasta: hoy })
 
   useEffect(() => {
     async function cargar() {
@@ -35,80 +53,75 @@ export function AdminDashboard() {
     cargar()
   }, [])
 
-  const hoy = porDia.get(fechaISO(0)) ?? { fecha: fechaISO(0), total: 0, cantidad: 0 }
+  const ventasHoy = porDia.get(fechaISO(0)) ?? { fecha: fechaISO(0), total: 0, cantidad: 0 }
   const ayer = porDia.get(fechaISO(-1)) ?? { fecha: fechaISO(-1), total: 0, cantidad: 0 }
-  const ticketPromedio = hoy.cantidad > 0 ? hoy.total / hoy.cantidad : 0
+  const ticketPromedio = ventasHoy.cantidad > 0 ? ventasHoy.total / ventasHoy.cantidad : 0
 
   const variacion =
     ayer.total > 0
-      ? { texto: `${hoy.total >= ayer.total ? '+' : ''}${(((hoy.total - ayer.total) / ayer.total) * 100).toFixed(0)}% vs. ayer`, subida: hoy.total >= ayer.total }
-      : hoy.total > 0
-        ? { texto: 'Sin ventas ayer para comparar', subida: true }
-        : null
+      ? {
+          texto: `${ventasHoy.total >= ayer.total ? '↑' : '↓'} ${Math.abs(Math.round(((ventasHoy.total - ayer.total) / ayer.total) * 100))}%`,
+          detalle: `vs. ayer (${formatCurrency(ayer.total)})`,
+          subida: ventasHoy.total >= ayer.total,
+        }
+      : null
+
+  const errorProductos = productosQuery.error ? friendlyError(productosQuery.error as never) : null
 
   return (
-    <div className="flex h-full flex-col gap-stack-md">
-      <div>
+    <div className="flex h-full flex-col gap-3">
+      <div className="flex flex-wrap items-baseline gap-x-3">
         <h1 className="font-display text-headline-lg text-accent-darker">Dashboard</h1>
-        <p className="mt-1 font-sans text-body-md text-ink-soft">Panorama del negocio, hoy.</p>
+        <p className="font-sans text-body-md text-ink-soft">Panorama del negocio, hoy.</p>
       </div>
 
-      {error && <p className="rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>}
+      {error && <p className="rounded bg-error/10 px-4 py-2 font-sans text-body-md text-error">{error}</p>}
 
       <AbrirCajaCard />
+      <AlertaPreciosCard supabase={supabase} variant="fila" />
 
-      <div className="grid grid-cols-4 gap-gutter-grid">
-        <div className="col-span-2 rounded-lg bg-surface p-card shadow-sm">
-          <p className="font-sans text-label-bold uppercase text-ink-soft">Ventas de hoy (brutas)</p>
-          <p className="mt-2 font-display text-display-card text-accent-darker">
-            {loading ? '—' : formatCurrency(hoy.total)}
-          </p>
-          {!loading && devolucionesNetoHoy !== 0 && (
-            <p className="mt-2 font-sans text-label-md text-ink-soft">
-              Devoluciones y cambios: {devolucionesNetoHoy < 0 ? '−' : '+'} {formatCurrency(Math.abs(devolucionesNetoHoy))} ·
-              Venta neta {formatCurrency(hoy.total + devolucionesNetoHoy)}
-            </p>
-          )}
+      <div className="grid grid-cols-3 gap-3">
+        <Kpi
+          label="Ventas de hoy (brutas)"
+          detalle={
+            !loading && devolucionesNetoHoy !== 0
+              ? `Devoluciones ${devolucionesNetoHoy < 0 ? '−' : '+'} ${formatCurrency(Math.abs(devolucionesNetoHoy))} · Neta ${formatCurrency(ventasHoy.total + devolucionesNetoHoy)}`
+              : undefined
+          }
+        >
+          <span>{loading ? '—' : formatCurrency(ventasHoy.total)}</span>
           {!loading && variacion && (
-            <p className={`mt-2 font-sans text-label-bold ${variacion.subida ? 'text-success' : 'text-error'}`}>
+            <span title={variacion.detalle} className={`font-sans text-label-bold ${variacion.subida ? 'text-success' : 'text-error'}`}>
               {variacion.texto}
-            </p>
+              <span className="sr-only"> {variacion.detalle}</span>
+            </span>
+          )}
+        </Kpi>
+        <Kpi label="Tickets hoy">{loading ? '—' : ventasHoy.cantidad}</Kpi>
+        <Kpi label="Ticket promedio">{loading ? '—' : formatCurrency(ticketPromedio)}</Kpi>
+      </div>
+
+      <div className="grid min-h-0 flex-1 grid-cols-3 gap-3">
+        <div className="col-span-2 flex min-h-0 flex-col gap-3">
+          <div className="rounded-lg bg-surface p-3.5 shadow-sm">
+            <WeeklySalesChart porDia={porDia} altoBarras="h-12" />
+          </div>
+          {errorProductos ? (
+            <p className="rounded bg-error/10 px-4 py-2 font-sans text-body-md text-error">{errorProductos}</p>
+          ) : (
+            <ProductosVendidos
+              filas={productosQuery.data ?? []}
+              titulo="Productos vendidos hoy"
+              className="min-h-[9rem] flex-1"
+              alturaTabla="min-h-0 flex-1"
+              verTodosArriba
+            />
           )}
         </div>
-        <div className="rounded-lg bg-surface p-card shadow-sm">
-          <p className="font-sans text-label-bold uppercase text-ink-soft">Tickets hoy</p>
-          <p className="mt-2 font-display text-headline-md text-accent-darker">{loading ? '—' : hoy.cantidad}</p>
+        <div className="flex min-h-0 flex-col gap-3">
+          <StockBajoCard supabase={supabase} className="min-h-0 flex-1 overflow-hidden" />
+          <DefectuososCard supabase={supabase} to="/facturacion" variant="auto" />
         </div>
-        <div className="rounded-lg bg-surface p-card shadow-sm">
-          <p className="font-sans text-label-bold uppercase text-ink-soft">Ticket promedio</p>
-          <p className="mt-2 font-display text-headline-md text-accent-darker">
-            {loading ? '—' : formatCurrency(ticketPromedio)}
-          </p>
-        </div>
-      </div>
-
-      <div className="grid flex-1 grid-cols-3 gap-gutter-grid">
-        <div className="col-span-2 rounded-lg bg-surface p-card shadow-sm">
-          <WeeklySalesChart porDia={porDia} />
-        </div>
-
-        <div className="flex flex-col gap-gutter-grid">
-          <StockBajoCard supabase={supabase} className="flex-1" />
-          <DefectuososCard supabase={supabase} to="/facturacion" />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-4 gap-stack-sm">
-        {ACCESOS_RAPIDOS.map(({ to, label, Icon }) => (
-          <Link
-            key={to}
-            to={to}
-            className="flex h-[130px] flex-col items-center justify-center gap-2 rounded-lg bg-surface shadow-sm transition hover:bg-accent-light"
-          >
-            <Icon className="h-7 w-7 text-accent-dark [stroke-width:1.5]" />
-            <span className="font-sans text-body-lg text-ink">{label}</span>
-          </Link>
-        ))}
       </div>
     </div>
   )

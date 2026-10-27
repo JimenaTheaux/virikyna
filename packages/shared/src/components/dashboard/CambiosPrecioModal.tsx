@@ -34,9 +34,10 @@ function Precios({ fila: f }: { fila: CambioPrecio }) {
   )
 }
 
-// Flecha + número (no solo color). Alta: "Nuevo".
-function Variacion({ valor, origen }: { valor: number | null; origen: CambioPrecio['origen'] }) {
-  if (valor === null) return <span className="text-ink-soft">{origen === 'alta' ? 'Nuevo' : '—'}</span>
+// Flecha + número (no solo color). Nunca etiquetado (alta, aunque después lo haya tocado una
+// factura): "Nuevo".
+function Variacion({ valor, sinEtiqueta }: { valor: number | null; sinEtiqueta: boolean }) {
+  if (valor === null) return <span className="text-ink-soft">{sinEtiqueta ? 'Nuevo' : '—'}</span>
   if (valor === 0) return <span className="text-ink-soft">= 0%</span>
   const sube = valor > 0
   return (
@@ -66,7 +67,9 @@ function ListadoImpresion({ filas, titulo, onListo }: { filas: CambioPrecio[]; t
 
   return createPortal(
     <div id="impresion-cambios-precio" className="hidden bg-white p-6 text-black print:block">
-      <style>{'@media print { body > *:not(#impresion-cambios-precio) { display: none !important; } @page { margin: 12mm; } }'}</style>
+      <style>
+        {'@media print { body { background: #fff !important; } body > *:not(#impresion-cambios-precio) { display: none !important; } @page { margin: 12mm; } }'}
+      </style>
       <h1 className="text-[16pt] font-bold">{titulo}</h1>
       <p className="mb-3 text-[10pt]">
         {formatFechaHora(new Date().toISOString())} · {filas.length} producto{filas.length === 1 ? '' : 's'}
@@ -91,8 +94,8 @@ function ListadoImpresion({ filas, titulo, onListo }: { filas: CambioPrecio[]; t
               <td className="py-1.5 pr-2">{f.nombre}</td>
               <td className="py-1.5 pr-2">{f.marca ?? ''}</td>
               <td className="py-1.5 pr-2 font-mono text-[9pt]">{f.codigoBarras ?? f.codigoInterno ?? ''}</td>
-              <td className="py-1.5 text-right">{f.precioAnterior === null ? '—' : formatCurrency(f.precioAnterior)}</td>
-              <td className="py-1.5 text-right text-[13pt] font-bold">{formatCurrency(f.precioActual)}</td>
+              <td className="whitespace-nowrap py-1.5 pr-3 text-right">{f.precioAnterior === null ? 'Nuevo' : formatCurrency(f.precioAnterior)}</td>
+              <td className="whitespace-nowrap py-1.5 text-right text-[13pt] font-bold">{formatCurrency(f.precioActual)}</td>
             </tr>
           ))}
         </tbody>
@@ -113,6 +116,7 @@ export function CambiosPrecioModal({ supabase, onClose }: { supabase: SupabaseCl
   const [confirmarTodas, setConfirmarTodas] = useState(false)
   const [aviso, setAviso] = useState<string | null>(null)
   const [imprimiendo, setImprimiendo] = useState(false)
+  const buscadorRef = useRef<HTMLInputElement>(null)
 
   const pendientesQuery = useCambiosPrecio(supabase, 'pendientes')
   const query = useCambiosPrecio(supabase, vista)
@@ -156,6 +160,9 @@ export function CambiosPrecioModal({ supabase, onClose }: { supabase: SupabaseCl
     } catch (e) {
       setAviso(friendlyError(e as never))
     }
+    // El botón se deshabilita mientras marca y la fila tildada desaparece: sin esto el foco queda
+    // en <body>, fuera del modal, y Esc deja de cerrarlo.
+    buscadorRef.current?.focus()
   }
 
   const titulo = 'Cambios de precio'
@@ -182,6 +189,7 @@ export function CambiosPrecioModal({ supabase, onClose }: { supabase: SupabaseCl
             ))}
           </div>
           <input
+            ref={buscadorRef}
             type="search"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
@@ -293,7 +301,7 @@ export function CambiosPrecioModal({ supabase, onClose }: { supabase: SupabaseCl
                       <Precios fila={f} />
                     </td>
                     <td className="px-2 py-1 text-right">
-                      <Variacion valor={f.variacion} origen={f.origen} />
+                      <Variacion valor={f.variacion} sinEtiqueta={f.precioAnterior === null} />
                     </td>
                     <td className="truncate px-2 py-1 text-ink-soft">{ORIGEN_PRECIO_LABEL[f.origen] ?? f.origen}</td>
                   </tr>

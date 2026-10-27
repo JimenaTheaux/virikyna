@@ -9,28 +9,43 @@ import type { VentaPorProducto } from './ventasPorProducto'
 // interno y encabezado fijo, para que un día con muchas ventas no empuje la pantalla. Lo devuelto
 // ese día de una venta de otro día (neto < 0) va aparte, en "Devoluciones del día". "Ver todos"
 // abre lo mismo en grande, con buscador y orden. Gestión y Local (Admin y Cajero) usan la misma
-// card; en Local la tabla ocupa el alto que queda (alturaTabla = 'min-h-0 flex-1').
+// card; en Local la tabla ocupa el alto que queda (alturaTabla = 'min-h-0 flex-1') y "Ver todos"
+// va en el encabezado (verTodosArriba) para dejarle una fila más a la tabla.
 export function ProductosVendidos({
   filas: todas,
   titulo,
   className = '',
   alturaTabla = 'max-h-[8.5rem]',
+  verTodosArriba = false,
 }: {
   filas: VentaPorProducto[]
   titulo: string
   className?: string
   alturaTabla?: string
+  verTodosArriba?: boolean
 }) {
   const [verTodos, setVerTodos] = useState(false)
   const { vendidos: filas, devueltos: devueltas } = separarVendidos(todas)
   const unidades = filas.reduce((acc, f) => acc + f.unidades, 0)
+  const botonVerTodos = (filas.length > 0 || devueltas.length > 0) && (
+    <button
+      type="button"
+      onClick={() => setVerTodos(true)}
+      className="shrink-0 self-start rounded px-2 py-0.5 font-sans text-label-md font-semibold text-accent-dark hover:bg-accent-light"
+    >
+      Ver todos ({filas.length})
+    </button>
+  )
   return (
     <div className={`flex min-w-0 flex-col gap-2 rounded-lg bg-surface p-4 shadow-sm ${className}`}>
       <div className="flex items-baseline justify-between gap-3">
         <p className="font-sans text-label-bold uppercase text-ink-soft">{titulo}</p>
-        <p className="font-sans text-label-md text-ink-soft">
-          {filas.length} producto{filas.length === 1 ? '' : 's'} · {formatCantidad(unidades)} unid.
-        </p>
+        <div className="flex items-baseline gap-2">
+          <p className="font-sans text-label-md text-ink-soft">
+            {filas.length} producto{filas.length === 1 ? '' : 's'} · {formatCantidad(unidades)} unid.
+          </p>
+          {verTodosArriba && botonVerTodos}
+        </div>
       </div>
       {filas.length === 0 ? (
         <p className="py-2 font-sans text-body-md text-ink-soft">Sin ventas en el día.</p>
@@ -84,15 +99,7 @@ export function ProductosVendidos({
           </ul>
         </div>
       )}
-      {(filas.length > 0 || devueltas.length > 0) && (
-        <button
-          type="button"
-          onClick={() => setVerTodos(true)}
-          className="self-start rounded px-2 py-0.5 font-sans text-label-md font-semibold text-accent-dark hover:bg-accent-light"
-        >
-          Ver todos ({filas.length})
-        </button>
-      )}
+      {!verTodosArriba && botonVerTodos}
       {verTodos && (
         <ProductosVendidosModal
           filas={todas}

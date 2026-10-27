@@ -73,16 +73,20 @@ export function AbrirCajaCard() {
 
   if (loading) return null
 
+  // Abierta: un renglón (estado, no acción) — el Dashboard prioriza la alerta de precios y las ventas.
   if (apertura) {
     return (
-      <section className="flex items-center gap-3 rounded-lg bg-surface p-card shadow-sm">
-        <IconAbrirCaja className="h-6 w-6 text-accent-dark [stroke-width:1.5]" />
-        <div>
-          <p className="font-sans text-label-bold uppercase text-ink-soft">Caja abierta</p>
-          <p className="font-sans text-body-md text-ink">
+      <section className="flex items-center gap-2 rounded-lg bg-surface px-4 py-2.5 shadow-sm">
+        <IconAbrirCaja className="h-5 w-5 shrink-0 text-accent-dark [stroke-width:1.5]" />
+        <p className="flex min-w-0 flex-wrap items-baseline gap-x-2 font-sans text-label-md">
+          <span className="font-bold uppercase text-ink-soft">Caja abierta</span>
+          <span aria-hidden="true" className="text-ink-soft">
+            ·
+          </span>
+          <span className="text-body-md text-ink">
             {formatCurrency(apertura.monto_real)} desde {formatFechaHora(apertura.abierta_at)}
-          </p>
-        </div>
+          </span>
+        </p>
       </section>
     )
   }

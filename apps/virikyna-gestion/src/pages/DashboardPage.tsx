@@ -1,6 +1,14 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { formatCurrency, friendlyError, hoyAR, StockBajoCard, DefectuososCard, ProductosVendidos } from '@virikyna/shared'
+import {
+  AlertaPreciosCard,
+  DefectuososCard,
+  formatCurrency,
+  friendlyError,
+  hoyAR,
+  ProductosVendidos,
+  StockBajoCard,
+} from '@virikyna/shared'
 import { useVentasPorDia, useVentasPorProducto } from './Dashboard/queries'
 import { WeeklySalesChart } from './Dashboard/WeeklySalesChart'
 import { AperturasAlerta } from './Dashboard/AperturasAlerta'
@@ -128,10 +136,12 @@ export function DashboardPage() {
         </Kpi>
         <Kpi label="Tickets">{loading ? '—' : actual.cantidad}</Kpi>
         <Kpi label="Ticket promedio">{loading ? '—' : formatCurrency(ticketPromedio)}</Kpi>
-        {/* Alertas de inventario: indicador chico con link, sin listado (el detalle está en Inventario). */}
+        {/* Alertas de inventario y de precios (docs/67): indicador chico, sin listado (el detalle
+            está en Inventario o en el modal de cambios de precio). */}
         <div className="flex min-w-0 flex-col justify-center gap-0.5 rounded-lg bg-surface p-1.5 shadow-sm">
           <StockBajoCard supabase={supabase} variant="compacta" />
           <DefectuososCard supabase={supabase} to="/inventario" variant="compacta" />
+          <AlertaPreciosCard supabase={supabase} variant="linea" />
         </div>
       </div>
 

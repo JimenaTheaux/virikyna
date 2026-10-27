@@ -39,7 +39,9 @@ export interface DefectuososCardProps {
   className?: string
   maxItems?: number
   // 'compacta' (Dashboard de Gestión): un renglón "Defectuosos · N ›", sin listado.
-  variant?: 'card' | 'compacta'
+  // 'auto' (Dashboard de Local): el renglón en su propia card si no hay ninguno; la card con
+  // listado si hay algo para revisar.
+  variant?: 'card' | 'compacta' | 'auto'
 }
 
 // Alerta para la dueña: mercadería devuelta como defectuosa, separada del stock, pendiente de
@@ -63,16 +65,17 @@ export function DefectuososCard({ supabase, to, className = '', maxItems = 3, va
 
   const unidades = items.reduce((acc, i) => acc + i.cantidad, 0)
 
-  if (variant === 'compacta') {
-    return (
+  if (variant === 'compacta' || (variant === 'auto' && items.length === 0)) {
+    const renglon = (
       <IndicadorCompacto
         to={to}
         label="Defectuosos a revisar"
         valor={loading ? '—' : String(unidades)}
         alerta={unidades > 0}
-        className={className}
+        className={variant === 'compacta' ? className : ''}
       />
     )
+    return variant === 'compacta' ? renglon : <div className={`rounded-lg bg-surface p-1.5 shadow-sm ${className}`}>{renglon}</div>
   }
 
   return (
