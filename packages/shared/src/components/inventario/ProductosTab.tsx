@@ -3,8 +3,6 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Proveedor } from '../../../types/database'
 import { friendlyError } from '../../../lib/supabaseErrors'
 import { formatCurrency } from '../../../lib/format'
-import { coincideBusquedaProducto } from '../../../lib/productoBusqueda'
-import { textoParaBuscar } from '../../../lib/texto'
 import { cargarProductosInventario, stockTotal, type ProductoConRelaciones } from '../../../lib/inventario'
 import {
   cantidadFiltrosAplicados,
@@ -17,7 +15,14 @@ import { ProductoBuscador } from '../ProductoBuscador'
 import { EstadoBadge } from '../EstadoBadge'
 import { ControlSegmentado } from '../ControlSegmentado'
 import { SelectBuscable } from '../SelectBuscable'
-import { BadgeStock, ChipsStock, ESTADO_OPCIONES, mensajeListadoVacio, useFiltrosInventario } from './FiltrosInventario'
+import {
+  BadgeStock,
+  ChipsStock,
+  coincideBusquedaInventario,
+  ESTADO_OPCIONES,
+  mensajeListadoVacio,
+  useFiltrosInventario,
+} from './FiltrosInventario'
 
 export type FormularioProductoRender = (args: {
   producto?: ProductoConRelaciones // undefined = alta
@@ -54,11 +59,6 @@ type Props = {
   renderMarcarIva?: MarcarIvaRender
 }
 
-// Búsqueda del listado: nombre, marca, códigos (coincideBusquedaProducto) y proveedor.
-function coincide(p: ProductoConRelaciones, q: string) {
-  return coincideBusquedaProducto(p, q) || textoParaBuscar(p.proveedor?.razon_social).includes(textoParaBuscar(q))
-}
-
 const ESTADO_RESUMEN = { activos: ' activos', inactivos: ' inactivos', todos: '' } as const
 
 // Pestaña "Productos" de Inventario en escritorio (Virikyna Local y Virikyna Gestión). Tabla estilo G
@@ -80,7 +80,7 @@ export function ProductosTab({ supabase, renderFormulario, renderActualizarPreci
   const [orden, setOrden] = useState<OrdenInventario | null>(null)
 
   const { visibles, totalEstado, contadores } = useMemo(
-    () => filtrarInventario(productos, filtros, { stockDe: stockTotal, coincideBusqueda: coincide, orden }),
+    () => filtrarInventario(productos, filtros, { stockDe: stockTotal, coincideBusqueda: coincideBusquedaInventario, orden }),
     // filtros es un objeto nuevo en cada render: dependencias por campo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [productos, filtros.estado, filtros.stock, filtros.marca, filtros.proveedor, filtros.q, orden],

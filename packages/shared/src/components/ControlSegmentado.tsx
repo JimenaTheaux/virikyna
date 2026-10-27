@@ -7,7 +7,7 @@ type Props<T extends string> = {
   opciones: Opcion<T>[]
   value: T
   onChange: (value: T) => void
-  // 'touch' (Inventario): ancho completo y 48px de alto, cómodo con el pulgar.
+  // 'touch' (Inventario): ancho completo (columnas iguales, las que haya) y 48px de alto, cómodo con el pulgar.
   size?: 'compact' | 'touch'
   // Deshabilita el grupo entero (fieldset disabled): se ve la opción elegida pero no se cambia.
   disabled?: boolean
@@ -37,7 +37,7 @@ export function ControlSegmentado<T extends string>({
     <fieldset disabled={disabled} className="flex flex-col gap-2">
       <legend className={ocultarLegend ? 'sr-only' : 'mb-2 font-sans text-label-md text-ink'}>{legend}</legend>
       <div
-        className={`${touch ? 'grid grid-cols-2' : 'inline-flex self-start'} gap-1 rounded border border-line bg-bg p-1 ${
+        className={`${touch ? 'grid auto-cols-fr grid-flow-col' : 'inline-flex self-start'} gap-1 rounded border border-line bg-bg p-1 ${
           disabled ? 'opacity-60' : ''
         }`}
       >

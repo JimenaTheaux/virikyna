@@ -92,7 +92,11 @@ export function SelectBuscable({
       </button>
 
       {abierto && (
-        <div className="absolute left-0 z-30 mt-1 w-72 max-w-[90vw] rounded-lg border border-line bg-surface p-2 shadow-lg">
+        <div
+          className={`absolute left-0 z-30 mt-1 max-w-[90vw] rounded-lg border border-line bg-surface p-2 shadow-lg ${
+            size === 'touch' ? 'w-full' : 'w-72'
+          }`}
+        >
           <input
             autoFocus
             type="text"

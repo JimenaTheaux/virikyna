@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { formatCantidad } from '../../../lib/cargaInicial'
+import type { ProductoConRelaciones } from '../../../lib/inventario'
+import { coincideBusquedaProducto } from '../../../lib/productoBusqueda'
+import { textoParaBuscar } from '../../../lib/texto'
 import {
   clasificarStock,
   escribirFiltrosInventario,
@@ -13,6 +16,11 @@ import {
 } from '../../../lib/estadoStock'
 
 // Piezas del listado de Inventario que comparten Local/Gestión (tabla) y la app Inventario (cards).
+
+// Búsqueda del listado: nombre, marca, códigos (coincideBusquedaProducto) y proveedor.
+export function coincideBusquedaInventario(p: ProductoConRelaciones, q: string): boolean {
+  return coincideBusquedaProducto(p, q) || textoParaBuscar(p.proveedor?.razon_social).includes(textoParaBuscar(q))
+}
 
 export const ESTADO_OPCIONES: { value: FiltroEstado; label: string }[] = [
   { value: 'activos', label: 'Activos' },
@@ -90,21 +98,30 @@ const BADGE: Record<'negativo' | 'sin_stock' | 'bajo', { clase: string; sr: stri
   bajo: { clase: 'bg-badge-amber-bg text-badge-amber-text', sr: 'stock bajo' },
 }
 
-// Stock con color según estado (rojo oscuro negativo, rojo sin stock, ámbar bajo) y el mínimo debajo.
-export function BadgeStock({ stock, minimo, align = 'right' }: { stock: number; minimo: number; align?: 'left' | 'right' }) {
+// Stock con color según estado (rojo oscuro negativo, rojo sin stock, ámbar bajo) y el mínimo:
+// 'celda' (tabla) con el mínimo debajo; 'linea' (cards de Inventario) "Stock N · min N" en un renglón.
+export function BadgeStock({ stock, minimo, variante = 'celda' }: { stock: number; minimo: number; variante?: 'celda' | 'linea' }) {
   const estado = clasificarStock(stock, minimo)
   const badge = estado === 'negativo' || estado === 'sin_stock' || estado === 'bajo' ? BADGE[estado] : null
+  const numero = (
+    <span className={`tabular-nums ${badge ? `rounded-[6px] px-2 py-0.5 font-semibold ${badge.clase}` : 'text-ink'}`}>
+      {formatCantidad(stock)}
+      {badge && <span className="sr-only"> ({badge.sr})</span>}
+    </span>
+  )
+  const textoMinimo = minimo > 0 ? `min ${formatCantidad(minimo)}` : 'sin min'
+  if (variante === 'linea') {
+    return (
+      <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+        Stock {numero}
+        <span className="text-ink-soft">· {textoMinimo}</span>
+      </span>
+    )
+  }
   return (
-    <span className={`inline-flex flex-col ${align === 'right' ? 'items-end' : 'items-start'}`}>
-      <span
-        className={`tabular-nums ${badge ? `rounded-[6px] px-2 py-0.5 font-semibold ${badge.clase}` : 'text-ink'}`}
-      >
-        {formatCantidad(stock)}
-        {badge && <span className="sr-only"> ({badge.sr})</span>}
-      </span>
-      <span className="mt-0.5 whitespace-nowrap font-sans text-[11px] leading-tight text-ink-soft">
-        {minimo > 0 ? `min ${formatCantidad(minimo)}` : 'sin min'}
-      </span>
+    <span className="inline-flex flex-col items-end">
+      {numero}
+      <span className="mt-0.5 whitespace-nowrap font-sans text-[11px] leading-tight text-ink-soft">{textoMinimo}</span>
     </span>
   )
 }
