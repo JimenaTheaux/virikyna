@@ -33,6 +33,9 @@ export * from './lib/useDebouncedValue'
 export * from './auth/createAuthController'
 export * from './src/components/Footer'
 export * from './src/components/VentasDelDiaTab'
+// Pestaña Devoluciones de Facturación (Local y Gestión); registrar una devolución es solo de Local.
+export * from './src/components/DevolucionesTab'
+export * from './src/components/DevolucionDetalleModal'
 // Comprobante X / Factura C (Local y Gestión): datos, PDF, JPG y modal de envío.
 export * from './lib/comprobante'
 export * from './lib/comprobantePdf'

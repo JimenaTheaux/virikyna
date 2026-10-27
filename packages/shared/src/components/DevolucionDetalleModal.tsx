@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
-import type { Devolucion, DevolucionItem, DevolucionPago } from '@virikyna/shared'
-import { MOTIVO_DEVOLUCION_LABEL, EstadoBadge, formatCurrency, formatFechaHora, nombreItemVendido } from '@virikyna/shared'
-import { supabase } from '../../lib/supabaseClient'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Devolucion, DevolucionItem, DevolucionPago } from '../../types/database'
+import { MOTIVO_DEVOLUCION_LABEL } from '../../lib/devoluciones'
+import { formatCurrency, formatFechaHora } from '../../lib/format'
+import { nombreItemVendido } from '../../lib/productoTexto'
 import { FORMA_PAGO_LABEL } from '../../lib/comprobante'
-import { Modal } from '../../components/Modal'
+import { EstadoBadge } from './EstadoBadge'
+import { Modal } from './Modal'
 
 // producto: respaldo para devoluciones anteriores a docs/42, sin producto_nombre/producto_marca guardados.
 export type ItemDevolucionConProducto = DevolucionItem & { producto: { nombre: string; marca: string | null } | null }
@@ -23,7 +26,15 @@ export function sentidoDiferencia(monto: number): string {
 
 // Detalle completo de una devolución/cambio — lo que el listado ya no muestra en la fila para
 // mantenerla compacta: ítems devueltos y nuevos, motivo, observaciones y cómo se saldó la diferencia.
-export function DevolucionDetalleModal({ devolucion: d, onClose }: { devolucion: DevolucionConDetalle; onClose: () => void }) {
+export function DevolucionDetalleModal({
+  supabase,
+  devolucion: d,
+  onClose,
+}: {
+  supabase: SupabaseClient
+  devolucion: DevolucionConDetalle
+  onClose: () => void
+}) {
   const [pagos, setPagos] = useState<Pick<DevolucionPago, 'forma_pago' | 'monto'>[]>([])
 
   useEffect(() => {
@@ -33,7 +44,7 @@ export function DevolucionDetalleModal({ devolucion: d, onClose }: { devolucion:
       .select('forma_pago, monto')
       .eq('devolucion_id', d.id)
       .then(({ data }) => setPagos((data ?? []) as Pick<DevolucionPago, 'forma_pago' | 'monto'>[]))
-  }, [d.id, d.diferencia_forma_pago])
+  }, [supabase, d.id, d.diferencia_forma_pago])
 
   const devueltos = d.items.filter((it) => it.tipo === 'devuelto')
   const nuevos = d.items.filter((it) => it.tipo !== 'devuelto')

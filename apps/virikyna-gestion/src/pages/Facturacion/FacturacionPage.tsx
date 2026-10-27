@@ -2,10 +2,12 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { VentasDelDiaTab } from './VentasDelDiaTab'
 import { FacturacionTab } from './FacturacionTab'
+import { DevolucionesTab } from './DevolucionesTab'
 
 const TABS = [
   { id: 'ventas_dia', label: 'Ventas del día' },
   { id: 'facturacion', label: 'Facturación' },
+  { id: 'devoluciones', label: 'Devoluciones' },
 ] as const
 
 type TabId = (typeof TABS)[number]['id']
@@ -47,6 +49,7 @@ export function FacturacionPage() {
       <div className="mt-stack-md flex-1 overflow-hidden">
         {tab === 'ventas_dia' && <VentasDelDiaTab />}
         {tab === 'facturacion' && <FacturacionTab />}
+        {tab === 'devoluciones' && <DevolucionesTab />}
       </div>
     </section>
   )
