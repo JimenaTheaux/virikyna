@@ -1,10 +1,13 @@
 # 19 — Integración real con ARCA (Facturación Electrónica)
 
 Reemplaza el mock de `emitir_factura_c` mencionado en `07_guia_desarrollo_iterativo.md`
-FASE 4. Esta integración ya está probada de punta a punta en **homologación** (uso diario,
-conectado a los botones reales) y también se validó una vez en **producción real** (ver
-sección "Prueba de producción realizada" más abajo) — pero el día a día de la app sigue
-usando homologación por diseño, hasta que se decida el corte real a producción.
+FASE 4.
+
+> **⚠️ Incidente 2026-10-26 (docs/59).** Hasta esta fecha los botones de emitir seguían en
+> homologación: las 43 Factura C del 19/10 al 26/10 (ventas N° 17 a 198, todas a consumidor
+> final) tienen CAE de homologación, **sin validez fiscal**, y no figuran en ARCA. Desde docs/59
+> los botones emiten en **producción** (también los cajeros), `facturas_c.ambiente` dice en qué
+> ambiente se emitió cada una, y `scripts/reemitir-facturas-c.ts` las re-emite en producción.
 
 ## 1. Arquitectura
 
@@ -33,20 +36,20 @@ usando homologación por diseño, hasta que se decida el corte real a producció
 ## 2. Ambientes — homologación vs. producción
 
 Todas las acciones aceptan un campo opcional `ambiente: "homologacion" | "produccion"`.
-**Si no se manda, es homologación siempre** — es el default seguro. Producción es un
-opt-in explícito y requiere:
+En la Edge Function, **si no se manda, es homologación** (para pruebas: `dummy`, `consultar`).
+Producción requiere:
 - El campo `ambiente: "produccion"` en el body.
-- Que quien llama tenga `rol = 'admin'` en `perfiles` (un cajero no puede, aunque esté
-  activo).
+- Un usuario activo (cualquier rol: los cajeros emiten las del día a día). La acción
+  `reemitir` es solo para admin.
 - Que los secretos de producción estén cargados (si no, la función falla con un mensaje
   claro — nunca hay un reemplazo/fallback silencioso).
 
-**Hoy, ningún botón de la app manda `ambiente: "produccion"`** — el flujo real de
-Facturación y Ventas del día (`emitirFacturaCReal` en `packages/shared/lib/arcaFacturacion.ts`)
-siempre usa homologación. Para cortar a producción de verdad en el futuro, hay que pasar
-`'produccion'` como tercer argumento de `emitirFacturaCReal(supabase, venta, 'produccion')`
-en el/los botones reales de emitir — es un cambio de una línea, ya que toda la lógica de
-ambiente ya está armada y probada.
+Los botones reales (`emitirFacturaCReal` en `packages/shared/lib/arcaFacturacion.ts`, usado
+por Facturación y Ventas del día) mandan **`'produccion'` por default** desde docs/59, y
+guardan en `facturas_c.ambiente` el ambiente que respondió la función.
+
+La fecha del comprobante se calcula en hora argentina (antes, después de las 21hs salía la
+del día siguiente porque el runtime corre en UTC).
 
 ### Secretos por ambiente
 
@@ -121,8 +124,6 @@ real, así que no hay implicancia de dejar un "hueco" contable):
 
 ## 6. Pendiente / fuera de alcance por ahora
 
-- El botón real de emitir sigue apuntando a homologación — falta decidir el momento del
-  corte a producción y pasar `ambiente: 'produccion'` en ese llamado.
 - No hay Nota de Crédito (ver `06_estructura_de_datos.md`): una Factura C real, una vez
   emitida, no se puede revertir desde el sistema.
 - `condicion_iva` de clientes cuenta corriente hay que cargarla manualmente al dar de alta

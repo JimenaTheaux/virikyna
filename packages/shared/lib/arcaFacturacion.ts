@@ -1,20 +1,21 @@
 // Emisión real de Factura C contra ARCA (WSFEv1), vía la Edge Function arca-emitir-factura
 // (ver supabase/functions/arca-emitir-factura/index.ts). Reemplaza el mock de CAE que usaban
 // Virikyna Local y Virikyna Gestión — la función solo consigue el CAE, este helper es el que
-// además lo persiste con el RPC emitir_factura_c (docs/06_estructura_de_datos.md), igual que
-// hacía cada app por separado con el mock.
+// además lo persiste con el RPC emitir_factura_c (docs/06_estructura_de_datos.md, docs/59).
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { friendlyError } from './supabaseErrors'
 
+export type AmbienteArca = 'homologacion' | 'produccion'
+
 type RespuestaArca =
-  | { ok: true; cae: string; caeFchVto: string; numeroFactura: string; puntoVenta: string }
+  | { ok: true; cae: string; caeFchVto: string; numeroFactura: string; puntoVenta: string; ambiente: AmbienteArca }
   | { ok: false; error: string }
 
 async function llamarArcaEmitirFactura(
   supabase: SupabaseClient,
   ventaId: string,
-  ambiente?: 'produccion',
+  ambiente: AmbienteArca,
 ): Promise<RespuestaArca> {
   const { data, error } = await supabase.functions.invoke('arca-emitir-factura', {
     body: { accion: 'emitir', venta_id: ventaId, ambiente },
@@ -38,10 +39,10 @@ async function llamarArcaEmitirFactura(
 export async function emitirFacturaCReal(
   supabase: SupabaseClient,
   venta: { id: string; numero: number },
-  // Ausente = homologación (default seguro, lo que usan Facturación y Ventas del día en
-  // el día a día). Solo pasar 'produccion' desde un flujo explícito y consciente de que
-  // esto genera un comprobante fiscal real e irreversible.
-  ambiente?: 'produccion',
+  // Producción = comprobante fiscal real e irreversible (no hay Nota de Crédito). Homologación
+  // solo para pruebas: hasta docs/59 este era el default y las Factura C del 19/10 al 26/10
+  // salieron sin validez fiscal.
+  ambiente: AmbienteArca = 'produccion',
 ): Promise<{ ok: boolean; mensaje: string }> {
   const resultado = await llamarArcaEmitirFactura(supabase, venta.id, ambiente)
   if (!resultado.ok) {
@@ -53,13 +54,15 @@ export async function emitirFacturaCReal(
     p_cae: resultado.cae,
     p_numero_factura: resultado.numeroFactura,
     p_punto_venta: resultado.puntoVenta,
+    // El que usó la función de verdad, no el pedido.
+    p_ambiente: resultado.ambiente,
   })
   if (rpcError) {
     // Grave: ARCA ya emitió el CAE (comprobante fiscal real) pero no se pudo guardar acá.
     // No hay forma de "deshacerlo" del lado de ARCA — se muestra completo para no perderlo.
     return {
       ok: false,
-      mensaje: `N° ${venta.numero}: ARCA emitió el CAE ${resultado.cae} pero no se pudo guardar (${friendlyError(rpcError)}). Anotalo a mano.`,
+      mensaje: `N° ${venta.numero}: ARCA emitió el CAE ${resultado.cae} (comprobante ${resultado.puntoVenta}-${resultado.numeroFactura}) pero no se pudo guardar (${friendlyError(rpcError)}). Anotalo a mano.`,
     }
   }
 

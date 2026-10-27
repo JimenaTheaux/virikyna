@@ -241,6 +241,8 @@ export type FacturaC = {
   enviado_a: string | null
   usuario_id: string
   created_at: string
+  // docs/59: hasta el 26/10 las Factura C se emitían en homologación (sin validez fiscal)
+  ambiente: 'homologacion' | 'produccion'
 }
 
 export type FacturaCompra = {

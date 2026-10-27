@@ -1,14 +1,12 @@
 // Edge Function: arca-emitir-factura
 //
-// Integración real (no mock) con ARCA (WSFEv1) para Factura C. Homologación por default
-// siempre — producción es un opt-in explícito: el caller tiene que mandar
-// `ambiente: "produccion"` a propósito en el body, si no está ese campo se usa
-// homologación siempre, pase lo que pase. Así el uso normal del día a día (Facturación,
-// Ventas del día) nunca puede terminar tocando ARCA real por accidente — hoy en día el
-// frontend nunca manda ese campo, homologación es la única vía real conectada a las
-// pantallas. Esta función solo habla con ARCA; no toca facturas_c ni el estado de la
-// venta — eso lo hace el RPC `emitir_factura_c` (ver docs/06_estructura_de_datos.md), que
-// asume que el CAE ya se consiguió antes de llamarlo.
+// Integración real (no mock) con ARCA (WSFEv1) para Factura C. Si el body no trae
+// `ambiente: "produccion"` se usa homologación (para pruebas: dummy, consultas). Los botones de
+// emitir (arcaFacturacion.ts) mandan siempre "produccion" desde docs/59 — hasta entonces no lo
+// mandaban y las 43 Factura C del 19/10 al 26/10 salieron en homologación, sin validez fiscal.
+// Esta función solo habla con ARCA; no toca facturas_c ni el estado de la venta — eso lo hacen
+// los RPC `emitir_factura_c` / `reemitir_factura_c_produccion` (docs/59), que asumen que el CAE
+// ya se consiguió antes de llamarlos.
 //
 // SDK elegido: @aledj02/afip.js, fork de @afipsdk/afip.js que acepta cert/key como texto
 // (no como paths de archivo) y no cachea el TA (ticket de acceso de WSAA) en disco. Eso
@@ -73,16 +71,23 @@ const CONDICION_IVA_ARCA: Record<string, number> = {
 }
 const CONDICION_IVA_CONSUMIDOR_FINAL = CONDICION_IVA_ARCA.consumidor_final
 
-// Presente en TODAS las acciones, pero opcional — ausente u "homologacion" = homologación
-// (default seguro). Solo "produccion" activa el ambiente real, y requiere ARCA_PROD_CERT
-// y ARCA_PROD_KEY cargados como secretos.
+// Presente en TODAS las acciones, pero opcional — ausente u "homologacion" = homologación.
+// Solo "produccion" activa el ambiente real, y requiere ARCA_PROD_CERT y ARCA_PROD_KEY
+// cargados como secretos.
 type Ambiente = 'homologacion' | 'produccion'
 
 type Body =
   | { accion: 'dummy'; ambiente?: Ambiente }
   | { accion: 'ultimo_autorizado'; ambiente?: Ambiente }
   | { accion: 'emitir'; venta_id: string; ambiente?: Ambiente }
+  // Re-emite en producción una venta cuya Factura C quedó en homologación (docs/59), con la
+  // fecha de comprobante indicada (YYYY-MM-DD). Solo admin, solo producción.
+  | { accion: 'reemitir'; venta_id: string; fecha: string; ambiente?: Ambiente }
   | { accion: 'consultar'; numero: number; ambiente?: Ambiente }
+
+// ARCA acepta, para Concepto 1 (productos), una fecha de comprobante de hasta 5 días antes de
+// la emisión. Se valida acá para dar un mensaje claro antes de pedir número.
+const DIAS_ATRAS_MAXIMO = 5
 
 // Sin esto, el navegador/webview bloquea el preflight OPTIONS antes de que el POST
 // llegue a esta función — supabase-js lo reporta como "Failed to send a request to
@@ -102,6 +107,12 @@ function jsonResponse(body: unknown, status = 200) {
 
 function mensajeError(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
+}
+
+// El runtime de Edge Functions corre en UTC: con getDate() a secas, una factura emitida
+// después de las 21hs de Argentina salía con la fecha del día siguiente.
+function fechaArgentina(fecha = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(fecha)
 }
 
 function obtenerPuntoVenta(ambiente: Ambiente): string {
@@ -200,6 +211,73 @@ function crearAfip(ambiente: Ambiente): any {
   return afip
 }
 
+type VentaAFacturar = {
+  total: number
+  cliente: { cuit: string | null; condicion_iva: string | null } | null
+}
+
+// Pide el próximo número y el CAE a ARCA. `fecha` es la fecha del comprobante (YYYY-MM-DD).
+async function emitirComprobante(
+  // deno-lint-ignore no-explicit-any
+  afip: any,
+  puntoVenta: string,
+  venta: VentaAFacturar,
+  fecha: string,
+  ambiente: Ambiente,
+) {
+  const ultimoNumero = await afip.ElectronicBilling.getLastVoucher(Number(puntoVenta), CBTE_TIPO_FACTURA_C)
+  const proximoNumero = ultimoNumero + 1
+
+  const cuitCliente = venta.cliente?.cuit?.replace(/\D/g, '') ?? ''
+  const tieneCuit = cuitCliente.length === 11
+  const condicionIvaReceptor =
+    CONDICION_IVA_ARCA[venta.cliente?.condicion_iva ?? 'consumidor_final'] ?? CONDICION_IVA_CONSUMIDOR_FINAL
+
+  // Factura C: monotributo, no discrimina IVA — ImpNeto = ImpTotal, ImpIVA = 0.
+  const data = {
+    CantReg: 1,
+    PtoVta: Number(puntoVenta),
+    CbteTipo: CBTE_TIPO_FACTURA_C,
+    Concepto: 1, // Productos
+    DocTipo: tieneCuit ? DOC_TIPO_CUIT : DOC_TIPO_CONSUMIDOR_FINAL,
+    DocNro: tieneCuit ? Number(cuitCliente) : 0,
+    CbteDesde: proximoNumero,
+    CbteHasta: proximoNumero,
+    CbteFch: Number(fecha.replaceAll('-', '')),
+    ImpTotal: venta.total,
+    ImpTotConc: 0,
+    ImpNeto: venta.total,
+    ImpOpEx: 0,
+    ImpIVA: 0,
+    ImpTrib: 0,
+    MonId: 'PES',
+    MonCotiz: 1,
+    CondicionIVAReceptorId: condicionIvaReceptor,
+  }
+
+  const resultadoCrudo = await afip.ElectronicBilling.createVoucher(data, true)
+  const detalle = Array.isArray(resultadoCrudo.FeDetResp.FECAEDetResponse)
+    ? resultadoCrudo.FeDetResp.FECAEDetResponse[0]
+    : resultadoCrudo.FeDetResp.FECAEDetResponse
+
+  // El SDK ya tira error si ARCA rechaza con observaciones; esto cubre cualquier otra
+  // respuesta sin aprobación o sin CAE, para que nunca se guarde un comprobante vacío.
+  if (detalle?.Resultado !== 'A' || !/^\d{14}$/.test(String(detalle?.CAE ?? ''))) {
+    throw new Error(`ARCA no aprobó el comprobante (Resultado: ${detalle?.Resultado ?? '—'}, CAE: ${detalle?.CAE ?? '—'})`)
+  }
+
+  return {
+    ok: true,
+    cae: String(detalle.CAE),
+    caeFchVto: detalle.CAEFchVto,
+    numeroFactura: String(proximoNumero).padStart(8, '0'),
+    puntoVenta: puntoVenta.padStart(4, '0'),
+    fecha,
+    ambiente,
+    resultadoCrudo,
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -236,10 +314,10 @@ Deno.serve(async (req) => {
 
   const ambiente: Ambiente = body.ambiente === 'produccion' ? 'produccion' : 'homologacion'
 
-  // Producción, además de activo, requiere admin — un cajero nunca debería poder
-  // gatillar un comprobante fiscal real.
-  if (ambiente === 'produccion' && perfil.rol !== 'admin') {
-    return jsonResponse({ error: 'Solo un administrador puede usar el ambiente de producción' }, 403)
+  // Producción la usa cualquier usuario activo: los cajeros emiten las Factura C del día a día.
+  // Solo la re-emisión (corrección de comprobantes viejos) queda para admin.
+  if (body.accion === 'reemitir' && (ambiente !== 'produccion' || perfil.rol !== 'admin')) {
+    return jsonResponse({ error: 'La re-emisión es solo en producción y solo para un administrador' }, 403)
   }
 
   // deno-lint-ignore no-explicit-any
@@ -301,55 +379,33 @@ Deno.serve(async (req) => {
     if (venta.factura_c) return jsonResponse({ error: 'Esta venta ya tiene una Factura C emitida' }, 400)
 
     try {
-      const ultimoNumero = await afip.ElectronicBilling.getLastVoucher(Number(puntoVenta), CBTE_TIPO_FACTURA_C)
-      const proximoNumero = ultimoNumero + 1
+      return jsonResponse(await emitirComprobante(afip, puntoVenta, venta, fechaArgentina(), ambiente))
+    } catch (err) {
+      return jsonResponse({ ok: false, error: mensajeError(err) }, 502)
+    }
+  }
 
-      const hoy = new Date()
-      const fechaArca = Number(
-        `${hoy.getFullYear()}${String(hoy.getMonth() + 1).padStart(2, '0')}${String(hoy.getDate()).padStart(2, '0')}`,
-      )
+  if (body.accion === 'reemitir') {
+    if (!body.venta_id) return jsonResponse({ error: 'venta_id es obligatorio' }, 400)
+    const hoy = fechaArgentina()
+    const minima = fechaArgentina(new Date(Date.now() - DIAS_ATRAS_MAXIMO * 24 * 60 * 60 * 1000))
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(body.fecha ?? '') || body.fecha > hoy || body.fecha < minima) {
+      return jsonResponse({ error: `fecha tiene que estar entre ${minima} y ${hoy}` }, 400)
+    }
 
-      const cuitCliente = venta.cliente?.cuit?.replace(/\D/g, '') ?? ''
-      const tieneCuit = cuitCliente.length === 11
-      const condicionIvaReceptor =
-        CONDICION_IVA_ARCA[venta.cliente?.condicion_iva ?? 'consumidor_final'] ?? CONDICION_IVA_CONSUMIDOR_FINAL
+    const { data: venta, error: ventaError } = await callerClient
+      .from('ventas')
+      .select('id, total, cliente:clientes(cuit, condicion_iva), factura_c:facturas_c(id, ambiente)')
+      .eq('id', body.venta_id)
+      .single()
+    if (ventaError || !venta) return jsonResponse({ error: 'Venta no encontrada' }, 404)
+    if (!venta.factura_c) return jsonResponse({ error: 'Esta venta no tiene Factura C para re-emitir' }, 400)
+    if (venta.factura_c.ambiente !== 'homologacion') {
+      return jsonResponse({ error: 'Esta Factura C ya es de producción, no se re-emite' }, 400)
+    }
 
-      // Factura C: monotributo, no discrimina IVA — ImpNeto = ImpTotal, ImpIVA = 0.
-      const data = {
-        CantReg: 1,
-        PtoVta: Number(puntoVenta),
-        CbteTipo: CBTE_TIPO_FACTURA_C,
-        Concepto: 1, // Productos
-        DocTipo: tieneCuit ? DOC_TIPO_CUIT : DOC_TIPO_CONSUMIDOR_FINAL,
-        DocNro: tieneCuit ? Number(cuitCliente) : 0,
-        CbteDesde: proximoNumero,
-        CbteHasta: proximoNumero,
-        CbteFch: fechaArca,
-        ImpTotal: venta.total,
-        ImpTotConc: 0,
-        ImpNeto: venta.total,
-        ImpOpEx: 0,
-        ImpIVA: 0,
-        ImpTrib: 0,
-        MonId: 'PES',
-        MonCotiz: 1,
-        CondicionIVAReceptorId: condicionIvaReceptor,
-      }
-
-      const resultadoCrudo = await afip.ElectronicBilling.createVoucher(data, true)
-      const detalle = Array.isArray(resultadoCrudo.FeDetResp.FECAEDetResponse)
-        ? resultadoCrudo.FeDetResp.FECAEDetResponse[0]
-        : resultadoCrudo.FeDetResp.FECAEDetResponse
-
-      return jsonResponse({
-        ok: true,
-        cae: detalle.CAE,
-        caeFchVto: detalle.CAEFchVto,
-        numeroFactura: String(proximoNumero).padStart(8, '0'),
-        puntoVenta: puntoVenta.padStart(4, '0'),
-        ambiente,
-        resultadoCrudo,
-      })
+    try {
+      return jsonResponse(await emitirComprobante(afip, puntoVenta, venta, body.fecha, ambiente))
     } catch (err) {
       return jsonResponse({ ok: false, error: mensajeError(err) }, 502)
     }
