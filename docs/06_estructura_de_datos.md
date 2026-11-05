@@ -2632,3 +2632,41 @@ SQL, verificaciones y tests en `docs/67_alerta_cambio_precios.sql`. Aplicada el 
 **RPCs** (sin anon): `alerta_precios_pendientes()` → contador de las cards; `precios_cambiados(p_solo_pendientes, p_desde)` → filas del modal (pendientes o historial, default 30 días); `marcar_etiquetas(p_producto_ids, p_precios)` → admin y cajero; si el precio cambió desde que se vio en pantalla, ese producto no se marca.
 
 **Inicialización.** Backfill del historial desde `auditoria` (346 filas: 158 altas, 141 factura, 40 manual, 7 margen). Lo cambiado en los últimos 7 días quedó pendiente: 156 al aplicar (127 altas sin etiqueta, 29 cambios); el resto, etiquetado al precio actual (2195 filas).
+
+## 36. Cuentas corrientes de clientes: cobros con imputación y cuentas internas
+
+SQL, verificaciones y tests en `docs/68_cuentas_corrientes_clientes.sql`. Aplicada el 2026-11-05 (backup `virikyna_2026-11-05_pre-docs68-aplicar`). Base: `docs/DIAGNOSTICO_CUENTAS_CORRIENTES.md` y decisiones D1–D13 del 2026-11-05. Sin UI todavía.
+
+**Clientes.** `tipo` (`tipo_cliente`: `externo` | `interno`, default externo) y `perfil_id` (FK a `perfiles`, único, solo si interno). Trigger `trg_proteger_tipo_cliente`: solo un admin da de alta un interno o cambia tipo/perfil (las apps siguen escribiendo el resto de la ficha directo). Al aplicar: GRION ALICIA, LOPEZ ANA JULIA, ALBORNOZ ALEJANDRA, BARONTINI JOSE y MALDONADO BELEN → internos con su perfil.
+
+**Ventas internas.** Una venta es interna si se cobra a cuenta corriente a un cliente interno (lo decide `confirmar_venta`; en Ventas no cambia nada para el cajero). Columnas en `ventas`: `estado_interno` (`estado_venta_interna`: `pendiente` | `finalizado`; NULL = no es interna), `total_original` y `descuento_global_original` (lo que registró el cajero), `editada_at/por`, `finalizada_at/por`, `reabierta_at/por/motivo`, `version` (sube en cada edición/finalización/reapertura). CHECK: interna ⇒ cuenta corriente; `precio_cobrado > 0` salvo internas (pueden quedar en $0). La venta N° 388 quedó interna pendiente sin tocar importes.
+
+**Ítems.** `venta_items`: `costo_unitario` (snapshot de `productos.costo`, sin IVA) y `producto_con_iva` (snapshot de `iva_porcentaje > 0`) desde `confirmar_venta`; `precio_unitario_original` y `descuento_porcentaje_original` (antes de la primera edición). CHECK descuento 0–100. Auditoría en UPDATE/DELETE (el alta ya está en la de ventas).
+
+**Cobros.** `pagos_cliente` + `origen` (`turno` = caja de Local | `general` = Gestión), `fecha`, `nota`; `forma_pago` admite `combinado` (cobro con varios medios); `venta_id` DEPRECATED. Tablas nuevas (solo SELECT por RLS): `pagos_cliente_medios` (un medio por fila, sin cheques; negativo en el espejo de una reversión) y `pagos_cliente_aplicaciones` (cobro → venta, `revertida_at`; auditada).
+
+**Devoluciones (D12).** `devoluciones.a_cuenta_corriente`: en una venta a cta. cte., si el comercio tendría que devolver plata (o no hay diferencia), la diferencia va a la cuenta y no hay `devolucion_pagos` (el Cierre no la ve), aunque una app vieja mande forma de pago. Si el cliente lleva más, paga como hoy o lo carga a la cuenta con `p_forma_pago = 'cuenta_corriente'`. Una interna finalizada hay que reabrirla antes. `credito_devoluciones_venta(venta)` calcula el crédito al precio **vigente** de la venta (una interna editada se reprecia sola).
+
+**Vistas (security_invoker).**
+- `ventas_cuenta_corriente_saldo`: por venta a cta. cte., `total_aplicado`, `total_devuelto`, `saldo_pendiente`, `credito` y `estado_cuenta` (`a_revisar` | `finalizado` | `pendiente` | `parcial` | `pagada` | `anulada`).
+- `pagos_cliente_a_cuenta`: por cobro, aplicado vigente y lo que queda a cuenta.
+- `clientes_saldo`: mismas columnas que antes + `condicion_iva`, `tipo`, `perfil_id`, `deuda_comprobantes`, `consumo_interno_pendiente`, `a_cuenta`, `saldo_cobrable`, `comprobantes_abiertos`. `saldo_actual` excluye internas finalizadas y descuenta devoluciones imputadas; `saldo_cobrable` además excluye internas pendientes.
+- `consumo_interno_mensual` (D11): por cliente y mes de finalización (hora AR), cantidad y total neto.
+
+**RPCs nuevas** (sin anon):
+- `registrar_cobro_cliente(cliente, medios jsonb [{forma_pago, monto}], venta_ids[], origen, fecha, nota, monto) → jsonb`. Medios: efectivo, transferencia, QR, débito, crédito. Reparto: elegidas o las más viejas; sobrante a cuenta; no supera `saldo_cobrable`; nunca a una interna. `turno`: cualquier perfil activo, caja abierta, fecha de hoy, **sin** `movimientos_cuenta` (entra al Cierre). `general`: solo admin, movimiento en la cuenta mapeada de cada medio.
+- `aplicar_cobros_a_cuenta(cliente, venta_ids[], pago_ids[])` (perfil activo) y `desaplicar_cobro(aplicacion)` (admin): espejo de docs/52.
+- `editar_venta_interna(venta, items jsonb [{item_id, descuento_porcentaje}], version)` — admin; interna pendiente, sin facturar, sin cobros aplicados, versión vigente; todos los ítems, 0–100 % sobre el precio registrado; el global queda en 0; recalcula importe, subtotal, precio oficial/cobrado y total (recargo se conserva). No toca cantidades, productos, stock ni fecha.
+- `finalizar_venta_interna(venta, version?)` — admin; sin cobro ni movimiento de caja.
+- `reabrir_venta_interna(venta, motivo)` — admin, motivo obligatorio; vuelve a pendiente (sale del total mensual hasta que se vuelva a finalizar).
+- `dashboard_consumo_interno(desde, hasta)` — filas día × cliente × producto × estado, importe final prorrateado, devoluciones restan.
+
+**RPCs modificadas** (misma firma):
+- `confirmar_venta`: snapshot de costo/IVA y marca interna. Sin restricciones nuevas de descuento (D2).
+- `registrar_pago_cliente` (vieja, la usa el Local instalado): origen por header `x-virikyna-app` (`local` → turno, sin movimiento; resto → general), un medio, imputación a la venta elegida hasta su saldo.
+- `crear_devolucion`: D12.
+- `cerrar_caja`: `cierres_caja` + `cantidad_cobros`, `total_cobros_efectivo/transferencia/qr/tarjeta` (cobros `turno` del día); el efectivo suma al efectivo esperado.
+- `validar_cierre_z`: lleva también los cobros no-efectivo del turno a su cuenta.
+- `reservar_emision_factura_c` (D5): "Es un consumo interno (cliente interno): no lleva Factura C", antes de cualquier reserva.
+- `dashboard_ventas_por_dia` y `dashboard_ventas_por_producto` (D8): sin ventas internas ni sus devoluciones.
+- `revertir_movimiento`, rama `pagos_cliente`: copia el origen, espeja los medios, devuelve a la cuenta solo lo que el cobro movió (neto) y deja sin efecto sus aplicaciones.
