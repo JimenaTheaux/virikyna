@@ -451,6 +451,7 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
           proveedorNombre={proveedorNombre}
           facturaCompraId={facturaActual.id}
           saldoPendiente={facturaActual.saldo_pendiente}
+          comprobanteEtiqueta={etiquetaComprobanteCompra(facturaActual)}
           onClose={() => setModalPago(false)}
           onSaved={() => {
             setModalPago(false)

@@ -1,6 +1,17 @@
 import { useState, type FormEvent } from 'react'
 import type { FormaPagoEgreso } from '@virikyna/shared'
-import { fechaHoyISO, formatCurrency, mensajeErrorGuardado, registrarPagoProveedor, usePagosACuenta } from '@virikyna/shared'
+import {
+  CAJA_ORIGEN_LABEL,
+  ConfirmarPagoDialog,
+  fechaHoyISO,
+  formatCurrency,
+  formatFechaCorta,
+  mensajeErrorGuardado,
+  registrarPagoProveedor,
+  repartoPagoAFactura,
+  useEnterComoTab,
+  usePagosACuenta,
+} from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { FORMA_PAGO_EGRESO_LABEL } from '../../lib/caja'
 import { Modal } from '../../components/Modal'
@@ -15,6 +26,7 @@ type Props = {
   proveedorNombre: string
   facturaCompraId: string | null // null = pago a cuenta general del proveedor
   saldoPendiente?: number
+  comprobanteEtiqueta?: string // para el resumen de la confirmación
   onClose: () => void
   onSaved: () => void
 }
@@ -30,6 +42,7 @@ export function RegistrarPagoProveedorModal({
   proveedorNombre,
   facturaCompraId,
   saldoPendiente,
+  comprobanteEtiqueta,
   onClose,
   onSaved,
 }: Props) {
@@ -42,6 +55,8 @@ export function RegistrarPagoProveedorModal({
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [confirmCerrar, setConfirmCerrar] = useState(false)
+  const [confirmar, setConfirmar] = useState(false)
+  const enterComoTab = useEnterComoTab()
   // docs/52: si el proveedor ya tiene plata a cuenta, se avisa antes de pagar de nuevo (igual que Gestión).
   const aCuenta = usePagosACuenta(supabase, proveedorId).data?.total ?? 0
 
@@ -53,11 +68,13 @@ export function RegistrarPagoProveedorModal({
     }
   }
 
-  async function handleSubmit(e: FormEvent) {
+  const montoNum = Number(monto)
+
+  // Valida y abre la confirmación; recién "Confirmar pago" guarda (guardar()).
+  function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
 
-    const montoNum = Number(monto)
     if (!montoNum || montoNum <= 0) {
       setError('Ingresá un monto mayor a cero.')
       return
@@ -77,7 +94,11 @@ export function RegistrarPagoProveedorModal({
         return
       }
     }
+    setConfirmar(true)
+  }
 
+  async function guardar() {
+    setError(null)
     setSaving(true)
     const { error: dbError, status } = await registrarPagoProveedor(supabase, {
       proveedorId,
@@ -91,6 +112,7 @@ export function RegistrarPagoProveedorModal({
     setSaving(false)
 
     if (dbError) {
+      setConfirmar(false)
       setError(mensajeErrorGuardado(dbError, status, 'registrar el pago', 'los datos siguen acá'))
       return
     }
@@ -99,7 +121,7 @@ export function RegistrarPagoProveedorModal({
 
   return (
     <Modal title="Registrar pago a proveedor" onClose={pedirCierre} cambiosSinGuardar={dirty} widthClassName="max-w-[460px]">
-      <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
+      <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} onKeyDown={enterComoTab} className="flex flex-col gap-stack-md">
         <p className="font-sans text-body-md text-ink-soft">
           Proveedor: <span className="text-ink">{proveedorNombre}</span>
         </p>
@@ -197,6 +219,33 @@ export function RegistrarPagoProveedorModal({
           confirmLabel="Cerrar sin guardar"
           onCancel={() => setConfirmCerrar(false)}
           onConfirm={onClose}
+        />
+      )}
+
+      {confirmar && (
+        <ConfirmarPagoDialog
+          titulo="Confirmar pago"
+          confirmLabel="Confirmar pago"
+          titularLabel="Proveedor"
+          titular={proveedorNombre}
+          total={montoNum}
+          fecha={fechaHoyISO()}
+          origen={CAJA_ORIGEN_LABEL.turno}
+          medios={[
+            {
+              etiqueta: FORMA_PAGO_EGRESO_LABEL[formaPago],
+              monto: montoNum,
+              detalle: ES_CHEQUE(formaPago)
+                ? [chequeNumero.trim() && `N° ${chequeNumero.trim()}`, chequeFechaVencimiento && `vence el ${formatFechaCorta(chequeFechaVencimiento)}`]
+                    .filter(Boolean)
+                    .join(' · ') || undefined
+                : undefined,
+            },
+          ]}
+          reparto={repartoPagoAFactura(montoNum, facturaCompraId ? (comprobanteEtiqueta ?? 'Esta factura') : null, saldoPendiente)}
+          confirmando={saving}
+          onVolver={() => setConfirmar(false)}
+          onConfirmar={() => void guardar()}
         />
       )}
     </Modal>

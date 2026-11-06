@@ -1,13 +1,19 @@
 import { useId, useState, type FormEvent } from 'react'
 import {
+  CAJA_ORIGEN_LABEL,
+  ConfirmarPagoDialog,
   diferenciaMedios,
   ErrorRegistrarPago,
   fechaHoyISO,
+  FORMA_PAGO_EGRESO_LABEL,
   formatCurrency,
   friendlyError,
   MediosPagoEditor,
+  mediosParaConfirmar,
+  repartoPagoAFactura,
   mensajeErrorGuardado,
   ResumenMedios,
+  useEnterComoTab,
   useMediosPago,
   usePagosACuenta,
   useRegistrarPagoProveedorV3,
@@ -23,6 +29,7 @@ type Props = {
   proveedorNombre: string
   facturaCompraId: string | null // null = se aplica a las pendientes más viejas
   saldoPendiente?: number
+  comprobanteEtiqueta?: string // para el resumen de la confirmación ("Factura A 0001-00001234")
   onClose: () => void
   onSaved: () => void
 }
@@ -37,6 +44,7 @@ export function RegistrarPagoProveedorModal({
   proveedorNombre,
   facturaCompraId,
   saldoPendiente,
+  comprobanteEtiqueta,
   onClose,
   onSaved,
 }: Props) {
@@ -47,6 +55,8 @@ export function RegistrarPagoProveedorModal({
   const [error, setError] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
   const [confirmCerrar, setConfirmCerrar] = useState(false)
+  const [confirmar, setConfirmar] = useState(false)
+  const enterComoTab = useEnterComoTab()
   const formId = useId()
   const mutation = useRegistrarPagoProveedorV3(supabase)
   // docs/52: si el proveedor ya tiene plata a cuenta, se avisa antes de pagar de nuevo.
@@ -63,7 +73,8 @@ export function RegistrarPagoProveedorModal({
     }
   }
 
-  async function handleSubmit(e: FormEvent) {
+  // Valida y abre la confirmación; recién "Confirmar pago" guarda (guardar()).
+  function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
 
@@ -82,7 +93,11 @@ export function RegistrarPagoProveedorModal({
     }
     // Un monto mayor al saldo ya no se rechaza (docs/52): el RPC paga la factura y el sobrante
     // queda a cuenta del proveedor.
+    setConfirmar(true)
+  }
 
+  async function guardar() {
+    setError(null)
     try {
       await mutation.mutateAsync({
         proveedorId,
@@ -95,6 +110,7 @@ export function RegistrarPagoProveedorModal({
       })
       onSaved()
     } catch (err) {
+      setConfirmar(false)
       setError(
         err instanceof ErrorRegistrarPago
           ? mensajeErrorGuardado(err.causa, err.status, 'registrar el pago', 'los datos siguen acá')
@@ -130,7 +146,13 @@ export function RegistrarPagoProveedorModal({
         </div>
       }
     >
-      <form id={formId} onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
+      <form
+        id={formId}
+        onSubmit={handleSubmit}
+        onChangeCapture={() => setDirty(true)}
+        onKeyDown={enterComoTab}
+        className="flex flex-col gap-stack-md"
+      >
         <p className="font-sans text-body-md text-ink-soft">
           Proveedor: <span className="text-ink">{proveedorNombre}</span>
         </p>
@@ -182,6 +204,24 @@ export function RegistrarPagoProveedorModal({
           confirmLabel="Cerrar sin guardar"
           onCancel={() => setConfirmCerrar(false)}
           onConfirm={onClose}
+        />
+      )}
+
+      {confirmar && (
+        <ConfirmarPagoDialog
+          titulo="Confirmar pago"
+          confirmLabel="Confirmar pago"
+          titularLabel="Proveedor"
+          titular={proveedorNombre}
+          total={montoNum}
+          fecha={fecha}
+          origen={CAJA_ORIGEN_LABEL.general}
+          medios={mediosParaConfirmar(medios, (m) => FORMA_PAGO_EGRESO_LABEL[m])}
+          reparto={repartoPagoAFactura(montoNum, facturaCompraId ? (comprobanteEtiqueta ?? 'Esta factura') : null, saldoPendiente)}
+          nota={nota.trim() || undefined}
+          confirmando={mutation.isPending}
+          onVolver={() => setConfirmar(false)}
+          onConfirmar={() => void guardar()}
         />
       )}
     </Modal>

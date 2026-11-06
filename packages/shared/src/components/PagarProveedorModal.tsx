@@ -2,6 +2,7 @@ import { useId, useMemo, useState, type FormEvent } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { FacturaCompraSaldo, FormaPagoEgreso, OrigenEgreso } from '../../types/database'
 import {
+  CAJA_ORIGEN_LABEL,
   ErrorRegistrarPago,
   esCheque,
   etiquetaComprobanteCompra,
@@ -14,10 +15,12 @@ import {
 import { diferenciaMedios, validarMedios } from '../../lib/mediosPago'
 import { simularRepartoPago } from '../../lib/repartoPagoProveedor'
 import { MediosPagoEditor, ResumenMedios, useMediosPago } from './MediosPagoEditor'
-import { fechaHoyISO, formatCurrency } from '../../lib/format'
+import { fechaHoyISO, formatCurrency, formatFechaCorta } from '../../lib/format'
 import { friendlyError, mensajeErrorGuardado } from '../../lib/supabaseErrors'
+import { useEnterComoTab } from '../../lib/useEnterComoTab'
 import { Modal } from './Modal'
 import { ConfirmDialog } from './ConfirmDialog'
+import { ConfirmarPagoDialog, mediosParaConfirmar, type FilaRepartoConfirmacion } from './ConfirmarPagoDialog'
 import { Field, ErrorText, inputClass, selectClass } from './FormField'
 import { EstadoBadge } from './EstadoBadge'
 
@@ -108,6 +111,9 @@ export function PagarProveedorModal({
   const cancelaSaldoInicial = Math.min(Math.round(reparto.aCuenta * 100), Math.round(Math.max(saldoInicialPendiente, 0) * 100)) / 100
   const quedaACuenta = (Math.round(reparto.aCuenta * 100) - Math.round(cancelaSaldoInicial * 100)) / 100
 
+  const [confirmar, setConfirmar] = useState(false)
+  const enterComoTab = useEnterComoTab()
+
   // Una fila por comprobante alcanzado: cuánto le llega de NC y de plata, y cómo queda.
   const filasPreview = useMemo(() => {
     const porComprobante = new Map<string, { nc: number; pago: number }>()
@@ -130,7 +136,8 @@ export function PagarProveedorModal({
     else onClose()
   }
 
-  async function handleSubmit(e: FormEvent) {
+  // Valida y abre la confirmación; recién "Confirmar pago" guarda (guardar()).
+  function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
 
@@ -162,7 +169,11 @@ export function PagarProveedorModal({
       setError('Ingresá la fecha del pago.')
       return
     }
+    setConfirmar(true)
+  }
 
+  async function guardar() {
+    setError(null)
     try {
       if (variosMedios) {
         await mutationV3.mutateAsync({
@@ -192,6 +203,7 @@ export function PagarProveedorModal({
       }
       onPagado()
     } catch (err) {
+      setConfirmar(false)
       setError(
         err instanceof ErrorRegistrarPago
           ? mensajeErrorGuardado(err.causa, err.status, 'registrar el pago', 'los datos siguen acá')
@@ -231,6 +243,7 @@ export function PagarProveedorModal({
         id={formId}
         onSubmit={handleSubmit}
         onChangeCapture={() => setDirty(true)}
+        onKeyDown={enterComoTab}
         className="flex flex-col gap-stack-md"
       >
         <p className="font-sans text-body-md text-ink-soft">
@@ -450,6 +463,55 @@ export function PagarProveedorModal({
           confirmLabel="Cerrar sin guardar"
           onCancel={() => setConfirmCerrar(false)}
           onConfirm={onClose}
+        />
+      )}
+
+      {confirmar && (
+        <ConfirmarPagoDialog
+          titulo={soloCredito ? 'Confirmar aplicación de crédito' : 'Confirmar pago'}
+          confirmLabel={soloCredito ? 'Confirmar' : 'Confirmar pago'}
+          titularLabel="Proveedor"
+          titular={proveedorNombre}
+          total={montoNum}
+          fecha={fecha}
+          origen={CAJA_ORIGEN_LABEL[origen]}
+          medios={
+            soloCredito
+              ? []
+              : variosMedios
+                ? mediosParaConfirmar(medios, (m) => FORMA_PAGO_EGRESO_LABEL[m])
+                : [
+                    {
+                      etiqueta: FORMA_PAGO_EGRESO_LABEL[formaPago],
+                      monto: montoNum,
+                      detalle: esCheque(formaPago)
+                        ? [chequeNumero.trim() && `N° ${chequeNumero.trim()}`, chequeFechaVencimiento && `vence el ${formatFechaCorta(chequeFechaVencimiento)}`]
+                            .filter(Boolean)
+                            .join(' · ') || undefined
+                        : undefined,
+                    },
+                  ]
+          }
+          reparto={[
+            ...filasPreview.map<FilaRepartoConfirmacion>(({ comprobante, nc, pago, saldoFinal }) => ({
+              etiqueta: etiquetaComprobanteCompra(comprobante),
+              aplica: nc + pago,
+              queda: saldoFinal,
+            })),
+            ...Array.from(reparto.creditoFinal.entries()).map<FilaRepartoConfirmacion>(([id, queda]) => ({
+              etiqueta: `Usa crédito de ${etiquetaComprobanteCompra(porId.get(id)!)}`,
+              aplica: Number(porId.get(id)!.credito_disponible) - queda,
+              negativo: true,
+            })),
+            ...(cancelaSaldoInicial > 0
+              ? [{ etiqueta: 'Saldo inicial', aplica: cancelaSaldoInicial, queda: saldoInicialPendiente - cancelaSaldoInicial }]
+              : []),
+            ...(quedaACuenta > 0 ? [{ etiqueta: 'Queda a cuenta del proveedor', aplica: quedaACuenta }] : []),
+          ]}
+          nota={nota.trim() || undefined}
+          confirmando={guardando}
+          onVolver={() => setConfirmar(false)}
+          onConfirmar={() => void guardar()}
         />
       )}
     </Modal>

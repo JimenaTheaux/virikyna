@@ -14,8 +14,11 @@ import { simularRepartoCobro } from '../../lib/repartoPagoProveedor'
 import { MediosPagoEditor, ResumenMedios, useMediosPago } from './MediosPagoEditor'
 import { fechaHoyISO, formatCurrency, formatFechaCorta, formatFechaCortaLocal } from '../../lib/format'
 import { friendlyError, mensajeErrorGuardado } from '../../lib/supabaseErrors'
+import { FORMA_PAGO_LABEL } from '../../lib/comprobante'
+import { useEnterComoTab } from '../../lib/useEnterComoTab'
 import { Modal } from './Modal'
 import { ConfirmDialog } from './ConfirmDialog'
+import { ConfirmarPagoDialog, mediosParaConfirmar, type FilaRepartoConfirmacion } from './ConfirmarPagoDialog'
 import { Field, ErrorText, inputClass } from './FormField'
 import { EstadoBadge } from './EstadoBadge'
 
@@ -65,6 +68,8 @@ export function CobrarClienteModal({
   const [error, setError] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
   const [confirmCerrar, setConfirmCerrar] = useState(false)
+  const [confirmar, setConfirmar] = useState(false)
+  const enterComoTab = useEnterComoTab()
   const formId = useId()
   const avisoId = useId()
 
@@ -93,7 +98,8 @@ export function CobrarClienteModal({
     else onClose()
   }
 
-  async function handleSubmit(e: FormEvent) {
+  // Valida y abre la confirmación; recién "Confirmar cobro" guarda (guardar()).
+  function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
     const invalido =
@@ -110,6 +116,11 @@ export function CobrarClienteModal({
       setError('Ingresá la fecha del cobro.')
       return
     }
+    setConfirmar(true)
+  }
+
+  async function guardar() {
+    setError(null)
     try {
       const resultado = await mutation.mutateAsync({
         clienteId: cliente.id,
@@ -122,6 +133,7 @@ export function CobrarClienteModal({
       })
       onCobrado(resultado)
     } catch (err) {
+      setConfirmar(false)
       setError(
         err instanceof ErrorRegistrarPago
           ? mensajeErrorGuardado(err.causa, err.status, 'registrar el cobro', 'los datos siguen acá')
@@ -153,7 +165,13 @@ export function CobrarClienteModal({
         </div>
       }
     >
-      <form id={formId} onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
+      <form
+        id={formId}
+        onSubmit={handleSubmit}
+        onChangeCapture={() => setDirty(true)}
+        onKeyDown={enterComoTab}
+        className="flex flex-col gap-stack-md"
+      >
         <p className="font-sans text-body-md text-ink-soft">
           Cliente: <span className="text-ink">{nombreCliente(cliente)}</span>
           <span className="mx-2" aria-hidden="true">·</span>
@@ -302,6 +320,31 @@ export function CobrarClienteModal({
           confirmLabel="Cerrar sin guardar"
           onCancel={() => setConfirmCerrar(false)}
           onConfirm={onClose}
+        />
+      )}
+
+      {confirmar && (
+        <ConfirmarPagoDialog
+          titulo="Confirmar cobro"
+          confirmLabel="Confirmar cobro"
+          titularLabel="Cliente"
+          titular={nombreCliente(cliente)}
+          total={montoNum}
+          fecha={origen === 'general' ? fecha : fechaHoyISO()}
+          origen={CAJA_ORIGEN_LABEL[origen]}
+          medios={mediosParaConfirmar(medios, (m) => FORMA_PAGO_LABEL[m])}
+          reparto={[
+            ...filasPreview.map<FilaRepartoConfirmacion>(({ venta, aplica, saldoFinal }) => ({
+              etiqueta: etiquetaVenta(venta),
+              aplica,
+              queda: saldoFinal,
+            })),
+            ...(reparto.aCuenta > 0 ? [{ etiqueta: 'Queda a cuenta del cliente', aplica: reparto.aCuenta }] : []),
+          ]}
+          nota={nota.trim() || undefined}
+          confirmando={mutation.isPending}
+          onVolver={() => setConfirmar(false)}
+          onConfirmar={() => void guardar()}
         />
       )}
     </Modal>
