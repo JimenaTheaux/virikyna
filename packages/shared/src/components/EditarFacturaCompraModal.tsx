@@ -18,6 +18,7 @@ import { Modal } from './Modal'
 import { ConfirmDialog } from './ConfirmDialog'
 import { Field, ErrorText, inputClass, selectClass } from './FormField'
 import { SelectorAlicuotaIva } from './SelectorAlicuotaIva'
+import { useEnterComoTab } from '../../lib/useEnterComoTab'
 
 type Props = {
   supabase: SupabaseClient
@@ -34,6 +35,7 @@ type Props = {
 // recalcula IVA y total sobre el total sin IVA guardado. Con pagos o NC aplicados los dos quedan
 // bloqueados (el RPC también lo rechaza): cambiarían lo que ya se imputó.
 export function EditarFacturaCompraModal({ supabase, factura, onClose, onSaved }: Props) {
+  const enterComoTab = useEnterComoTab()
   const [tipoComprobante, setTipoComprobante] = useState<TipoComprobanteCompra>(factura.tipo_comprobante)
   const [ivaAlicuota, setIvaAlicuota] = useState<AlicuotaIvaCompra>(aAlicuotaIvaCompra(factura.iva_alicuota))
   const bloqueado = tieneAplicacionesVigentes(factura)
@@ -114,7 +116,7 @@ export function EditarFacturaCompraModal({ supabase, factura, onClose, onSaved }
         </div>
       }
     >
-      <form
+      <form onKeyDown={enterComoTab}
         id="form-editar-factura-compra"
         onSubmit={handleSubmit}
         onChangeCapture={() => setDirty(true)}

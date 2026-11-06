@@ -8,10 +8,12 @@ import { TIPO_MOVIMIENTO_CUENTA_LABEL, esMovimientoManualEditable } from '../../
 import { Field, ErrorText, inputClass, selectClass } from '../../components/FormField'
 import { EditarMovimientoModal } from './EditarMovimientoModal'
 import type { MovimientoCuentaConUsuario } from './types'
+import { useEnterComoTab } from '@virikyna/shared'
 
 type TipoManual = 'ingreso_manual' | 'egreso'
 
 export function MovimientosManualesTab() {
+  const enterComoTab = useEnterComoTab()
   const [cuentas, setCuentas] = useState<CuentaSaldo[]>([])
   const [historial, setHistorial] = useState<MovimientoCuentaConUsuario[]>([])
   const [loading, setLoading] = useState(true)
@@ -173,7 +175,7 @@ export function MovimientosManualesTab() {
 
       {error && <p className="rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>}
 
-      <form onSubmit={handleSubmit} className="rounded-lg border border-line p-4">
+      <form onKeyDown={enterComoTab} onSubmit={handleSubmit} className="rounded-lg border border-line p-4">
         <p className="font-sans text-label-bold text-ink-soft">Registrar movimiento manual</p>
         <div className="mt-3 grid grid-cols-4 gap-stack-md">
           <Field label="Cuenta">
@@ -216,7 +218,7 @@ export function MovimientosManualesTab() {
         </div>
       </form>
 
-      <form onSubmit={handleTransferir} className="rounded-lg border border-line p-4">
+      <form onKeyDown={enterComoTab} onSubmit={handleTransferir} className="rounded-lg border border-line p-4">
         <p className="font-sans text-label-bold text-ink-soft">Transferir entre cuentas</p>
         <div className="mt-3 grid grid-cols-4 gap-stack-md">
           <Field label="Cuenta origen">

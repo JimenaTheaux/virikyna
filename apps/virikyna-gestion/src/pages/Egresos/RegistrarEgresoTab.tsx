@@ -4,12 +4,14 @@ import { fechaHoyISO, friendlyError, registrarEgresoGeneral } from '@virikyna/sh
 import { supabase } from '../../lib/supabaseClient'
 import { CATEGORIA_EGRESO_LABEL, CATEGORIAS_EGRESO_GENERAL, FORMA_PAGO_EGRESO_LABEL } from '../../lib/caja'
 import { Field, ErrorText, inputClass, selectClass } from '../../components/FormField'
+import { useEnterComoTab } from '@virikyna/shared'
 
 const FORMAS_PAGO_EGRESO = Object.keys(FORMA_PAGO_EGRESO_LABEL) as FormaPagoEgreso[]
 
 // Exclusivo Gestión — siempre origen='general'. Nunca se mezcla con el egreso de turno que
 // carga un cajero desde el Cierre de Caja de Virikyna Local (origen='turno').
 export function RegistrarEgresoTab() {
+  const enterComoTab = useEnterComoTab()
   const [categoria, setCategoria] = useState<CategoriaEgreso>('sueldo')
   const [monto, setMonto] = useState('')
   const [descripcion, setDescripcion] = useState('')
@@ -61,7 +63,7 @@ export function RegistrarEgresoTab() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-lg border border-line p-4">
+    <form onKeyDown={enterComoTab} onSubmit={handleSubmit} className="rounded-lg border border-line p-4">
       <p className="font-sans text-label-bold text-ink-soft">Registrar egreso general</p>
       <p className="mt-1 font-sans text-body-md text-ink-soft">Sueldo, servicio u otro gasto sin proveedor.</p>
       {/* Orden de un comprobante de gasto: cuándo, qué tipo, de qué se trata (obligatoria, ancha) y

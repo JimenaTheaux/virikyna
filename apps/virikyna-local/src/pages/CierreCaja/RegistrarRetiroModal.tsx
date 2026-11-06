@@ -6,12 +6,14 @@ import { mensajeErrorGuardado, fechaHoyISO } from '@virikyna/shared'
 import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field, ErrorText, inputClass, selectClass } from '../../components/FormField'
+import { useEnterComoTab } from '@virikyna/shared'
 
 // Retiro de efectivo: el cajero entrega plata física a un admin durante el turno. Este es el
 // ÚNICO camino por el que ese efectivo llega a Caja Gestión — el Cierre Z solo informa cuánto
 // efectivo hay en el cajón, nunca lo suma a las cuentas (docs/14_retiro_efectivo_caja.sql).
 // Por eso vive acá, separado del flujo de Cierre X/Z, no como un paso del cierre.
 export function RegistrarRetiroModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const enterComoTab = useEnterComoTab()
   const { user, perfil } = useAuth()
   const [fecha, setFecha] = useState(fechaHoyISO())
   const [monto, setMonto] = useState('')
@@ -85,7 +87,7 @@ export function RegistrarRetiroModal({ onClose, onSaved }: { onClose: () => void
 
   return (
     <Modal title="Registrar retiro" onClose={pedirCierre} cambiosSinGuardar={dirty} widthClassName="max-w-[460px]">
-      <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
+      <form onKeyDown={enterComoTab} onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
         <Field label="Fecha">
           <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className={inputClass} />
         </Field>

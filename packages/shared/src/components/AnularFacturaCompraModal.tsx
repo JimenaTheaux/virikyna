@@ -7,6 +7,7 @@ import { friendlyError } from '../../lib/supabaseErrors'
 import { Modal } from './Modal'
 import { ConfirmDialog } from './ConfirmDialog'
 import { Field, ErrorText, inputClass } from './FormField'
+import { useEnterComoTab } from '../../lib/useEnterComoTab'
 
 type Props = {
   supabase: SupabaseClient
@@ -20,6 +21,7 @@ type Props = {
 // aplicadas vigentes (docs/31), el RPC rechaza la anulación con su propio mensaje — se muestra tal
 // cual acá (friendlyError no lo reinterpreta), nunca un mensaje genérico inventado en el cliente.
 export function AnularFacturaCompraModal({ supabase, factura, onClose, onAnulada }: Props) {
+  const enterComoTab = useEnterComoTab()
   const [motivo, setMotivo] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -61,7 +63,7 @@ export function AnularFacturaCompraModal({ supabase, factura, onClose, onAnulada
       widthClassName="max-w-[480px]"
       cambiosSinGuardar={dirty}
     >
-      <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
+      <form onKeyDown={enterComoTab} onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
         <div className="rounded border border-error/40 bg-error/5 p-4">
           <p className="font-sans text-body-md text-ink">
             {/* docs/55: se revierte lo que el comprobante movió de verdad. */}

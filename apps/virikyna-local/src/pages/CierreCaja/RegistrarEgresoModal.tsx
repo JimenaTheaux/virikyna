@@ -7,12 +7,14 @@ import { CATEGORIA_EGRESO_LABEL, CATEGORIAS_LOCAL, FORMA_PAGO_EGRESO_LABEL } fro
 import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field, ErrorText, inputClass, selectClass } from '../../components/FormField'
+import { useEnterComoTab } from '@virikyna/shared'
 
 const CATEGORIAS = CATEGORIAS_LOCAL
 const FORMAS_PAGO = Object.keys(FORMA_PAGO_EGRESO_LABEL) as FormaPagoEgreso[]
 const ES_CHEQUE = (f: FormaPagoEgreso) => f === 'cheque' || f === 'echeq'
 
 export function RegistrarEgresoModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const enterComoTab = useEnterComoTab()
   const { user } = useAuth()
   const [categoria, setCategoria] = useState<CategoriaEgreso>('otro')
   const [monto, setMonto] = useState('')
@@ -146,7 +148,7 @@ export function RegistrarEgresoModal({ onClose, onSaved }: { onClose: () => void
 
   return (
     <Modal title="Registrar egreso" onClose={pedirCierre} cambiosSinGuardar={dirty} widthClassName="max-w-[460px]">
-      <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
+      <form onKeyDown={enterComoTab} onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
         <Field label="Categoría">
           <select
             value={categoria}

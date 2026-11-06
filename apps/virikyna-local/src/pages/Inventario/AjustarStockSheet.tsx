@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field, ErrorText, inputClass, selectClass } from '../../components/FormField'
 import { Modal } from '../../components/Modal'
+import { useEnterComoTab } from '@virikyna/shared'
 
 const MOTIVOS = MOTIVOS_AJUSTE_STOCK
 
@@ -17,6 +18,7 @@ type Props = {
 }
 
 export function AjustarStockSheet({ productoId, productoNombre, ubicacion, onClose, onSaved }: Props) {
+  const enterComoTab = useEnterComoTab()
   const [cantidad, setCantidad] = useState('')
   const [motivoTipo, setMotivoTipo] = useState<(typeof MOTIVOS)[number]>(MOTIVOS[0])
   const [detalle, setDetalle] = useState('')
@@ -67,7 +69,7 @@ export function AjustarStockSheet({ productoId, productoNombre, ubicacion, onClo
 
   return (
     <Modal title={`Ajustar stock — ${ubicacion === 'local' ? 'Local' : 'Depósito'}`} onClose={pedirCierre} cambiosSinGuardar={dirty}>
-      <form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
+      <form onKeyDown={enterComoTab} onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)} className="flex flex-col gap-stack-md">
         <p className="font-sans text-body-md text-ink-soft">{productoNombre}</p>
 
         <Field label="Cantidad" hint="Positiva para sumar, negativa para restar.">
