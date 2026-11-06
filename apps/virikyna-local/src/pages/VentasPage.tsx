@@ -20,6 +20,7 @@ import { TicketsBar } from './Ventas/TicketsBar'
 import { MAX_TICKETS, cargarTicketsGuardados, crearTicketVacio, guardarTickets } from './Ventas/ticketsStorage'
 import type { TicketsPersistState } from './Ventas/ticketsStorage'
 import type { CartItem, ClienteSeleccionado, PagoParcial, Ticket } from './Ventas/types'
+import { MontoInput } from '@virikyna/shared'
 
 // Atajos con letras de Ventas (docs/04, módulo 3). Solo con el foco fuera de los campos de texto.
 const ATAJOS_FORMA_PAGO: Record<string, FormaPagoVenta> = {
@@ -725,15 +726,12 @@ export function VentasPage() {
 
           <div className="mt-stack-md rounded-lg border border-line p-4">
             <Field label="Precio final a cobrar">
-              <input
+              <MontoInput
                 ref={precioCobradoInputRef}
                 autoFocus
-                type="number"
-                step="0.01"
-                min="0"
                 value={precioCobradoStr}
-                onChange={(e) => setPrecioCobradoStr(e.target.value)}
-                onFocus={(e) => e.target.select()}
+                onChange={setPrecioCobradoStr}
+                onFocus={(e) => { const campo = e.currentTarget; requestAnimationFrame(() => campo.select()) }}
                 className={inputClass}
               />
             </Field>

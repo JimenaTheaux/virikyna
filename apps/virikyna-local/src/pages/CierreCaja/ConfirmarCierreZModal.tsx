@@ -3,6 +3,7 @@ import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field, ErrorText, inputClass } from '../../components/FormField'
 import { MontoLeido } from '../../components/MontoLeido'
+import { MontoInput } from '@virikyna/shared'
 
 type Props = {
   onClose: () => void
@@ -51,12 +52,10 @@ export function ConfirmarCierreZModal({ onClose, onConfirmar }: Props) {
         </p>
 
         <Field label="Efectivo contado en caja">
-          <input
-            type="number"
-            step="0.01"
+          <MontoInput
             autoFocus
             value={efectivoContado}
-            onChange={(e) => setEfectivoContado(e.target.value)}
+            onChange={setEfectivoContado}
             className={inputClass}
           />
         </Field>

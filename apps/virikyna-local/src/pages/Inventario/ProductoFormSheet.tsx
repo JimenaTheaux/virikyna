@@ -35,6 +35,7 @@ import { Modal } from '../../components/Modal'
 import { AjustarStockSheet } from './AjustarStockSheet'
 import { HistorialPrecioTab } from './HistorialPrecioTab'
 import type { ProductoConRelaciones } from './types'
+import { MontoInput } from '@virikyna/shared'
 
 // Input compacto para que el formulario completo entre en una sola pantalla sin scroll interno.
 const inputCompacto = inputClass.replace('px-4 py-2.5', 'px-3 py-1.5').replace('text-body-md', 'text-[15px]')
@@ -440,12 +441,9 @@ export function ProductoFormSheet({
             <p className="mb-1 font-sans text-label-bold text-ink">Precio</p>
             <div className="grid grid-cols-3 gap-2">
               <Field compact label="Costo">
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                <MontoInput
                   value={costo}
-                  onChange={(e) => setCosto(e.target.value)}
+                  onChange={setCosto}
                   placeholder={conPrecioManual ? 'Sin costo' : '$ 0,00'}
                   className={inputCompacto}
                 />
@@ -494,12 +492,9 @@ export function ProductoFormSheet({
             {sigueManual && (
               <div className="mt-2 grid grid-cols-[1fr_2fr] items-end gap-2">
                 <Field compact label="Precio de venta (manual)">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
+                  <MontoInput
                     value={precioManual}
-                    onChange={(e) => setPrecioManual(e.target.value)}
+                    onChange={setPrecioManual}
                     className={inputCompacto}
                   />
                 </Field>

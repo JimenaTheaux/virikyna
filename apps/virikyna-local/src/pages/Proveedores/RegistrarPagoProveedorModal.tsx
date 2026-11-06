@@ -17,6 +17,7 @@ import { FORMA_PAGO_EGRESO_LABEL } from '../../lib/caja'
 import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field, ErrorText, inputClass, selectClass } from '../../components/FormField'
+import { MontoInput } from '@virikyna/shared'
 
 const FORMAS_PAGO = Object.keys(FORMA_PAGO_EGRESO_LABEL) as FormaPagoEgreso[]
 const ES_CHEQUE = (f: FormaPagoEgreso) => f === 'cheque' || f === 'echeq'
@@ -138,12 +139,10 @@ export function RegistrarPagoProveedorModal({
         )}
 
         <Field label="Monto">
-          <input
-            type="number"
-            step="0.01"
+          <MontoInput
             autoFocus
             value={monto}
-            onChange={(e) => setMonto(e.target.value)}
+            onChange={setMonto}
             className={inputClass}
           />
         </Field>

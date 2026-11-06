@@ -7,6 +7,7 @@ import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field, ErrorText, inputClass, selectClass } from '../../components/FormField'
 import { useEnterComoTab } from '@virikyna/shared'
+import { MontoInput } from '@virikyna/shared'
 
 // Retiro de efectivo: el cajero entrega plata física a un admin durante el turno. Este es el
 // ÚNICO camino por el que ese efectivo llega a Caja Gestión — el Cierre Z solo informa cuánto
@@ -93,12 +94,10 @@ export function RegistrarRetiroModal({ onClose, onSaved }: { onClose: () => void
         </Field>
 
         <Field label="Importe">
-          <input
-            type="number"
-            step="0.01"
+          <MontoInput
             autoFocus
             value={monto}
-            onChange={(e) => setMonto(e.target.value)}
+            onChange={setMonto}
             className={inputClass}
           />
         </Field>

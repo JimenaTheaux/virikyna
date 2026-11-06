@@ -6,6 +6,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field, ErrorText, inputClass, selectClass } from '../../components/FormField'
 import { FORMA_PAGO_LABEL } from '../../lib/comprobante'
 import type { PagoParcial } from './types'
+import { MontoInput } from '@virikyna/shared'
 
 const MEDIOS_COMBINABLES: FormaPagoVenta[] = ['efectivo', 'transferencia', 'qr', 'tarjeta_debito', 'tarjeta_credito']
 
@@ -92,13 +93,10 @@ export function PagoCombinadoModal({ total, valorActual, onClose, onAplicar }: P
             </select>
           </Field>
           <Field label="Monto">
-            <input
+            <MontoInput
               autoFocus
-              type="number"
-              min="0"
-              step="0.01"
               value={monto1}
-              onChange={(e) => handleMonto1(e.target.value)}
+              onChange={handleMonto1}
               className={inputClass}
             />
           </Field>
@@ -115,14 +113,11 @@ export function PagoCombinadoModal({ total, valorActual, onClose, onAplicar }: P
             </select>
           </Field>
           <Field label="Monto">
-            <input
-              type="number"
-              min="0"
-              step="0.01"
+            <MontoInput
               value={monto2}
-              onChange={(e) => {
+              onChange={(v) => {
                 setMonto2Tocado(true)
-                setMonto2(e.target.value)
+                setMonto2(v)
               }}
               className={inputClass}
             />

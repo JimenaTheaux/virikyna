@@ -8,6 +8,7 @@ import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field, ErrorText, inputClass, selectClass } from '../../components/FormField'
 import { useEnterComoTab } from '@virikyna/shared'
+import { MontoInput } from '@virikyna/shared'
 
 const CATEGORIAS = CATEGORIAS_LOCAL
 const FORMAS_PAGO = Object.keys(FORMA_PAGO_EGRESO_LABEL) as FormaPagoEgreso[]
@@ -196,12 +197,10 @@ export function RegistrarEgresoModal({ onClose, onSaved }: { onClose: () => void
         )}
 
         <Field label="Monto">
-          <input
-            type="number"
-            step="0.01"
+          <MontoInput
             autoFocus
             value={monto}
-            onChange={(e) => setMonto(e.target.value)}
+            onChange={setMonto}
             className={inputClass}
           />
         </Field>

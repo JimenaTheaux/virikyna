@@ -5,6 +5,7 @@ import type { AperturaCaja, CierreCaja } from '@virikyna/shared'
 import { Field, ErrorText, inputClass } from '../../components/FormField'
 import { MontoLeido } from '../../components/MontoLeido'
 import { IconAbrirCaja } from '../../components/icons'
+import { MontoInput } from '@virikyna/shared'
 
 // Recuadro de apertura de caja (docs/21_apertura_caja.sql, punto 8 del roadmap). Vive en el
 // dashboard principal (Cajero y Admin de Virikyna Local) porque es lo primero que necesita
@@ -132,12 +133,10 @@ export function AbrirCajaCard() {
         <>
           <div className="mt-stack-md flex flex-wrap items-end gap-3">
             <Field label="Monto real en caja">
-              <input
-                type="number"
-                step="0.01"
+              <MontoInput
                 autoFocus
                 value={montoInput}
-                onChange={(e) => setMontoInput(e.target.value)}
+                onChange={setMontoInput}
                 className={inputClass}
               />
             </Field>
