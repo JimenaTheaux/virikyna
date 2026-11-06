@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Modal } from './Modal'
 
 type Props = {
@@ -6,29 +7,44 @@ type Props = {
   confirmLabel?: string
   cancelLabel?: string
   confirmando?: boolean
+  // 'destructivo' (default): eliminar, anular, cerrar sin guardar — botón con borde rojo.
+  // 'primario': confirmar una acción normal (registrar un pago o un cobro) — botón teal lleno.
+  variant?: 'destructivo' | 'primario'
+  children?: ReactNode // contenido debajo del mensaje (ej. resumen del pago)
+  widthClassName?: string
   onCancel: () => void
   onConfirm: () => void
 }
 
-// Mismo patrón en toda la app para cualquier acción destructiva (docs/08_estilos_y_diseno.md,
-// sección 5): cancelar a la izquierda, acción destructiva a la derecha en `error`, siempre en
-// esa posición — evita que un click apurado confirme algo pensando que era el botón de siempre.
+const CLASE_CONFIRMAR = {
+  destructivo:
+    'rounded border border-error px-4 py-3 font-sans text-label-bold text-error transition hover:bg-error hover:text-white disabled:opacity-60',
+  primario: 'rounded bg-accent px-4 py-3 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-60',
+} as const
+
+// Mismo patrón en toda la app (docs/08_estilos_y_diseno.md, sección 5): cancelar a la izquierda, la
+// acción a la derecha y siempre en esa posición — evita que un click apurado confirme algo pensando
+// que era el botón de siempre.
 export function ConfirmDialog({
   title,
   mensaje,
   confirmLabel = 'Eliminar',
   cancelLabel = 'Cancelar',
   confirmando,
+  variant = 'destructivo',
+  children,
+  widthClassName = 'max-w-[440px]',
   onCancel,
   onConfirm,
 }: Props) {
   return (
     // Siempre como diálogo accesible: Esc = Cancelar (nunca confirma) y el foco arranca en
-    // Cancelar — un Enter apurado no ejecuta la acción destructiva.
-    <Modal title={title} onClose={onCancel} widthClassName="max-w-[440px]" dialogo={{ onEscape: onCancel }}>
+    // Cancelar — un Enter apurado no ejecuta la acción.
+    <Modal title={title} onClose={onCancel} widthClassName={widthClassName} dialogo={{ onEscape: onCancel }}>
       <div className="flex flex-col gap-stack-md">
         {/* pre-line: un mensaje con varias líneas (ej. confirmación de contado, docs/57) se lee por renglón. */}
-        <p className="whitespace-pre-line font-sans text-body-md text-ink">{mensaje}</p>
+        {mensaje && <p className="whitespace-pre-line font-sans text-body-md text-ink">{mensaje}</p>}
+        {children}
         <div className="flex justify-end gap-3">
           <button
             type="button"
@@ -38,12 +54,7 @@ export function ConfirmDialog({
           >
             {cancelLabel}
           </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={confirmando}
-            className="rounded border border-error px-4 py-3 font-sans text-label-bold text-error transition hover:bg-error hover:text-white disabled:opacity-60"
-          >
+          <button type="button" onClick={onConfirm} disabled={confirmando} className={CLASE_CONFIRMAR[variant]}>
             {confirmando ? 'Confirmando...' : confirmLabel}
           </button>
         </div>

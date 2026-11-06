@@ -31,6 +31,10 @@ export function nuevoMedio<M extends string = FormaPagoEgreso>(
 
 const centavos = (n: number) => Math.round(n * 100)
 
+// Mismo formato que formatCurrency (lib/format.ts): "$ 4.500,40". Copia local porque este archivo no
+// importa valores (lo corre node --test directo).
+const pesos = (n: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
+
 // NaN si el campo está vacío o no es un número.
 export function montoDe(m: Pick<MedioPagoForm, 'monto'>): number {
   return m.monto.trim() === '' ? NaN : Number(m.monto)
@@ -68,9 +72,9 @@ export function validarMedios(
   }
   const dif = diferenciaMedios(total, medios)
   if (dif.estado !== 'cierra') {
-    return `Los medios suman ${totalMedios(medios).toFixed(2)} y el pago es de ${total.toFixed(2)}: ${
+    return `Los medios suman ${pesos(totalMedios(medios))} y el pago es de ${pesos(total)}: ${
       dif.estado === 'falta' ? 'falta' : 'sobra'
-    } ${dif.monto.toFixed(2)}.`
+    } ${pesos(dif.monto)}.`
   }
   return null
 }

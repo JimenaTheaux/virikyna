@@ -30,7 +30,16 @@ test('validarMedios: vacíos, montos, datos de cheque y suma', () => {
     validarMedios([nuevoMedio('cheque', '100', { numero: 'C1', fechaPago: '2026-10-01' })], 100, { fechaPagoProveedor: '2026-10-27' }),
     'El cheque C1 se cobra antes de la fecha del pago.',
   )
-  assert.equal(validarMedios([nuevoMedio('efectivo', '60'), nuevoMedio('transferencia', '30')], 100), 'Los medios suman 90.00 y el pago es de 100.00: falta 10.00.')
+  // Formato argentino (formatCurrency): "$ 90,00", con espacio duro después del signo.
+  const ars = (s: string) => s.replace(/\$ /g, '$ ')
+  assert.equal(
+    validarMedios([nuevoMedio('efectivo', '60'), nuevoMedio('transferencia', '30')], 100),
+    ars('Los medios suman $ 90,00 y el pago es de $ 100,00: falta $ 10,00.'),
+  )
+  assert.equal(
+    validarMedios([nuevoMedio('efectivo', '3000'), nuevoMedio('transferencia', '2000')], 4500.4),
+    ars('Los medios suman $ 5.000,00 y el pago es de $ 4.500,40: sobra $ 499,60.'),
+  )
   assert.equal(validarMedios([nuevoMedio('efectivo', '60'), nuevoMedio('transferencia', '40')], 100), null)
 })
 
