@@ -275,3 +275,149 @@ export async function datosComprobanteVenta(
     nota: v.nota,
   }
 }
+
+// ── Comprobantes internos (docs/68, fase 3): revisar con descuento por ítem, finalizar, reabrir ──
+
+export type ItemVentaInternaRow = {
+  id: string
+  producto_id: string
+  cantidad: number
+  precio_unitario: number
+  descuento_porcentaje: number
+  importe: number
+  producto_nombre: string | null
+  producto_marca: string | null
+  costo_unitario: number | null
+  producto_con_iva: boolean | null
+  precio_unitario_original: number | null
+  descuento_porcentaje_original: number | null
+  producto: { nombre: string; marca: string | null; costo: number | null; iva_porcentaje: number } | null
+}
+
+export const ventaQueryKeys = {
+  items: (ventaId: string) => ['venta', ventaId, 'items'] as const,
+  venta: (ventaId: string) => ['venta', ventaId] as const,
+}
+
+export function useItemsVenta(supabase: SupabaseClient, ventaId: string) {
+  return useQuery({
+    queryKey: ventaQueryKeys.items(ventaId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('venta_items')
+        .select(
+          'id, producto_id, cantidad, precio_unitario, descuento_porcentaje, importe, producto_nombre, producto_marca, costo_unitario, producto_con_iva, precio_unitario_original, descuento_porcentaje_original, producto:productos(nombre, marca, costo, iva_porcentaje)',
+        )
+        .eq('venta_id', ventaId)
+        .order('id')
+      if (error) throw error
+      return (data ?? []) as unknown as ItemVentaInternaRow[]
+    },
+  })
+}
+
+// Una venta a cta. cte. leída de nuevo (después de un conflicto de versión, o para el modal).
+export function useVentaCuentaCorriente(supabase: SupabaseClient, ventaId: string) {
+  return useQuery({
+    queryKey: ventaQueryKeys.venta(ventaId),
+    queryFn: async () => {
+      const { data, error } = await supabase.from('ventas_cuenta_corriente_saldo').select('*').eq('id', ventaId).maybeSingle()
+      if (error) throw error
+      return data as VentaCuentaCorrienteSaldo | null
+    },
+  })
+}
+
+// El RPC rechaza con este texto si la versión no coincide (otra pantalla la cambió).
+export function esConflictoDeVersion(err: unknown): boolean {
+  const msg = err instanceof ErrorRegistrarPago ? err.causa.message : err instanceof Error ? err.message : ''
+  return /cambió mientras/.test(msg)
+}
+
+function invalidarVentaInterna(queryClient: QueryClient, clienteId: string, ventaId: string) {
+  return Promise.all([
+    invalidarCuentaCliente(queryClient, clienteId),
+    queryClient.invalidateQueries({ queryKey: ['venta', ventaId] }),
+    queryClient.invalidateQueries({ queryKey: ['consumo-interno'] }),
+  ])
+}
+
+type Rpc = { data: unknown; error: import('@supabase/supabase-js').PostgrestError | null; status: number }
+async function llamar(p: PromiseLike<Rpc>) {
+  const { data, error, status } = await p
+  if (error) throw new ErrorRegistrarPago(error, status)
+  return data
+}
+
+export function useEditarVentaInterna(supabase: SupabaseClient) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { clienteId: string; ventaId: string; version: number; descuentos: { itemId: string; descuento: number }[] }) =>
+      llamar(
+        supabase.rpc('editar_venta_interna', {
+          p_venta_id: input.ventaId,
+          p_items: input.descuentos.map((d) => ({ item_id: d.itemId, descuento_porcentaje: Math.round(d.descuento * 100) / 100 })),
+          p_version: input.version,
+        }),
+      ) as Promise<{ venta_id: string; subtotal: number; total: number; total_original: number; version: number }>,
+    onSettled: (_d, _e, input) => invalidarVentaInterna(queryClient, input.clienteId, input.ventaId),
+  })
+}
+
+export function useFinalizarVentaInterna(supabase: SupabaseClient) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { clienteId: string; ventaId: string; version: number }) =>
+      llamar(supabase.rpc('finalizar_venta_interna', { p_venta_id: input.ventaId, p_version: input.version })),
+    onSettled: (_d, _e, input) => invalidarVentaInterna(queryClient, input.clienteId, input.ventaId),
+  })
+}
+
+export function useReabrirVentaInterna(supabase: SupabaseClient) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { clienteId: string; ventaId: string; motivo: string }) =>
+      llamar(supabase.rpc('reabrir_venta_interna', { p_venta_id: input.ventaId, p_motivo: input.motivo.trim() })),
+    onSettled: (_d, _e, input) => invalidarVentaInterna(queryClient, input.clienteId, input.ventaId),
+  })
+}
+
+// D11: total mensual por fecha de finalización (vista consumo_interno_mensual).
+export type ConsumoInternoMes = { cliente_id: string; cliente_nombre: string; mes: string; cantidad_comprobantes: number; total: number; total_original: number }
+
+export function useConsumoInternoMensual(supabase: SupabaseClient, clienteId?: string) {
+  return useQuery({
+    queryKey: ['consumo-interno', 'mensual', clienteId ?? 'todos'],
+    queryFn: async () => {
+      let q = supabase.from('consumo_interno_mensual').select('*').order('mes', { ascending: false })
+      if (clienteId) q = q.eq('cliente_id', clienteId)
+      const { data, error } = await q
+      if (error) throw error
+      return (data ?? []) as ConsumoInternoMes[]
+    },
+  })
+}
+
+// dashboard_consumo_interno: una fila por día × cliente × producto × estado (D8).
+export type ConsumoInternoFila = {
+  fecha: string
+  cliente_id: string
+  cliente_nombre: string
+  producto_id: string
+  nombre: string
+  marca: string | null
+  estado_interno: 'pendiente' | 'finalizado'
+  unidades: number
+  importe: number
+}
+
+export function useDashboardConsumoInterno(supabase: SupabaseClient, desde: string, hasta: string) {
+  return useQuery({
+    queryKey: ['consumo-interno', 'dashboard', desde, hasta],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('dashboard_consumo_interno', { p_desde: desde, p_hasta: hasta })
+      if (error) throw error
+      return ((data ?? []) as ConsumoInternoFila[]).map((f) => ({ ...f, unidades: Number(f.unidades), importe: Number(f.importe) }))
+    },
+  })
+}

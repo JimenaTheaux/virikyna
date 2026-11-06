@@ -1,7 +1,8 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   AlertaPreciosCard,
+  ConsumoInternoCard,
   DefectuososCard,
   formatCurrency,
   friendlyError,
@@ -43,6 +44,7 @@ export function DashboardPage() {
   // El período vive en la URL (?periodo=…), así sobrevive a recargar y se puede compartir.
   // Todas las fechas en hora argentina (hoyAR), no del reloj de la PC — mismo día que la RPC.
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const periodo = periodoDesdeParams(searchParams)
   const fechaHoy = hoyAR(0)
   const [medida, setMedida] = useState<Medida>('unidades')
@@ -171,6 +173,13 @@ export function DashboardPage() {
         </div>
         <div className={`flex min-w-0 flex-col gap-gutter-grid transition-opacity ${actualizandoProductos}`}>
           <Reponer filas={productos} loading={productosQuery.isPending} />
+          {/* docs/68 (D8): las ventas de arriba no incluyen el consumo de dueñas y empleados. */}
+          <ConsumoInternoCard
+            supabase={supabase}
+            desde={periodo.actual.desde}
+            hasta={periodo.actual.hasta}
+            onAbrirCliente={(id) => navigate(`/clientes/${id}`)}
+          />
           {!unDia && <VentasPorMarca filas={productos} medida={medida} />}
         </div>
       </div>

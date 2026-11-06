@@ -23,6 +23,27 @@ Venta en curso ──▶ Cobro ──▶ Comprobante X ──▶ Selección para
 - Sin impresora fiscal: si no hay internet al momento de facturar, la emisión queda pendiente — la venta ya cobrada no se ve afectada.
 - El Comprobante X se puede descargar en PDF y enviar por mail/WhatsApp en cualquier momento, esté facturado o no.
 
+### 1.1 Comprobante interno (dueñas y empleados, docs/68)
+
+Venta a **cuenta corriente** de un cliente marcado como **interno**. Paralelo al estado fiscal: nunca pasa a Factura C.
+
+```
+Venta a cta. cte. ──▶ A revisar ──▶ Finalizado ──▶ (Reabierto) ──▶ A revisar ──▶ Finalizado …
+   (Local)           (pendiente)    (finalizado)     (Admin, motivo)
+                   Admin edita % por producto
+```
+
+| Estado (`ventas.estado_interno`) | Qué pasa | Quién | Reversible |
+|---|---|---|---|
+| A revisar (`pendiente`) | Suma al saldo del cliente. La dueña aplica descuento por producto (solo baja) viendo el margen. Guardar no la cierra | Cajero la registra · Admin edita | Sí: se edita las veces que haga falta; Anular venta como cualquier otra |
+| Finalizado (`finalizado`) | Cerrado sin cobro ni caja: se descuenta del sueldo fuera del sistema. Sale del saldo y entra al total del mes de finalización | Admin | Sí: Reabrir (Admin, motivo obligatorio, queda auditado) |
+
+**Reglas clave:**
+- Nunca lleva Factura C (bloqueado en la base y oculto en Facturación).
+- Un comprobante finalizado no se edita ni se devuelve: hay que reabrirlo primero.
+- Cada edición, finalización y reapertura sube la versión del comprobante: si dos personas lo editan a la vez, la segunda recibe el aviso y vuelve a ver la versión actual.
+- El stock y la fecha de la venta nunca cambian al editar.
+
 ---
 
 ## 2. Ciclo de vida de un Producto

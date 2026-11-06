@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ComponentType } from 'react'
-import { Eye, Wallet } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { ClipboardCheck, Eye, Wallet } from 'lucide-react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { EstadoCuentaVenta, OrigenEgreso, VentaCuentaCorrienteSaldo } from '../../types/database'
 import { CAJA_ORIGEN_LABEL } from '../../lib/facturasCompra'
@@ -13,11 +14,15 @@ import {
   useCobrosACuenta,
   useCobrosCliente,
   useComprobantesCliente,
+  useConsumoInternoMensual,
   type CobroClienteConDetalle,
+  type ConsumoInternoMes,
 } from '../../lib/cuentaCorrienteCliente'
+import { nombresPorId } from '../../lib/perfiles'
+import { EditarVentaInternaModal } from './EditarVentaInternaModal'
 import { esCobrable, simularRepartoCobro } from '../../lib/repartoPagoProveedor'
 import { FORMA_PAGO_LABEL, type DatosComprobante } from '../../lib/comprobante'
-import { fechaLocalDeISO, formatCurrency, formatFechaCorta, formatFechaCortaLocal } from '../../lib/format'
+import { fechaLocalDeISO, formatCurrency, formatFechaCorta, formatFechaCortaLocal, hoyAR } from '../../lib/format'
 import { friendlyError } from '../../lib/supabaseErrors'
 import { Field, inputClass } from './FormField'
 import { EstadoBadge } from './EstadoBadge'
@@ -43,21 +48,32 @@ type Props = {
   onVolver: () => void
   // Detalle de un comprobante: cada app enchufa su ComprobanteModal (Local abre links con Tauri).
   ComprobanteModal: ComponentType<ComprobanteModalProps>
+  // docs/68 fase 3: Gestión (admin) revisa, finaliza y reabre los comprobantes internos.
+  permitirRevisarInternas?: boolean
 }
 
-const TABS = [
+type TabId = 'pendientes' | 'cobrados' | 'todos' | 'cobros' | 'mensual'
+const TABS: { id: TabId; label: string }[] = [
   { id: 'pendientes', label: 'Pendientes' },
   { id: 'cobrados', label: 'Cobrados' },
   { id: 'todos', label: 'Todos' },
   { id: 'cobros', label: 'Cobros' },
-] as const
+]
+// Cliente interno: "Cobrados" pasa a "Finalizados" y se suma el total por mes (D11).
+const TABS_INTERNO: { id: TabId; label: string }[] = [
+  { id: 'pendientes', label: 'A revisar' },
+  { id: 'cobrados', label: 'Finalizados' },
+  { id: 'todos', label: 'Todos' },
+  { id: 'mensual', label: 'Total por mes' },
+  { id: 'cobros', label: 'Cobros' },
+]
 const FILTROS = ['desde', 'hasta', 'q'] as const
 
 const ESTADO_BADGE: Record<EstadoCuentaVenta, { label: string; variant: 'amber' | 'green' | 'red' | 'neutral' | 'violet' }> = {
   pendiente: { label: 'Pendiente', variant: 'amber' },
   parcial: { label: 'Parcial', variant: 'amber' },
   pagada: { label: 'Cobrada', variant: 'green' },
-  a_revisar: { label: 'Consumo interno', variant: 'violet' },
+  a_revisar: { label: 'A revisar', variant: 'violet' },
   finalizado: { label: 'Finalizado', variant: 'neutral' },
   anulada: { label: 'Anulada', variant: 'red' },
 }
@@ -70,7 +86,7 @@ const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno
 // pero para cobrar. Comprobantes con saldo y estado, selección de uno o varios para cobrar, cobros
 // con varios medios y lo que cubrió cada uno, cobros a cuenta. Las ventas internas (dueñas y
 // empleados) se ven pero no se cobran: se finalizan en Gestión.
-export function ClienteCuentaCorriente({ supabase, clienteId, origen, onVolver, ComprobanteModal }: Props) {
+export function ClienteCuentaCorriente({ supabase, clienteId, origen, onVolver, ComprobanteModal, permitirRevisarInternas = false }: Props) {
   const clienteQ = useCliente(supabase, clienteId)
   const comprobantesQ = useComprobantesCliente(supabase, clienteId)
   const cobrosQ = useCobrosCliente(supabase, clienteId)
@@ -82,7 +98,18 @@ export function ClienteCuentaCorriente({ supabase, clienteId, origen, onVolver, 
   const cobros = useMemo(() => cobrosQ.data ?? [], [cobrosQ.data])
   const porId = useMemo(() => new Map(comprobantes.map((c) => [c.id, c])), [comprobantes])
 
-  const { tab, irATab, valores, hayFiltros, setParam, limpiarFiltros } = useParamsCuentaCorriente(TABS, FILTROS)
+  const esInterno = clienteQ.data?.tipo === 'interno'
+  const tabs = esInterno ? TABS_INTERNO : TABS
+  const { tab, irATab, valores, hayFiltros, setParam, limpiarFiltros } = useParamsCuentaCorriente(tabs, FILTROS)
+  const mensualQ = useConsumoInternoMensual(supabase, clienteId)
+  const meses = useMemo(() => mensualQ.data ?? [], [mensualQ.data])
+  // Quién cargó cada venta (perfiles_publico): se muestra en las internas.
+  const usuariosQ = useQuery({
+    queryKey: ['nombres', 'ventas-cliente', clienteId, comprobantes.map((c) => c.usuario_id).join(',')],
+    queryFn: () => nombresPorId(supabase, comprobantes.map((c) => c.usuario_id)),
+    enabled: comprobantes.some((c) => c.estado_interno !== null),
+  })
+  const [revisarId, setRevisarId] = useState<string | null>(null)
   const { desde, hasta, q } = valores
 
   const { seleccion, setSeleccion, toggle } = useSeleccion(comprobantes, idDe, esCobrable)
@@ -100,6 +127,12 @@ export function ClienteCuentaCorriente({ supabase, clienteId, origen, onVolver, 
   useEffect(() => {
     if (cobro || aplicar) setAviso('')
   }, [cobro, aplicar])
+
+  // Una interna en Gestión abre la revisión; el resto (y en Local), el Comprobante X.
+  function abrir(v: VentaCuentaCorrienteSaldo) {
+    if (permitirRevisarInternas && v.estado_interno !== null && v.estado !== 'anulada') setRevisarId(v.id)
+    else void abrirDetalle(v)
+  }
 
   async function abrirDetalle(v: VentaCuentaCorrienteSaldo) {
     if (!cliente) return
@@ -139,6 +172,14 @@ export function ClienteCuentaCorriente({ supabase, clienteId, origen, onVolver, 
   const aCuenta = aCuentaQ.data?.total ?? 0
   const ofrecerAplicar = aCuenta > 0 && pendientes.length > 0
   const ultimoCobro = cobros.find((p) => Number(p.monto) > 0 && !p.revierte_pago_cliente_id && !p.revertido)
+  // D11: por fecha de finalización (mes argentino).
+  const mesActual = `${hoyAR().slice(0, 7)}-01`
+  const mesAnterior = (() => {
+    const [a, m] = hoyAR().slice(0, 7).split('-').map(Number)
+    return m === 1 ? `${a - 1}-12-01` : `${a}-${String(m - 1).padStart(2, '0')}-01`
+  })()
+  const delMes = (mes: string) => meses.find((x) => x.mes === mes)
+  const aRevisar = comprobantes.filter((c) => c.estado_cuenta === 'a_revisar')
 
   function toggleVisibles(ids: string[], marcar: boolean) {
     setSeleccion((prev) => {
@@ -198,14 +239,17 @@ export function ClienteCuentaCorriente({ supabase, clienteId, origen, onVolver, 
               type="button"
               onClick={(e) => {
                 e.stopPropagation()
-                void abrirDetalle(c)
+                abrir(c)
               }}
-              aria-label={`Ver detalle de ${etiquetaVenta(c)}`}
+              aria-label={`${permitirRevisarInternas && c.estado_interno ? 'Revisar' : 'Ver detalle de'} ${etiquetaVenta(c)}`}
               className="rounded text-left text-ink hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
             >
               {etiquetaVenta(c)}
             </button>
             {c.estado === 'facturado' && <span className="ml-2 font-sans text-label-md text-ink-soft">Factura C</span>}
+            {c.estado_interno && (
+              <span className="block text-label-md text-ink-soft">Cargó: {usuariosQ.data?.get(c.usuario_id) ?? '—'}</span>
+            )}
             {c.nota && <span className="block text-label-md text-ink-soft">“{c.nota}”</span>}
           </>
         ),
@@ -251,7 +295,15 @@ export function ClienteCuentaCorriente({ supabase, clienteId, origen, onVolver, 
       colClassName: 'w-[8.5rem]',
       td: (c) => {
         const badge = ESTADO_BADGE[c.estado_cuenta]
-        return { className: 'px-3 py-3', contenido: <EstadoBadge variant={badge.variant}>{badge.label}</EstadoBadge> }
+        return {
+          className: 'px-3 py-3',
+          contenido: (
+            <>
+              <EstadoBadge variant={badge.variant}>{badge.label}</EstadoBadge>
+              {c.estado_cuenta === 'finalizado' && <span className="block text-label-md text-ink-soft">se descuenta del sueldo</span>}
+            </>
+          ),
+        }
       },
     },
     {
@@ -259,8 +311,12 @@ export function ClienteCuentaCorriente({ supabase, clienteId, origen, onVolver, 
       header: <span className="sr-only">Acciones</span>,
       colClassName: 'w-[3rem]',
       td: (c) => {
+        const revisable = permitirRevisarInternas && c.estado_interno !== null && c.estado !== 'anulada'
         const acciones: RowActionsMenuItem[] = [
-          { label: 'Ver detalle', icon: Eye, onClick: () => void abrirDetalle(c) },
+          ...(revisable
+            ? [{ label: c.estado_interno === 'pendiente' ? 'Revisar y finalizar' : 'Ver revisión', icon: ClipboardCheck, onClick: () => setRevisarId(c.id) }]
+            : []),
+          { label: revisable ? 'Ver comprobante X' : 'Ver detalle', icon: Eye, onClick: () => void abrirDetalle(c) },
           ...(esCobrable(c) ? [{ label: 'Cobrar este comprobante', icon: Wallet, onClick: () => setCobro({ ventaIds: [c.id] }) }] : []),
         ]
         return {
@@ -297,8 +353,22 @@ export function ClienteCuentaCorriente({ supabase, clienteId, origen, onVolver, 
               : 'No tiene saldo a cobrar.',
       }}
       conSeleccion={seleccion.size > 0}
-      kpisClassName={saldoInicial ? 'sm:grid-cols-3 2xl:grid-cols-5' : 'lg:grid-cols-4'}
+      kpisClassName={saldoInicial && !esInterno ? 'sm:grid-cols-3 2xl:grid-cols-5' : 'lg:grid-cols-4'}
       kpis={
+        esInterno ? (
+          <>
+            <KpiCuenta label="Saldo">
+              <span className={saldo > 0 ? 'text-error' : 'text-accent-darker'}>{formatCurrency(saldo)}</span>
+              <span className="block font-sans text-label-md text-ink-soft">a revisar o a cobrar</span>
+            </KpiCuenta>
+            <KpiCuenta label="A revisar">
+              {formatCurrency(consumoInterno)}
+              <span className="block font-sans text-label-md text-ink-soft">{plural(aRevisar.length, 'comprobante', 'comprobantes')}</span>
+            </KpiCuenta>
+            <KpiMes label="Finalizado este mes" mes={delMes(mesActual)} />
+            <KpiMes label="Mes anterior" mes={delMes(mesAnterior)} />
+          </>
+        ) : (
         <>
           <KpiCuenta label="Saldo">
             <span className={saldo > 0 ? 'text-error' : saldo < 0 ? 'text-success' : 'text-accent-darker'}>{formatCurrency(saldo)}</span>
@@ -329,8 +399,9 @@ export function ClienteCuentaCorriente({ supabase, clienteId, origen, onVolver, 
             )}
           </KpiCuenta>
         </>
+        )
       }
-      tabs={TABS}
+      tabs={tabs}
       tab={tab}
       onTab={irATab}
       filtros={
@@ -384,7 +455,9 @@ export function ClienteCuentaCorriente({ supabase, clienteId, origen, onVolver, 
       }
       aviso={aviso}
       panel={
-        tab === 'cobros' ? (
+        tab === 'mensual' ? (
+          <TablaMensual meses={meses} cargando={mensualQ.isPending} />
+        ) : tab === 'cobros' ? (
           <TablaCobros cobros={cobrosVisibles} porId={porId} aCuentaPorPago={aCuentaQ.data?.porPago} cargando={cobrosQ.isPending || aCuentaQ.isPending} />
         ) : (
           <TablaComprobantes
@@ -405,16 +478,20 @@ export function ClienteCuentaCorriente({ supabase, clienteId, origen, onVolver, 
             seleccion={seleccion}
             onToggle={toggle}
             onToggleVisibles={toggleVisibles}
-            onAbrir={(c) => void abrirDetalle(c)}
+            onAbrir={abrir}
             claseFila={(c) => (tab === 'todos' && !abierta(c) ? 'opacity-60' : '')}
             cargando={comprobantesQ.isPending}
             vacio={
               hayFiltros
                 ? 'Ningún comprobante coincide con los filtros.'
                 : tab === 'pendientes'
-                  ? 'No hay comprobantes pendientes.'
+                  ? esInterno
+                    ? 'No hay comprobantes para revisar.'
+                    : 'No hay comprobantes pendientes.'
                   : tab === 'cobrados'
-                    ? 'Todavía no hay comprobantes cobrados.'
+                    ? esInterno
+                      ? 'Todavía no hay comprobantes finalizados.'
+                      : 'Todavía no hay comprobantes cobrados.'
                     : 'Este cliente no tiene ventas a cuenta corriente.'
             }
           />
@@ -489,6 +566,18 @@ export function ClienteCuentaCorriente({ supabase, clienteId, origen, onVolver, 
         />
       )}
 
+      {revisarId && porId.get(revisarId) && (
+        <EditarVentaInternaModal
+          supabase={supabase}
+          clienteId={clienteId}
+          clienteNombre={nombre}
+          venta={porId.get(revisarId)!}
+          onVerComprobante={() => void abrirDetalle(porId.get(revisarId)!)}
+          onClose={() => setRevisarId(null)}
+          onAviso={setAviso}
+        />
+      )}
+
       {detalle && (
         <ComprobanteModal
           datos={detalle}
@@ -496,6 +585,65 @@ export function ClienteCuentaCorriente({ supabase, clienteId, origen, onVolver, 
         />
       )}
     </CuentaCorrienteLayout>
+  )
+}
+
+function KpiMes({ label, mes }: { label: string; mes: ConsumoInternoMes | undefined }) {
+  return (
+    <KpiCuenta label={label}>
+      {formatCurrency(Number(mes?.total ?? 0))}
+      <span className="block font-sans text-label-md text-ink-soft">
+        {mes ? `${plural(mes.cantidad_comprobantes, 'comprobante', 'comprobantes')} · por fecha de finalización` : 'nada finalizado'}
+      </span>
+    </KpiCuenta>
+  )
+}
+
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+const nombreMes = (mes: string) => {
+  const [a, m] = mes.split('-').map(Number)
+  return `${MESES[m - 1]} ${a}`
+}
+
+// D11: total finalizado por mes (lo que se descuenta del sueldo), por fecha de finalización.
+function TablaMensual({ meses, cargando }: { meses: ConsumoInternoMes[]; cargando: boolean }) {
+  return (
+    <table className="w-full table-fixed text-left font-sans text-table-row">
+      <colgroup>
+        <col />
+        <col className="w-[10rem]" />
+        <col className="w-[10rem]" />
+        <col className="w-[10rem]" />
+      </colgroup>
+      <thead>
+        <tr className="bg-accent-light text-table-head uppercase text-accent-dark">
+          <th scope="col" className="px-3 py-2.5">Mes de finalización</th>
+          <th scope="col" className="px-3 py-2.5 text-right">Comprobantes</th>
+          <th scope="col" className="px-3 py-2.5 text-right">Original</th>
+          <th scope="col" className="px-3 py-2.5 text-right">Total final</th>
+        </tr>
+      </thead>
+      <tbody>
+        {cargando && (
+          <tr>
+            <td colSpan={4} className="px-4 py-4 text-ink-soft">Cargando...</td>
+          </tr>
+        )}
+        {!cargando && meses.length === 0 && (
+          <tr>
+            <td colSpan={4} className="px-4 py-4 text-ink-soft">Todavía no hay comprobantes finalizados.</td>
+          </tr>
+        )}
+        {meses.map((m) => (
+          <tr key={m.mes} className="border-b border-table-divider last:border-0 even:bg-table-row-alt">
+            <td className="px-3 py-3 capitalize text-ink">{nombreMes(m.mes)}</td>
+            <td className="px-3 py-3 text-right tabular-nums text-ink-soft">{m.cantidad_comprobantes}</td>
+            <td className="px-3 py-3 text-right tabular-nums text-ink-soft">{formatCurrency(Number(m.total_original))}</td>
+            <td className="px-3 py-3 text-right font-semibold tabular-nums text-ink">{formatCurrency(Number(m.total))}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   )
 }
 

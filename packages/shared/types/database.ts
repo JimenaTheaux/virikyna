@@ -216,6 +216,8 @@ export type Venta = {
   usuario_id: string
   client_id: string | null // docs/43: id del intento de cobro de Local (idempotencia); null en ventas anteriores
   created_at: string
+  // docs/68: venta a cta. cte. de un cliente interno (dueña o empleado). Nunca lleva Factura C (D5).
+  estado_interno?: EstadoVentaInterna | null
 }
 
 export type VentaItem = {

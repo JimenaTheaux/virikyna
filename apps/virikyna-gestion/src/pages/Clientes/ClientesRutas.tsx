@@ -7,7 +7,7 @@ import { ComprobanteModal } from '../../components/ComprobanteModal'
 // /clientes — listado compartido (packages/shared, docs/68). Abrir un cliente lleva a su cuenta.
 export function ClientesListadoPage() {
   const navigate = useNavigate()
-  return <ClientesPage supabase={supabase} SearchInput={SearchInput} onAbrirCuenta={(id) => navigate(`/clientes/${id}`)} />
+  return <ClientesPage supabase={supabase} SearchInput={SearchInput} onAbrirCuenta={(id) => navigate(`/clientes/${id}`)} permitirCuentaInterna />
 }
 
 // /clientes/:id — cuenta corriente del cliente (docs/68), misma pantalla que proveedores.
@@ -23,6 +23,7 @@ export function ClienteCuentaCorrientePage() {
       origen="general"
       onVolver={() => navigate('/clientes')}
       ComprobanteModal={ComprobanteModal}
+      permitirRevisarInternas
     />
   )
 }

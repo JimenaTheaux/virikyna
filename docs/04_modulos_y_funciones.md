@@ -377,6 +377,23 @@ Ambos caminos ejecutan la misma función del sistema — no son dos flujos disti
 - Si un cliente hace un pago parcial, **el cajero elige a qué venta se aplica** ese pago.
 - Sin límite de crédito.
 
+### 8.1 Cuenta corriente del cliente (docs/68, fase 2)
+
+Pantalla `/clientes/:id` en Local y Gestión, igual a la de proveedores: KPIs (saldo, comprobantes pendientes, a cuenta, último cobro), pestañas Pendientes / Cobrados / Todos / Cobros, saldo y estado por comprobante, detalle con el Comprobante X.
+
+- **Cobrar** uno o varios comprobantes (o sin elegir: van a los más viejos) con uno o varios medios: efectivo, transferencia, QR, débito, crédito. Sin cheques. Lo que sobra queda **a cuenta** y se aplica después ("Aplicar a comprobantes"). No se cobra más de lo que se debe.
+- Desde **Local** el cobro entra al Cierre X/Z del día (exige caja abierta; el efectivo queda en el cajón, docs/58). Desde **Gestión** entra directo a la cuenta de cada medio.
+- Una **devolución** sobre una venta a cuenta corriente baja la deuda: no se devuelve plata (D12).
+
+### 8.2 Cuentas internas: dueñas y empleados (docs/68, fase 3 — solo Gestión, solo Admin)
+
+- En la ficha del cliente, **"Cuenta interna"** (switch) y el usuario del sistema vinculado. Solo Admin lo cambia (la base lo exige). En Ventas no se distingue: el cajero vende igual que a cualquier cuenta corriente (D2).
+- Una venta a cuenta corriente de un cliente interno queda **A revisar**. No se cobra ni lleva Factura C (D5: no aparece en Facturación).
+- **Revisión** (Admin, desde la cuenta corriente del cliente): por producto se ve el costo comparable (con IVA = costo × 1,21; sin IVA = costo; "costo actual" si la venta es anterior al snapshot), el precio registrado, el % de descuento, el precio final, el margen ($ y % sobre el precio final) y el descuento máximo sin pérdida. Fila en rojo si queda bajo costo; "Sin costo cargado" si el producto no tiene costo. Si la venta traía descuento global, se precarga en cada producto y al guardar el global queda en 0 (D6). El descuento va de 0 a 100 % sobre el precio registrado (solo baja).
+- **Guardar** deja el comprobante a revisar. **Finalizar** lo cierra sin cobro ni movimiento de caja: se descuenta del sueldo fuera del sistema y sale del saldo. **Reabrir** (Admin, con motivo) lo devuelve a revisión.
+- La cuenta del cliente interno muestra el **total mensual por fecha de finalización** (D11) y quién cargó cada venta. El Comprobante X muestra los valores finales; lo original queda en el historial del comprobante.
+- El **Dashboard** de Gestión no suma el consumo interno a las ventas: lo muestra aparte, por cliente, a revisar y finalizado (D8).
+
 ---
 
 ## 9. CONFIGURACIÓN (Usuarios y Roles) — exclusivo Virikyna Gestión

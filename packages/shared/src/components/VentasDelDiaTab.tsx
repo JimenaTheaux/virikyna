@@ -200,7 +200,8 @@ export function VentasDelDiaTab({
                 { label: 'Ver detalle', icon: IconVerDetalle, onClick: () => verDetalle(venta) },
                 { label: 'Enviar comprobante', icon: IconEnviar, onClick: () => verDetalle(venta) },
               ]
-              if (venta.estado === 'sin_facturar') {
+              // docs/68 (D5): una venta interna nunca lleva Factura C (la base además la rechaza).
+              if (venta.estado === 'sin_facturar' && !venta.estado_interno) {
                 acciones.push({
                   label: emitiendoId === venta.id ? 'Emitiendo...' : 'Emitir Factura C',
                   icon: FileText,
@@ -229,7 +230,8 @@ export function VentasDelDiaTab({
                     <td className={`whitespace-nowrap font-sans font-semibold text-ink ${celda}`}>{formatCurrency(venta.total)}</td>
                     <td rowSpan={filas} className={celdaDoble}>
                       {venta.estado === 'facturado' && <EstadoBadge variant="green">Facturada</EstadoBadge>}
-                      {venta.estado === 'sin_facturar' && <EstadoBadge variant="amber">Sin facturar</EstadoBadge>}
+                      {venta.estado === 'sin_facturar' && venta.estado_interno && <EstadoBadge variant="violet">Consumo interno</EstadoBadge>}
+                      {venta.estado === 'sin_facturar' && !venta.estado_interno && <EstadoBadge variant="amber">Sin facturar</EstadoBadge>}
                     </td>
                     {/* El menú no expande la fila: los clicks del portal también burbujean por React. */}
                     <td rowSpan={filas} className={`cursor-default text-right ${celdaDoble}`} onClick={(e) => e.stopPropagation()}>

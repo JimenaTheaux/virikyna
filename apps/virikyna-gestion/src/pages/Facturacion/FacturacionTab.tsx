@@ -43,6 +43,8 @@ async function fetchVentas(
     .from('ventas')
     .select(`*, factura_c:facturas_c(*), ${SELECT_CLIENTE_FACTURA}, ${SELECT_ITEMS_VENTA_EMBEBIDOS}`)
     .in('estado', estadoFiltro === 'todas' ? ['sin_facturar', 'facturado'] : [estadoFiltro])
+    // docs/68 (D5): las ventas internas (dueñas y empleados) nunca llevan Factura C: no se listan.
+    .is('estado_interno', null)
     .order('created_at', { ascending: false })
 
   const desde = fechaDesde || (fechaHasta ? '' : hoyAR(-(DIAS_POR_DEFECTO - 1)))

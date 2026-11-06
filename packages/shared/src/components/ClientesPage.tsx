@@ -17,11 +17,13 @@ type Props = {
   // Cada app tiene su buscador (mismo aspecto, su propio ícono).
   SearchInput: ComponentType<{ value: string; onChange: (value: string) => void; placeholder: string }>
   onAbrirCuenta: (clienteId: string) => void // /clientes/:id
+  // docs/68: Gestión (admin) marca y ve las cuentas internas; Local no (D2).
+  permitirCuentaInterna?: boolean
 }
 
 // Listado de clientes con su saldo (docs/04, módulo 8). Igual en Local y Gestión (antes, una copia
 // por app). Abrir un cliente lleva a su cuenta corriente (ClienteCuentaCorriente, docs/68).
-export function ClientesPage({ supabase, SearchInput, onAbrirCuenta }: Props) {
+export function ClientesPage({ supabase, SearchInput, onAbrirCuenta, permitirCuentaInterna = false }: Props) {
   const queryClient = useQueryClient()
   const clientesQ = useClientesSaldo(supabase)
   const clientes = useMemo(() => clientesQ.data ?? [], [clientesQ.data])
@@ -175,7 +177,10 @@ export function ClientesPage({ supabase, SearchInput, onAbrirCuenta }: Props) {
                     {formatCurrency(cliente.saldo_actual)}
                   </td>
                   <td className="px-3 py-3">
-                    <EstadoBadge variant={cliente.activo ? 'green' : 'neutral'}>{cliente.activo ? 'Activo' : 'Inactivo'}</EstadoBadge>
+                    <span className="flex flex-wrap gap-1">
+                      <EstadoBadge variant={cliente.activo ? 'green' : 'neutral'}>{cliente.activo ? 'Activo' : 'Inactivo'}</EstadoBadge>
+                      {permitirCuentaInterna && cliente.tipo === 'interno' && <EstadoBadge variant="violet">Interna</EstadoBadge>}
+                    </span>
                   </td>
                   <td className="px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                     <RowActionsMenu ariaLabel={`Más acciones para ${nombre}`} items={items} />
@@ -191,6 +196,7 @@ export function ClientesPage({ supabase, SearchInput, onAbrirCuenta }: Props) {
         <ClienteFormModal
           supabase={supabase}
           cliente={modal === 'nuevo' ? undefined : modal}
+          permitirCuentaInterna={permitirCuentaInterna}
           onClose={() => setModal(null)}
           onSaved={() => {
             setModal(null)
