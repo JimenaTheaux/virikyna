@@ -99,6 +99,9 @@ export type Proveedor = {
   created_at: string
   // Notas internas libres (docs/41). Null si no hay; se muestran con ObservacionesProveedor.
   observaciones: string | null
+  // docs/69: cuándo y quién cargó (o corrigió) el saldo inicial. Null = nunca se cargó.
+  saldo_inicial_fecha: string | null
+  saldo_inicial_usuario_id: string | null
 }
 
 // CHECK chk_cliente_tiene_nombre: razon_social y nombre_fantasia no pueden ser ambos null.
@@ -114,6 +117,9 @@ export type Cliente = {
   saldo_inicial: number
   condicion_iva: CondicionIvaCliente
   created_at: string
+  // docs/69: cuándo y quién cargó (o corrigió) el saldo inicial. Null = nunca se cargó.
+  saldo_inicial_fecha: string | null
+  saldo_inicial_usuario_id: string | null
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -495,11 +501,20 @@ export type FacturaCompraSaldo = FacturaCompra & {
   estado: EstadoFacturaCompra
 }
 
-export type ProveedorSaldo = Proveedor & {
+// docs/69: columnas del saldo inicial en proveedores_saldo / clientes_saldo. Los pagos (cobros)
+// sin comprobante cancelan primero el saldo inicial: saldo_inicial_pendiente es lo que falta de
+// él y a_cuenta_libre lo que sobra después (lo único que se puede aplicar a comprobantes).
+export type SaldoInicialResumen = {
+  saldo_inicial_usuario_nombre: string | null
+  saldo_inicial_pendiente: number
+  a_cuenta_libre: number
+}
+
+export type ProveedorSaldo = Proveedor & SaldoInicialResumen & {
   saldo_actual: number
 }
 
-export type ClienteSaldo = Cliente & {
+export type ClienteSaldo = Cliente & SaldoInicialResumen & {
   saldo_actual: number
 }
 

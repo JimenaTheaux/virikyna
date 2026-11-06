@@ -16,7 +16,15 @@ export type PagoACuenta = {
   aplicado: number // de la plata de este pago, lo aplicado vigente
   vigente: boolean // monto > 0, no es una reversión y no fue revertido
   a_cuenta: number // monto − aplicado (0 si no está vigente)
+  // docs/69: de lo a cuenta, cuánto cancela el saldo inicial (pagos más viejos primero) y cuánto
+  // queda libre para aplicar a comprobantes. Opcionales: una base sin docs/69 no los trae.
+  cancela_saldo_inicial?: number
+  a_cuenta_libre?: number
 }
+
+// Lo que se puede aplicar a comprobantes. Sin docs/69 en la base, todo lo a cuenta.
+const libreDe = (p: { a_cuenta: number | string; a_cuenta_libre?: number | string | null }) =>
+  Number(p.a_cuenta_libre ?? p.a_cuenta)
 
 export type AplicarPagosACuentaResultado = {
   aplicado: number
@@ -28,8 +36,10 @@ export type AplicarPagosACuentaResultado = {
 // también la refresca, sin tener que acordarse en cada pantalla.
 export const pagosACuentaQueryKey = (proveedorId: string) => ['proveedor', proveedorId, 'a-cuenta'] as const
 
-// Lo a cuenta de cada pago del proveedor y el total. `porPago` incluye todos sus pagos (0 en
-// reversiones, revertidos y operaciones solo de NC).
+// Lo a cuenta de cada pago del proveedor y el total, ya descontado lo que cancela el saldo inicial
+// (docs/69): es lo mismo que aplica aplicar_pagos_a_cuenta. `porPago` incluye todos sus pagos (0 en
+// reversiones, revertidos y operaciones solo de NC); `saldoInicialPorPago` solo los que cancelan
+// parte del saldo inicial.
 export function usePagosACuenta(supabase: SupabaseClient, proveedorId: string) {
   return useQuery({
     queryKey: pagosACuentaQueryKey(proveedorId),
@@ -37,22 +47,26 @@ export function usePagosACuenta(supabase: SupabaseClient, proveedorId: string) {
       const { data, error } = await supabase.from('pagos_proveedor_a_cuenta').select('*').eq('proveedor_id', proveedorId)
       if (error) throw error
       const pagos = (data ?? []) as PagoACuenta[]
-      const porPago = new Map(pagos.map((p) => [p.id, Number(p.a_cuenta)]))
-      const total = Math.round(pagos.reduce((acc, p) => acc + Number(p.a_cuenta), 0) * 100) / 100
-      return { porPago, total }
+      const porPago = new Map(pagos.map((p) => [p.id, libreDe(p)]))
+      const saldoInicialPorPago = new Map(
+        pagos.filter((p) => Number(p.cancela_saldo_inicial ?? 0) > 0).map((p) => [p.id, Number(p.cancela_saldo_inicial)]),
+      )
+      const total = Math.round(pagos.reduce((acc, p) => acc + libreDe(p), 0) * 100) / 100
+      return { porPago, saldoInicialPorPago, total }
     },
   })
 }
 
-// Total a cuenta de un proveedor, sin react-query (para después de cargar una factura).
+// Total a cuenta libre de un proveedor, sin react-query (para después de cargar una factura).
 export async function obtenerACuentaProveedor(supabase: SupabaseClient, proveedorId: string): Promise<number> {
   const { data, error } = await supabase
     .from('proveedores_a_cuenta')
-    .select('a_cuenta')
+    .select('*')
     .eq('proveedor_id', proveedorId)
     .maybeSingle()
   if (error) throw error
-  return Number((data as { a_cuenta: number } | null)?.a_cuenta ?? 0)
+  const fila = data as { a_cuenta: number; a_cuenta_libre?: number | null } | null
+  return fila ? libreDe(fila) : 0
 }
 
 // Único punto de llamada a `aplicar_pagos_a_cuenta`. Sin comprobantes: los pendientes más viejos.

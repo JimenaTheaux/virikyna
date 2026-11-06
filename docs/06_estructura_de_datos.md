@@ -9,7 +9,7 @@ Decisiones de schema ya validadas con la clienta:
 - Auditoría universal vía triggers (no llamadas manuales) — toda acción queda registrada y es visible en Virikyna Gestión. Revertir es siempre una acción nueva, nunca se borra la original.
 - **Confirmado:** una venta ya facturada (con CAE) no es reversible desde el sistema — la Nota de Crédito que lo permitiría queda fuera de alcance de Fase 1. El Cierre Z ya validado tampoco se revierte, solo admite nota de corrección.
 - **Cuentas (Efectivo, Mercado Pago, Galicia, etc.) con ledger propio** (`cuentas` + `movimientos_cuenta`), mismo principio que el stock: el saldo nunca se pisa, es la suma de movimientos. Permite cargar saldos iniciales y que la dueña anote ingresos/egresos manuales en Caja Gestión, además de lo que impacta solo desde los Cierres Z validados.
-- `proveedores.saldo_inicial` y `clientes.saldo_inicial`: deuda con la que arranca cada uno en el sistema, cargada una vez desde Caja Gestión.
+- `proveedores.saldo_inicial` y `clientes.saldo_inicial`: deuda con la que arranca cada uno en el sistema, cargada una vez desde Caja Gestión. **Único** (docs/69, sección 37): no suma; si falta deuda va como comprobante y un error se corrige con motivo (`corregir_saldo_inicial`).
 - **Mapeo de medios de pago confirmado con la clienta:** Efectivo→Efectivo, Transferencia→Mercado Pago, QR/Débito/Crédito→Galicia (vía tabla `cuenta_forma_pago`). Se edita solo por SQL — sin pantalla de configuración en Fase 1, y limitado a estas 3 cuentas; sumar una cuenta nueva es una tarea de desarrollo, no autoservicio.
 - **Pagos de clientes y proveedores ahora impactan en `movimientos_cuenta`** (antes era un gap: el dinero no se reflejaba en ninguna cuenta real). Cheque y echeq de proveedores quedan fuera del ledger de cuentas — no son plata líquida al momento de registrarse.
 - **Transferencias entre cuentas** (`transferir_entre_cuentas`) — mover plata de una cuenta a otra, registrado como 2 movimientos vinculados por la misma `referencia_id`.
@@ -1096,6 +1096,8 @@ $$;
 
 -- ============================================================
 -- 8. cargar_saldos_iniciales
+-- (versión original; reemplazada por docs/69 — sección 37: valida todo antes de escribir,
+--  nombra las cuentas que ya tienen saldo inicial, setea fecha/usuario y deja nota en auditoria)
 -- ============================================================
 CREATE OR REPLACE FUNCTION cargar_saldos_iniciales(
   p_saldos_cuentas JSONB,      -- [{"cuenta_id":"...","monto":150000}]
@@ -2670,3 +2672,30 @@ SQL, verificaciones y tests en `docs/68_cuentas_corrientes_clientes.sql`. Aplica
 - `reservar_emision_factura_c` (D5): "Es un consumo interno (cliente interno): no lleva Factura C", antes de cualquier reserva.
 - `dashboard_ventas_por_dia` y `dashboard_ventas_por_producto` (D8): sin ventas internas ni sus devoluciones.
 - `revertir_movimiento`, rama `pagos_cliente`: copia el origen, espeja los medios, devuelve a la cuenta solo lo que el cobro movió (neto) y deja sin efecto sus aplicaciones.
+
+## 37. Saldo inicial único: fecha, usuario, corrección con motivo y "a cuenta" que primero lo cancela
+
+SQL, verificaciones y tests en `docs/69_saldo_inicial_unico.sql`. Base: `docs/DIAGNOSTICO_SALDOS_INICIALES.md`. Aplicada el 2026-11-06 (backup `virikyna_2026-11-06_pre-docs69-aplicar`; tests T1–T10 OK en producción).
+
+**Regla (dueña, 2026-11-05).** El saldo inicial es **único** por cuenta: no suma. Si falta deuda se carga como comprobante; si el monto está mal, se corrige con motivo.
+
+**Columnas.** `proveedores` y `clientes` + `saldo_inicial_fecha` (timestamptz; NULL = nunca se cargó) y `saldo_inicial_usuario_id` (FK `perfiles`). Backfill desde `auditoria` (el UPDATE que llevó el monto de 0 al vigente): GUTIERREZ LEANDRO y THE TOY COMPANY (20/10) y LUX ATLANTIC (03/11), los tres por Alicia. "Cargado" = tiene fecha o monto ≠ 0.
+
+**Protección.** Trigger `trg_proteger_saldo_inicial` (BEFORE INSERT/UPDATE en las dos tablas): solo un admin cambia `saldo_inicial`, `_fecha` o `_usuario_id` (la RLS deja escribir la ficha a cualquier perfil activo). Si un admin cambia el monto sin tocar la fecha, la estampa con `now()`/`auth.uid()`. Sin sesión (SQL de mantenimiento) se permite, como en docs/68.
+
+**`cargar_saldos_iniciales`** (misma firma). Valida todo antes de escribir: montos numéricos ≠ 0, sin repetidos, que existan. Si una cuenta de dinero, un proveedor o un cliente ya tiene saldo inicial, rechaza el envío **entero** nombrándolos: "Ya tienen saldo inicial cargado y no se suma: GUTIERREZ LEANDRO - LIBROS ($ 1.972.962,10, cargado el 20/10/2026). No se guardó nada…". Setea fecha y usuario y deja una fila `edicion` en `auditoria` con nota "Carga inicial: saldo inicial $ X" (en lugar de la genérica).
+
+**RPC `corregir_saldo_inicial(p_tipo 'proveedor'|'cliente', p_id, p_monto_nuevo, p_motivo) → {anterior, nuevo}`** — solo admin. Motivo obligatorio (≥ 3 caracteres). Solo sobre una cuenta que ya tiene saldo inicial y con un monto distinto del actual. **Reemplaza** el monto, actualiza fecha y usuario, y deja en `auditoria` "Corrección de saldo inicial: $ A → $ B. Motivo: …". El saldo inicial de una cuenta de dinero es un movimiento: no entra acá.
+
+**`revertir_edicion`** (Historial). Ya no restaura `saldo_inicial`/`_fecha`/`_usuario_id`: antes, revertir cualquier edición vieja de un proveedor (un teléfono) devolvía el saldo inicial al valor de ese momento. Una edición que solo cambió el saldo inicial responde "se corrige desde Caja Gestión → Carga inicial (Corregir), con motivo".
+
+**"A cuenta" que primero cancela el saldo inicial.** Los pagos (cobros) sin comprobante, del más viejo al más nuevo, cancelan primero el saldo inicial **positivo**; lo que sobra es lo único que se puede aplicar a comprobantes.
+- `pagos_proveedor_a_cuenta` / `pagos_cliente_a_cuenta`: + `cancela_saldo_inicial`, `a_cuenta_libre` por pago.
+- `proveedores_a_cuenta`: + `a_cuenta_libre`.
+- `proveedores_saldo` / `clientes_saldo`: + `saldo_inicial_fecha`, `saldo_inicial_usuario_id`, `saldo_inicial_usuario_nombre` (de `perfiles_publico`: perfiles tiene RLS "solo el propio"), `saldo_inicial_pendiente` (= saldo inicial − lo que cancelan los pagos), `a_cuenta_libre`.
+- Identidad (test B2): `saldo_actual = saldo_inicial_pendiente + Σ saldo_pendiente − Σ credito_disponible − a_cuenta_libre`. La columna `a_cuenta` cruda no cambia (la usan docs/37 y la identidad de la sección 29).
+- `aplicar_pagos_a_cuenta` / `aplicar_cobros_a_cuenta`: aplican solo `a_cuenta_libre` (antes, los pagos que cancelaron un saldo inicial se podían aplicar otra vez a una factura nueva). Si todo lo a cuenta cancela el saldo inicial: "Los pagos a cuenta de este proveedor cancelan su saldo inicial: no queda nada para aplicar a comprobantes". `a_cuenta_restante` devuelve lo libre.
+
+**Sin cambios.** El orden de imputación de `registrar_pago_proveedor_v2/_v3` y `registrar_cobro_cliente` (comprobantes más viejos; el sobrante queda a cuenta y, por la vista, cancela el saldo inicial). Revertir el saldo inicial de una **cuenta de dinero** desde el Historial sigue chocando con el índice único `ux_movimientos_cuenta_saldo_inicial_por_cuenta` (pendiente).
+
+**Apps.** Caja Gestión → Carga inicial: estado por fila (las cargadas en solo lectura con monto, fecha y usuario, y "Corregir" con motivo), filtro Con/Sin saldo inicial, verificación contra la base y confirmación antes de cargar; sin bloqueo global. `usePagosACuenta` / `obtenerACuentaProveedor` leen `a_cuenta_libre` (caen a `a_cuenta` en una base sin docs/69).
