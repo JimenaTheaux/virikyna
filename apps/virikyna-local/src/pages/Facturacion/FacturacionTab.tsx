@@ -14,6 +14,13 @@ import {
   useVentasExpandidas,
   type ConItemsVenta,
 } from '@virikyna/shared'
+import { alternarTodas, resumenSeleccion } from '@virikyna/shared/lib/seleccionFacturacion'
+import {
+  AvisoTopeFilasFacturacion,
+  CheckboxSeleccionarTodo,
+  LIMITE_FILAS_FACTURACION,
+  ResumenSeleccionFacturacion,
+} from '@virikyna/shared/src/components/SeleccionFacturacion'
 import { ComprobanteModal } from '../../components/ComprobanteModal'
 import { DevolucionModal } from './DevolucionModal'
 import type { VentaConFactura } from './types'
@@ -69,7 +76,11 @@ export function FacturacionTab() {
       .from('ventas')
       .select(`*, factura_c:facturas_c(*), ${SELECT_CLIENTE_FACTURA}, ${SELECT_ITEMS_VENTA_EMBEBIDOS}`)
       .in('estado', estadoFiltro === 'todas' ? ['sin_facturar', 'facturado'] : [estadoFiltro])
+      // docs/68 (D5): las ventas internas (dueñas y empleados) nunca llevan Factura C: no se listan. Igual que Gestión.
+      .is('estado_interno', null)
       .order('created_at', { ascending: false })
+      // Tope explícito (= max_rows de la API): si llega a 1000, la pantalla avisa que hay más.
+      .limit(LIMITE_FILAS_FACTURACION)
 
     const numeroBuscado = numeroDeTicket(busqueda)
     // Sin fechas: últimos 30 días, salvo al buscar un N° de ticket — la venta original de una
@@ -91,6 +102,9 @@ export function FacturacionTab() {
 
   useEffect(() => {
     cargar()
+    // Cualquier cambio de filtro o buscador vacía la selección: lo tildado siempre es algo que se
+    // eligió mirando la lista actual.
+    setSeleccion(new Set())
   }, [fechaDesde, fechaHasta, estadoFiltro, formaPagoFiltro, busqueda])
 
   function toggleSeleccion(id: string) {
@@ -114,12 +128,11 @@ export function FacturacionTab() {
   const { lista: aRevisar, recargar: recargarARevisar } = useEmisionesARevisar(supabase, ventas)
   const idsARevisar = new Set(aRevisar.map((e) => e.venta_id))
 
-  // Solo las filas que se ven y siguen sin facturar: una venta tildada que quedó oculta por el
-  // buscador (o que ya se facturó desde otra pantalla) no se factura sin que se vea. Igual que Gestión.
-  const seleccionadas = ventasVisibles.filter(
-    (v) => seleccion.has(v.id) && v.estado === 'sin_facturar' && !idsARevisar.has(v.id),
-  )
-  const totalSeleccionado = seleccionadas.reduce((acc, v) => acc + v.total, 0)
+  // "Lo que sumo" vs. "lo que facturo": se puede tildar cualquier fila visible para ver el total,
+  // pero el lote de Factura C sale solo de las sin facturar, no internas y no bloqueadas (docs/66).
+  // Igual que Gestión.
+  const resumen = resumenSeleccion(ventasVisibles, seleccion, idsARevisar)
+  const seleccionadasEmitir = resumen.paraEmitir
 
   // Se llama solo desde la confirmación, con la lista que se confirmó.
   async function emitirFacturas(lista: VentaFila[]) {
@@ -259,24 +272,26 @@ export function FacturacionTab() {
 
         <button
           type="button"
-          onClick={() => seleccionadas.length > 0 && setAConfirmar(seleccionadas)}
-          disabled={seleccionadas.length === 0 || emitiendo}
+          onClick={() => seleccionadasEmitir.length > 0 && setAConfirmar(seleccionadasEmitir)}
+          disabled={seleccionadasEmitir.length === 0 || emitiendo}
           className="min-h-[42px] shrink-0 whitespace-nowrap rounded bg-accent px-4 py-2 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-50"
         >
-          {emitiendo ? 'Emitiendo...' : 'Emitir Factura C'}
+          {emitiendo ? 'Emitiendo...' : `Emitir Factura C (${seleccionadasEmitir.length})`}
         </button>
       </div>
-      {seleccionadas.length > 0 && (
-        <p className="mt-2 text-right font-sans text-body-md text-ink-soft">
-          {seleccionadas.length} seleccionado{seleccionadas.length === 1 ? '' : 's'} · {formatCurrency(totalSeleccionado)}
-        </p>
-      )}
 
-      {!fechaDesde && !fechaHasta && numeroDeTicket(busqueda) === null && (
-        <p className="mt-2 font-sans text-label-md text-ink-soft">
-          Mostrando los últimos {DIAS_POR_DEFECTO} días. Para ver ventas anteriores, elegí las fechas o buscá el N° de ticket.
-        </p>
-      )}
+      {/* Período a la izquierda, selección (total, desglose y qué se emite) a la derecha, bajo el botón. */}
+      <div className="flex items-start justify-between gap-4">
+        {!fechaDesde && !fechaHasta && numeroDeTicket(busqueda) === null ? (
+          <p className="mt-2 font-sans text-label-md text-ink-soft">
+            Mostrando los últimos {DIAS_POR_DEFECTO} días. Para ver ventas anteriores, elegí las fechas o buscá el N° de ticket.
+          </p>
+        ) : (
+          <span />
+        )}
+        <ResumenSeleccionFacturacion resumen={resumen} className="mt-2 shrink-0" />
+      </div>
+      <AvisoTopeFilasFacturacion cantidad={ventas.length} />
 
       {error && (
         <p className="mt-stack-md rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>
@@ -315,7 +330,13 @@ export function FacturacionTab() {
           </colgroup>
           <thead>
             <tr className="bg-accent-light text-table-head uppercase text-accent-dark">
-              <th className="px-3 py-2.5"></th>
+              <th className="px-3 py-2.5">
+                <CheckboxSeleccionarTodo
+                  estado={resumen.estadoTodo}
+                  disabled={ventasVisibles.length === 0}
+                  onToggle={() => setSeleccion((prev) => alternarTodas(ventasVisibles, prev, resumen.estadoTodo))}
+                />
+              </th>
               <th className="px-3 py-2.5">N°</th>
               <th className="px-3 py-2.5">Fecha</th>
               <th className="px-3 py-2.5">Cliente</th>
@@ -353,14 +374,14 @@ export function FacturacionTab() {
                   >
                     {/* Checkbox y ⋮ no expanden la fila (el portal del menú también burbujea por React). */}
                     <td rowSpan={rowSpan} className={`cursor-default ${celdaDoble}`} onClick={(e) => e.stopPropagation()}>
-                      {venta.estado === 'sin_facturar' && !idsARevisar.has(venta.id) && (
-                        <input
-                          type="checkbox"
-                          checked={seleccion.has(venta.id)}
-                          onChange={() => toggleSeleccion(venta.id)}
-                          className="mt-0.5 h-4 w-4 accent-accent"
-                        />
-                      )}
+                      {/* Toda fila se puede tildar para sumar; qué se factura lo decide resumenSeleccion. */}
+                      <input
+                        type="checkbox"
+                        checked={seleccion.has(venta.id)}
+                        onChange={() => toggleSeleccion(venta.id)}
+                        aria-label={`Seleccionar venta N° ${venta.numero}`}
+                        className="mt-0.5 h-4 w-4 cursor-pointer accent-accent"
+                      />
                     </td>
                     <td className={`text-ink ${celda}`}>{venta.numero}</td>
                     <td className={`text-ink-soft ${celda}`}>

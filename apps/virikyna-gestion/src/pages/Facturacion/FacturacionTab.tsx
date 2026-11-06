@@ -14,6 +14,13 @@ import {
   useVentasExpandidas,
   type ConItemsVenta,
 } from '@virikyna/shared'
+import { alternarTodas, resumenSeleccion } from '@virikyna/shared/lib/seleccionFacturacion'
+import {
+  AvisoTopeFilasFacturacion,
+  CheckboxSeleccionarTodo,
+  LIMITE_FILAS_FACTURACION,
+  ResumenSeleccionFacturacion,
+} from '@virikyna/shared/src/components/SeleccionFacturacion'
 import { ComprobanteModal } from '../../components/ComprobanteModal'
 import { IconVerDetalle } from '../../components/icons'
 import { filtrarVentas, segmentosResaltados, tieneNota } from './filtroVentas'
@@ -46,6 +53,8 @@ async function fetchVentas(
     // docs/68 (D5): las ventas internas (dueñas y empleados) nunca llevan Factura C: no se listan.
     .is('estado_interno', null)
     .order('created_at', { ascending: false })
+    // Tope explícito (= max_rows de la API): si llega a 1000, la pantalla avisa que hay más.
+    .limit(LIMITE_FILAS_FACTURACION)
 
   const desde = fechaDesde || (fechaHasta ? '' : hoyAR(-(DIAS_POR_DEFECTO - 1)))
   if (desde) query = query.gte('created_at', rangoTimestampsAR(desde, desde).desde)
@@ -126,6 +135,12 @@ export function FacturacionTab() {
   const cantidadConNotas = ventas.filter((v) => tieneNota(v.nota)).length
   const visibles = filtrarVentas(ventas, soloConNotas, q)
 
+  // Cualquier cambio de filtro, buscador o chip vacía la selección: lo tildado siempre es algo que
+  // se eligió mirando la lista actual.
+  useEffect(() => {
+    setSeleccion(new Set())
+  }, [fechaDesde, fechaHasta, estadoFiltro, formaPagoFiltro, q, soloConNotas])
+
   function toggleSeleccion(id: string) {
     setSeleccion((prev) => {
       const next = new Set(prev)
@@ -135,10 +150,10 @@ export function FacturacionTab() {
     })
   }
 
-  // Solo las filas visibles: una venta tildada que después quedó oculta por el chip o el buscador
-  // no se factura sin que se vea. Tampoco una que ya quedó facturada (desde otra pantalla).
-  const seleccionadas = visibles.filter((v) => seleccion.has(v.id) && v.estado === 'sin_facturar' && !idsARevisar.has(v.id))
-  const totalSeleccionado = seleccionadas.reduce((acc, v) => acc + v.total, 0)
+  // "Lo que sumo" vs. "lo que facturo": se puede tildar cualquier fila visible para ver el total,
+  // pero el lote de Factura C sale solo de las sin facturar, no internas y no bloqueadas (docs/66).
+  const resumen = resumenSeleccion(visibles, seleccion, idsARevisar)
+  const seleccionadasEmitir = resumen.paraEmitir
 
   // Se llama solo desde la confirmación, con la lista que se confirmó.
   async function emitirFacturas(lista: VentaFila[]) {
@@ -292,28 +307,29 @@ export function FacturacionTab() {
         </button>
 
         <div className="ml-auto flex items-center gap-3">
-          {seleccionadas.length > 0 && (
-            <p className="font-sans text-body-md text-ink-soft">
-              {seleccionadas.length} seleccionado{seleccionadas.length === 1 ? '' : 's'} ·{' '}
-              {formatCurrency(totalSeleccionado)}
-            </p>
-          )}
           <button
             type="button"
-            onClick={() => seleccionadas.length > 0 && setAConfirmar(seleccionadas)}
-            disabled={seleccionadas.length === 0 || emitiendo}
-            className="rounded bg-accent px-4 py-3 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-50"
+            onClick={() => seleccionadasEmitir.length > 0 && setAConfirmar(seleccionadasEmitir)}
+            disabled={seleccionadasEmitir.length === 0 || emitiendo}
+            className="whitespace-nowrap rounded bg-accent px-4 py-3 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-50"
           >
-            {emitiendo ? 'Emitiendo...' : 'Emitir Factura C'}
+            {emitiendo ? 'Emitiendo...' : `Emitir Factura C (${seleccionadasEmitir.length})`}
           </button>
         </div>
       </div>
 
-      {!fechaDesde && !fechaHasta && (
-        <p className="mt-2 font-sans text-label-md text-ink-soft">
-          Mostrando los últimos {DIAS_POR_DEFECTO} días. Para ver ventas anteriores, elegí las fechas.
-        </p>
-      )}
+      {/* Período a la izquierda, selección (total, desglose y qué se emite) a la derecha, bajo el botón. */}
+      <div className="flex items-start justify-between gap-4">
+        {!fechaDesde && !fechaHasta ? (
+          <p className="mt-2 font-sans text-label-md text-ink-soft">
+            Mostrando los últimos {DIAS_POR_DEFECTO} días. Para ver ventas anteriores, elegí las fechas.
+          </p>
+        ) : (
+          <span />
+        )}
+        <ResumenSeleccionFacturacion resumen={resumen} className="mt-2 shrink-0" />
+      </div>
+      <AvisoTopeFilasFacturacion cantidad={ventas.length} />
 
       <p className="sr-only" aria-live="polite">
         {loading ? '' : `${visibles.length} venta${visibles.length === 1 ? '' : 's'}`}
@@ -357,7 +373,11 @@ export function FacturacionTab() {
           <thead>
             <tr className="bg-accent-light text-table-head uppercase text-accent-dark">
               <th className="px-3 py-2.5">
-                <span className="sr-only">Seleccionar</span>
+                <CheckboxSeleccionarTodo
+                  estado={resumen.estadoTodo}
+                  disabled={visibles.length === 0}
+                  onToggle={() => setSeleccion((prev) => alternarTodas(visibles, prev, resumen.estadoTodo))}
+                />
               </th>
               <th className="px-3 py-2.5">N°</th>
               <th className="px-3 py-2.5">Fecha</th>
@@ -399,15 +419,14 @@ export function FacturacionTab() {
                   >
                     {/* Checkbox y "Ver" no expanden la fila. */}
                     <td rowSpan={rowSpan} className={`cursor-default ${celdaDoble}`} onClick={(e) => e.stopPropagation()}>
-                      {venta.estado === 'sin_facturar' && !idsARevisar.has(venta.id) && (
-                        <input
-                          type="checkbox"
-                          checked={seleccion.has(venta.id)}
-                          onChange={() => toggleSeleccion(venta.id)}
-                          aria-label={`Seleccionar venta N° ${venta.numero}`}
-                          className="mt-0.5 h-4 w-4 accent-accent"
-                        />
-                      )}
+                      {/* Toda fila se puede tildar para sumar; qué se factura lo decide resumenSeleccion. */}
+                      <input
+                        type="checkbox"
+                        checked={seleccion.has(venta.id)}
+                        onChange={() => toggleSeleccion(venta.id)}
+                        aria-label={`Seleccionar venta N° ${venta.numero}`}
+                        className="mt-0.5 h-4 w-4 cursor-pointer accent-accent"
+                      />
                     </td>
                     <td className={`text-ink ${celda}`}>{venta.numero}</td>
                     <td className={`text-ink-soft ${celda}`}>
