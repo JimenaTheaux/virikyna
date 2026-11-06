@@ -1,5 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Ban, Copy, Eye, Pencil, Wallet } from 'lucide-react'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -33,6 +32,14 @@ import { AplicarACuentaModal } from './AplicarACuentaModal'
 import { EditarFacturaCompraModal } from './EditarFacturaCompraModal'
 import { AnularFacturaCompraModal } from './AnularFacturaCompraModal'
 import { ObservacionesProveedor } from './ObservacionesProveedor'
+import {
+  CuentaCorrienteLayout,
+  KpiCuenta,
+  TablaComprobantes,
+  useParamsCuentaCorriente,
+  useSeleccion,
+  type ColumnaComprobantes,
+} from './CuentaCorrienteLayout'
 
 export type RenderDetalleComprobante = (args: {
   factura: FacturaCompraSaldo
@@ -64,7 +71,8 @@ const TABS = [
   { id: 'todos', label: 'Todos' },
   { id: 'pagos', label: 'Pagos' },
 ] as const
-type TabId = (typeof TABS)[number]['id']
+const FILTROS = ['tipo', 'compra', 'desde', 'hasta', 'q'] as const
+const idDe = (c: FacturaCompraSaldo) => c.id
 
 const ESTADO_BADGE: Record<EstadoFacturaCompra, { label: string; variant: 'amber' | 'green' | 'red' | 'neutral' }> = {
   pendiente: { label: 'Pendiente', variant: 'amber' },
@@ -87,6 +95,8 @@ const negativo = (n: number) => `−${formatCurrency(Math.abs(n))}`
 // Cuenta corriente de un proveedor (docs/04, módulo 6; docs/31): cabecera con KPIs, comprobantes
 // por estado, selección múltiple + NC para pagar, y el historial de pagos con lo que cubrió cada uno.
 // Pestaña y filtros viven en la URL (search params): se pueden compartir y sobreviven al volver.
+// El esqueleto (cabecera, KPIs, pestañas, filtros, tabla con selección) es CuentaCorrienteLayout,
+// compartido con la cuenta corriente de clientes (docs/68).
 export function ProveedorCuentaCorriente({
   supabase,
   proveedorId,
@@ -98,7 +108,6 @@ export function ProveedorCuentaCorriente({
   renderDetalle,
 }: Props) {
   const queryClient = useQueryClient()
-  const [params, setParams] = useSearchParams()
   const proveedorQ = useProveedor(supabase, proveedorId)
   const comprobantesQ = useComprobantesProveedor(supabase, proveedorId)
   const pagosQ = usePagosProveedor(supabase, proveedorId)
@@ -109,48 +118,13 @@ export function ProveedorCuentaCorriente({
   const pagos = useMemo(() => pagosQ.data ?? [], [pagosQ.data])
   const porId = useMemo(() => new Map(comprobantes.map((c) => [c.id, c])), [comprobantes])
 
-  const tab = (TABS.some((t) => t.id === params.get('tab')) ? params.get('tab') : 'pendientes') as TabId
-  const tipo = (params.get('tipo') ?? '') as TipoComprobanteCompra | ''
-  const compra = (params.get('compra') ?? '') as TipoCompra | '' // docs/53: artículos / servicios
-  const desde = params.get('desde') ?? ''
-  const hasta = params.get('hasta') ?? ''
-  const q = params.get('q') ?? ''
-  const hayFiltros = Boolean(tipo || compra || desde || hasta || q)
-
-  function setParam(clave: string, valor: string) {
-    setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev)
-        if (valor) next.set(clave, valor)
-        else next.delete(clave)
-        return next
-      },
-      { replace: true },
-    )
-  }
-  function limpiarFiltros() {
-    setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev)
-        for (const k of ['tipo', 'compra', 'desde', 'hasta', 'q']) next.delete(k)
-        return next
-      },
-      { replace: true },
-    )
-  }
+  const { tab, irATab, valores, hayFiltros, setParam, limpiarFiltros } = useParamsCuentaCorriente(TABS, FILTROS)
+  const tipo = valores.tipo as TipoComprobanteCompra | ''
+  const compra = valores.compra as TipoCompra | '' // docs/53: artículos / servicios
+  const { desde, hasta, q } = valores
 
   // ── Selección (comprobantes con saldo + NC con crédito) ──
-  const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
-  useEffect(() => {
-    // Tras un pago/edición/anulación, lo que dejó de ser seleccionable se cae solo.
-    setSeleccion((prev) => {
-      const next = new Set([...prev].filter((id) => {
-        const c = porId.get(id)
-        return c ? esSeleccionableParaPago(c) : false
-      }))
-      return next.size === prev.size ? prev : next
-    })
-  }, [porId])
+  const { seleccion, setSeleccion, toggle } = useSeleccion(comprobantes, idDe, esSeleccionableParaPago)
 
   const seleccionFacturas = useMemo(
     () => [...seleccion].filter((id) => porId.get(id) && !esNotaCredito(porId.get(id)!)),
@@ -178,15 +152,6 @@ export function ProveedorCuentaCorriente({
         ]
           .filter(Boolean)
           .join(' · ')
-
-  function toggle(id: string) {
-    setSeleccion((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
 
   // ── Modales ──
   const [pago, setPago] = useState<{ facturaIds: string[]; notaCreditoIds: string[] } | null>(null)
@@ -238,40 +203,12 @@ export function ProveedorCuentaCorriente({
   const ofrecerAplicar = permitirAplicarACuenta && aCuenta > 0 && pendientes.length > 0
   const ultimoPago = pagos.find((p) => Number(p.monto) > 0 && !p.revierte_pago_proveedor_id && !p.revertido)
 
-  // ── Tabs accesibles (flechas, Home/End) ──
-  const idBase = useId()
-  const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
-  function irATab(id: TabId) {
-    setParam('tab', id === 'pendientes' ? '' : id)
-  }
-  function onTabKeyDown(e: KeyboardEvent<HTMLDivElement>) {
-    const i = TABS.findIndex((t) => t.id === tab)
-    const destino =
-      e.key === 'ArrowRight' ? (i + 1) % TABS.length
-      : e.key === 'ArrowLeft' ? (i - 1 + TABS.length) % TABS.length
-      : e.key === 'Home' ? 0
-      : e.key === 'End' ? TABS.length - 1
-      : -1
-    if (destino < 0) return
-    e.preventDefault()
-    irATab(TABS[destino].id)
-    tabRefs.current[destino]?.focus()
-  }
-
-  // ── Selección de todos los visibles ──
-  const seleccionablesVisibles = visibles.filter(esSeleccionableParaPago)
-  const todosMarcados = seleccionablesVisibles.length > 0 && seleccionablesVisibles.every((c) => seleccion.has(c.id))
-  const algunoMarcado = seleccionablesVisibles.some((c) => seleccion.has(c.id))
-  const checkTodosRef = useRef<HTMLInputElement>(null)
-  useEffect(() => {
-    if (checkTodosRef.current) checkTodosRef.current.indeterminate = algunoMarcado && !todosMarcados
-  }, [algunoMarcado, todosMarcados])
-  function toggleTodos() {
+  function toggleVisibles(ids: string[], marcar: boolean) {
     setSeleccion((prev) => {
       const next = new Set(prev)
-      for (const c of seleccionablesVisibles) {
-        if (todosMarcados) next.delete(c.id)
-        else next.add(c.id)
+      for (const id of ids) {
+        if (marcar) next.add(id)
+        else next.delete(id)
       }
       return next
     })
@@ -301,209 +238,260 @@ export function ProveedorCuentaCorriente({
   const aEditar = editarId ? porId.get(editarId) : undefined
   const aAnular = anularId ? porId.get(anularId) : undefined
 
-  return (
-    <section aria-labelledby={`${idBase}-titulo`} className="flex min-h-full flex-col rounded-lg bg-surface p-card shadow-sm">
-      {/* ── Cabecera ── */}
-      <div className="flex flex-wrap items-start justify-between gap-stack-md">
-        <div className="min-w-0">
-          <button
-            type="button"
-            onClick={onVolver}
-            className="rounded font-sans text-label-bold text-accent-dark hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
-          >
-            ← Proveedores
-          </button>
-          <h1 id={`${idBase}-titulo`} className="mt-1 font-display text-headline-lg text-accent-darker [overflow-wrap:anywhere]">
-            {proveedor.razon_social}
-          </h1>
-          <dl className="mt-1 flex flex-wrap gap-x-stack-md gap-y-1 font-sans text-label-md text-ink-soft">
-            <div className="flex gap-1">
-              <dt>CUIT:</dt>
-              <dd className="text-ink">{proveedor.cuit || '—'}</dd>
-            </div>
-            <div className="flex gap-1">
-              <dt>Contacto:</dt>
-              <dd className="text-ink">
-                {[proveedor.contacto, proveedor.telefono, proveedor.mail].filter(Boolean).join(' · ') || '—'}
-              </dd>
-            </div>
-            <div className="flex gap-1">
-              <dt>Márgenes:</dt>
-              <dd className="text-ink">
-                {proveedor.margen_1_default}% · {proveedor.margen_2_default}%
-              </dd>
-            </div>
-          </dl>
-        </div>
-        <button
-          type="button"
-          onClick={() => setPago({ facturaIds: [], notaCreditoIds: [] })}
-          // Una sola acción teal sólida por pantalla (docs/08 §5): con selección, la protagonista es "Pagar".
-          className={
-            seleccion.size > 0
-              ? 'rounded border border-accent px-4 py-3 font-sans text-label-bold text-accent-darker transition hover:bg-accent-light'
-              : 'rounded bg-accent px-4 py-3 font-sans text-label-bold text-white transition hover:bg-accent-dark'
-          }
-        >
-          Registrar pago
-        </button>
-      </div>
-
-      <ObservacionesProveedor observaciones={proveedor.observaciones} className="mt-stack-md" />
-
-      {/* ── KPIs ── */}
-      <ul aria-label="Resumen de la cuenta" className="mt-stack-md grid grid-cols-2 gap-stack-sm lg:grid-cols-5">
-        <Kpi label="Saldo">
-          <span className={saldo > 0 ? 'text-error' : saldo < 0 ? 'text-success' : 'text-accent-darker'}>
-            {formatCurrency(saldo)}
-          </span>
-          {saldo < 0 && <span className="block font-sans text-label-md text-ink-soft">a favor</span>}
-        </Kpi>
-        <Kpi label="Comprobantes pendientes">
-          {formatCurrency(totalPendiente)}
-          <span className="block font-sans text-label-md text-ink-soft">
-            {plural(pendientes.length, 'comprobante', 'comprobantes')}
-          </span>
-        </Kpi>
-        <Kpi label="Crédito NC disponible">
-          <span className={creditoNc > 0 ? 'text-success' : ''}>{formatCurrency(creditoNc)}</span>
-        </Kpi>
-        <Kpi label="A cuenta (pagos)">
-          <span className={aCuenta > 0 ? 'text-success' : ''}>{formatCurrency(aCuenta)}</span>
-          <span className="block font-sans text-label-md text-ink-soft">sin comprobante</span>
-        </Kpi>
-        <Kpi label="Último pago">
-          {ultimoPago ? (
+  const columnas: ColumnaComprobantes<FacturaCompraSaldo>[] = [
+    {
+      id: 'fecha',
+      header: 'Fecha',
+      colClassName: 'w-[6.25rem]',
+      td: (c) => ({ className: 'px-3 py-3 text-ink-soft tabular-nums', contenido: formatFechaCorta(c.fecha_comprobante) }),
+    },
+    {
+      id: 'tipo',
+      header: 'Tipo',
+      colClassName: 'w-[7.5rem]',
+      td: (c) => ({
+        className: `px-3 py-3 [overflow-wrap:anywhere] ${esNotaCredito(c) ? 'text-success' : 'text-ink'}`,
+        contenido: (
+          <>
+            {TIPO_COMPROBANTE_COMPRA_LABEL[c.tipo_comprobante]}
+            {c.letra ? ` ${c.letra}` : ''}
+          </>
+        ),
+      }),
+    },
+    {
+      id: 'numero',
+      header: 'Número',
+      td: (c) => ({
+        className: 'px-3 py-3 [overflow-wrap:anywhere]',
+        contenido: (
+          <>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setDetalleId(c.id)
+              }}
+              aria-label={`Ver detalle de ${etiquetaComprobanteCompra(c)}`}
+              className="rounded text-left text-ink hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+            >
+              {[c.punto_venta, c.numero_comprobante].filter(Boolean).join('-') || 'sin número'}
+            </button>
+            <ChipTipoCompra tipo={c.tipo_compra} className="ml-2" />
+          </>
+        ),
+      }),
+    },
+    {
+      id: 'total',
+      header: 'Total',
+      colClassName: 'w-[8rem]',
+      thClassName: 'text-right',
+      td: (c) => {
+        const nc = esNotaCredito(c)
+        return {
+          className: `px-3 py-3 text-right font-semibold tabular-nums ${nc ? 'text-success' : 'text-ink'}`,
+          contenido: (
             <>
-              {formatCurrency(Number(ultimoPago.monto))}
-              <span className="block font-sans text-label-md text-ink-soft">
-                {formatFechaCorta(ultimoPago.fecha)} · {FORMA_PAGO_CABECERA_LABEL[ultimoPago.forma_pago]}
-              </span>
+              {nc ? negativo(Number(c.total)) : formatCurrency(Number(c.total))}
+              <span className="block text-label-md font-normal text-ink-soft">{etiquetaCortaAlicuotaIva(c.iva_alicuota)}</span>
             </>
-          ) : (
-            <span className="text-ink-soft">—</span>
+          ),
+        }
+      },
+    },
+    {
+      id: 'aplicado',
+      header: 'Aplicado',
+      colClassName: 'w-[8rem] max-xl:hidden',
+      thClassName: 'text-right max-xl:hidden',
+      td: (c) => ({
+        className: 'px-3 py-3 text-right tabular-nums text-ink-soft max-xl:hidden',
+        contenido: formatCurrency(Number(c.total_aplicado)),
+      }),
+    },
+    {
+      id: 'saldo',
+      header: 'Saldo',
+      colClassName: 'w-[8rem]',
+      thClassName: 'text-right',
+      td: (c) => {
+        const nc = esNotaCredito(c)
+        return {
+          className: `px-3 py-3 text-right font-semibold tabular-nums ${
+            nc
+              ? Number(c.credito_disponible) > 0 ? 'text-success' : 'text-ink-soft'
+              : Number(c.saldo_pendiente) > 0 ? 'text-error' : 'text-ink-soft'
+          }`,
+          contenido: nc
+            ? Number(c.credito_disponible) > 0 ? negativo(Number(c.credito_disponible)) : formatCurrency(0)
+            : formatCurrency(Number(c.saldo_pendiente)),
+        }
+      },
+    },
+    {
+      id: 'estado',
+      header: 'Estado',
+      colClassName: 'w-[6.5rem]',
+      td: (c) => {
+        const badge = (esNotaCredito(c) ? ESTADO_BADGE_NC : ESTADO_BADGE)[c.estado]
+        return { className: 'px-3 py-3', contenido: <EstadoBadge variant={badge.variant}>{badge.label}</EstadoBadge> }
+      },
+    },
+    {
+      id: 'acciones',
+      header: <span className="sr-only">Acciones</span>,
+      colClassName: 'w-[3rem]',
+      td: (c) => {
+        const nc = esNotaCredito(c)
+        const etiqueta = etiquetaComprobanteCompra(c)
+        const acciones: RowActionsMenuItem[] = [
+          { label: 'Ver detalle', icon: Eye, onClick: () => setDetalleId(c.id) },
+          ...(esSeleccionableParaPago(c) && !nc
+            ? [{ label: 'Pagar este comprobante', icon: Wallet, onClick: () => setPago({ facturaIds: [c.id], notaCreditoIds: [] }) }]
+            : []),
+          ...(onCopiar ? [{ label: 'Copiar', icon: Copy, onClick: () => onCopiar(c) }] : []),
+          ...(permitirEditarAnular && !c.anulada
+            ? [
+                { label: 'Editar', icon: Pencil, onClick: () => setEditarId(c.id) },
+                { label: 'Anular', icon: Ban, onClick: () => setAnularId(c.id), destructive: true },
+              ]
+            : []),
+        ]
+        return {
+          className: 'px-3 py-3 text-right',
+          detenerClick: true,
+          // docs/08 §5.2: menú solo con 2+ acciones; con una sola (ver detalle), la fila ya lo hace.
+          contenido: acciones.length >= 2 && <RowActionsMenu ariaLabel={`Acciones para ${etiqueta}`} items={acciones} />,
+        }
+      },
+    },
+  ]
+
+  return (
+    <CuentaCorrienteLayout
+      volverLabel="← Proveedores"
+      onVolver={onVolver}
+      titulo={proveedor.razon_social}
+      datos={[
+        { label: 'CUIT', valor: proveedor.cuit || '—' },
+        { label: 'Contacto', valor: [proveedor.contacto, proveedor.telefono, proveedor.mail].filter(Boolean).join(' · ') || '—' },
+        { label: 'Márgenes', valor: <>{proveedor.margen_1_default}% · {proveedor.margen_2_default}%</> },
+      ]}
+      accionPrincipal={{ label: 'Registrar pago', onClick: () => setPago({ facturaIds: [], notaCreditoIds: [] }) }}
+      conSeleccion={seleccion.size > 0}
+      debajoCabecera={<ObservacionesProveedor observaciones={proveedor.observaciones} className="mt-stack-md" />}
+      kpis={
+        <>
+          <KpiCuenta label="Saldo">
+            <span className={saldo > 0 ? 'text-error' : saldo < 0 ? 'text-success' : 'text-accent-darker'}>
+              {formatCurrency(saldo)}
+            </span>
+            {saldo < 0 && <span className="block font-sans text-label-md text-ink-soft">a favor</span>}
+          </KpiCuenta>
+          <KpiCuenta label="Comprobantes pendientes">
+            {formatCurrency(totalPendiente)}
+            <span className="block font-sans text-label-md text-ink-soft">
+              {plural(pendientes.length, 'comprobante', 'comprobantes')}
+            </span>
+          </KpiCuenta>
+          <KpiCuenta label="Crédito NC disponible">
+            <span className={creditoNc > 0 ? 'text-success' : ''}>{formatCurrency(creditoNc)}</span>
+          </KpiCuenta>
+          <KpiCuenta label="A cuenta (pagos)">
+            <span className={aCuenta > 0 ? 'text-success' : ''}>{formatCurrency(aCuenta)}</span>
+            <span className="block font-sans text-label-md text-ink-soft">sin comprobante</span>
+          </KpiCuenta>
+          <KpiCuenta label="Último pago">
+            {ultimoPago ? (
+              <>
+                {formatCurrency(Number(ultimoPago.monto))}
+                <span className="block font-sans text-label-md text-ink-soft">
+                  {formatFechaCorta(ultimoPago.fecha)} · {FORMA_PAGO_CABECERA_LABEL[ultimoPago.forma_pago]}
+                </span>
+              </>
+            ) : (
+              <span className="text-ink-soft">—</span>
+            )}
+          </KpiCuenta>
+        </>
+      }
+      tabs={TABS}
+      tab={tab}
+      onTab={irATab}
+      filtros={
+        <>
+          {tab !== 'pagos' && (
+            <div className="w-44">
+              <Field label="Tipo" compact>
+                <select value={tipo} onChange={(e) => setParam('tipo', e.target.value)} className={selectClass}>
+                  <option value="">Todos</option>
+                  {TIPOS_COMPROBANTE_COMPRA.map((t) => (
+                    <option key={t} value={t}>
+                      {TIPO_COMPROBANTE_COMPRA_LABEL[t]}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
           )}
-        </Kpi>
-      </ul>
-
-      {/* ── Pestañas ── */}
-      <div role="tablist" aria-label="Vista de la cuenta" onKeyDown={onTabKeyDown} className="mt-stack-md flex gap-1 border-b border-line">
-        {TABS.map((t, i) => (
-          <button
-            key={t.id}
-            ref={(el) => (tabRefs.current[i] = el)}
-            id={`${idBase}-tab-${t.id}`}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.id}
-            aria-controls={`${idBase}-panel`}
-            tabIndex={tab === t.id ? 0 : -1}
-            onClick={() => irATab(t.id)}
-            className={[
-              'rounded-t px-4 py-2 font-sans text-label-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent',
-              tab === t.id ? 'border-b-2 border-accent text-accent-darker' : 'text-ink-soft hover:text-accent-darker',
-            ].join(' ')}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Filtros (en la URL) ── */}
-      <form
-        role="search"
-        aria-label="Filtrar"
-        onSubmit={(e) => e.preventDefault()}
-        className="mt-stack-md flex flex-wrap items-end gap-stack-sm"
-      >
-        {tab !== 'pagos' && (
-          <div className="w-44">
-            <Field label="Tipo" compact>
-              <select value={tipo} onChange={(e) => setParam('tipo', e.target.value)} className={selectClass}>
-                <option value="">Todos</option>
-                {TIPOS_COMPROBANTE_COMPRA.map((t) => (
-                  <option key={t} value={t}>
-                    {TIPO_COMPROBANTE_COMPRA_LABEL[t]}
-                  </option>
-                ))}
-              </select>
+          {tab !== 'pagos' && (
+            <div className="w-36">
+              <Field label="Compra" compact>
+                <select value={compra} onChange={(e) => setParam('compra', e.target.value)} className={selectClass}>
+                  <option value="">Todas</option>
+                  {TIPOS_COMPRA.map((t) => (
+                    <option key={t} value={t}>
+                      {TIPO_COMPRA_LABEL[t]}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          )}
+          <div className="w-40">
+            <Field label="Desde" compact>
+              <input type="date" value={desde} max={hasta || undefined} onChange={(e) => setParam('desde', e.target.value)} className={inputClass} />
             </Field>
           </div>
-        )}
-        {tab !== 'pagos' && (
-          <div className="w-36">
-            <Field label="Compra" compact>
-              <select value={compra} onChange={(e) => setParam('compra', e.target.value)} className={selectClass}>
-                <option value="">Todas</option>
-                {TIPOS_COMPRA.map((t) => (
-                  <option key={t} value={t}>
-                    {TIPO_COMPRA_LABEL[t]}
-                  </option>
-                ))}
-              </select>
+          <div className="w-40">
+            <Field label="Hasta" compact>
+              <input type="date" value={hasta} min={desde || undefined} onChange={(e) => setParam('hasta', e.target.value)} className={inputClass} />
             </Field>
           </div>
-        )}
-        <div className="w-40">
-          <Field label="Desde" compact>
-            <input type="date" value={desde} max={hasta || undefined} onChange={(e) => setParam('desde', e.target.value)} className={inputClass} />
-          </Field>
-        </div>
-        <div className="w-40">
-          <Field label="Hasta" compact>
-            <input type="date" value={hasta} min={desde || undefined} onChange={(e) => setParam('hasta', e.target.value)} className={inputClass} />
-          </Field>
-        </div>
-        {tab !== 'pagos' && (
-          <div className="w-48">
-            <Field label="Número" compact>
-              <input type="search" value={q} onChange={(e) => setParam('q', e.target.value)} placeholder="Buscar número" className={inputClass} />
-            </Field>
+          {tab !== 'pagos' && (
+            <div className="w-48">
+              <Field label="Número" compact>
+                <input type="search" value={q} onChange={(e) => setParam('q', e.target.value)} placeholder="Buscar número" className={inputClass} />
+              </Field>
+            </div>
+          )}
+        </>
+      }
+      hayFiltros={hayFiltros}
+      onLimpiarFiltros={limpiarFiltros}
+      error={error ? friendlyError(error as Error) : null}
+      avisos={
+        tab === 'pendientes' &&
+        ofrecerAplicar && (
+          <div className="mt-stack-md flex flex-wrap items-center justify-between gap-stack-sm rounded-lg border border-accent bg-accent-light px-4 py-3">
+            <p className="font-sans text-body-md text-accent-darker">
+              Hay <span className="font-semibold tabular-nums">{formatCurrency(aCuenta)}</span> a cuenta
+              {seleccionFacturas.length > 0 ? ' · se aplican a los comprobantes seleccionados' : ' · se aplican a los comprobantes más viejos'}
+            </p>
+            <button
+              type="button"
+              onClick={() => setAplicar({ facturaIds: seleccionFacturas })}
+              className="rounded border border-accent bg-surface px-4 py-2.5 font-sans text-label-bold text-accent-darker transition hover:bg-accent-light focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+            >
+              Aplicar a comprobantes
+            </button>
           </div>
-        )}
-        {hayFiltros && (
-          <button
-            type="button"
-            onClick={limpiarFiltros}
-            className="rounded px-3 py-2.5 font-sans text-label-bold text-ink-soft hover:bg-bg focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
-          >
-            Limpiar filtros
-          </button>
-        )}
-      </form>
-
-      {error && (
-        <p role="alert" className="mt-stack-md rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">
-          {friendlyError(error as Error)}
-        </p>
-      )}
-      {tab === 'pendientes' && ofrecerAplicar && (
-        <div className="mt-stack-md flex flex-wrap items-center justify-between gap-stack-sm rounded-lg border border-accent bg-accent-light px-4 py-3">
-          <p className="font-sans text-body-md text-accent-darker">
-            Hay <span className="font-semibold tabular-nums">{formatCurrency(aCuenta)}</span> a cuenta
-            {seleccionFacturas.length > 0 ? ' · se aplican a los comprobantes seleccionados' : ' · se aplican a los comprobantes más viejos'}
-          </p>
-          <button
-            type="button"
-            onClick={() => setAplicar({ facturaIds: seleccionFacturas })}
-            className="rounded border border-accent bg-surface px-4 py-2.5 font-sans text-label-bold text-accent-darker transition hover:bg-accent-light focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
-          >
-            Aplicar a comprobantes
-          </button>
-        </div>
-      )}
-      <p aria-live="polite" className={aviso ?'mt-stack-md rounded bg-badge-green-bg px-4 py-3 font-sans text-body-md text-badge-green-text' : 'sr-only'}>
-        {aviso}
-      </p>
-
-      {/* ── Panel ── */}
-      <div
-        id={`${idBase}-panel`}
-        role="tabpanel"
-        aria-labelledby={`${idBase}-tab-${tab}`}
-        className="mt-stack-md flex-1 overflow-hidden rounded-xl shadow-sm"
-      >
-        {tab === 'pagos' ? (
+        )
+      }
+      aviso={aviso}
+      panel={
+        tab === 'pagos' ? (
           <TablaPagos
             pagos={pagosVisibles}
             porId={porId}
@@ -511,184 +499,41 @@ export function ProveedorCuentaCorriente({
             cargando={pagosQ.isPending || aCuentaQ.isPending}
           />
         ) : (
-          <table className="w-full table-fixed text-left font-sans text-table-row max-xl:[&_td]:px-2 max-xl:[&_th]:px-2">
-            <colgroup>
-              <col className="w-[2.75rem]" />
-              <col className="w-[6.25rem]" />
-              <col className="w-[7.5rem]" />
-              <col />
-              <col className="w-[8rem]" />
-              <col className="w-[8rem] max-xl:hidden" />
-              <col className="w-[8rem]" />
-              <col className="w-[6.5rem]" />
-              <col className="w-[3rem]" />
-            </colgroup>
-            <thead>
-              <tr className="bg-accent-light text-table-head uppercase text-accent-dark">
-                <th scope="col" className="px-3 py-2.5">
-                  <input
-                    ref={checkTodosRef}
-                    type="checkbox"
-                    checked={todosMarcados}
-                    disabled={seleccionablesVisibles.length === 0}
-                    onChange={toggleTodos}
-                    aria-label="Seleccionar todos los comprobantes visibles"
-                    className="h-4 w-4 accent-accent"
-                  />
-                </th>
-                <th scope="col" className="px-3 py-2.5">Fecha</th>
-                <th scope="col" className="px-3 py-2.5">Tipo</th>
-                <th scope="col" className="px-3 py-2.5">Número</th>
-                <th scope="col" className="px-3 py-2.5 text-right">Total</th>
-                <th scope="col" className="px-3 py-2.5 text-right max-xl:hidden">Aplicado</th>
-                <th scope="col" className="px-3 py-2.5 text-right">Saldo</th>
-                <th scope="col" className="px-3 py-2.5">Estado</th>
-                <th scope="col" className="px-3 py-2.5">
-                  <span className="sr-only">Acciones</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {comprobantesQ.isPending && (
-                <tr>
-                  <td colSpan={9} className="px-4 py-4 text-ink-soft">Cargando...</td>
-                </tr>
-              )}
-              {!comprobantesQ.isPending && visibles.length === 0 && (
-                <tr>
-                  <td colSpan={9} className="px-4 py-4 text-ink-soft">
-                    {hayFiltros
-                      ? 'Ningún comprobante coincide con los filtros.'
-                      : tab === 'pendientes'
-                        ? 'No hay comprobantes pendientes ni notas de crédito con saldo.'
-                        : tab === 'pagados'
-                          ? 'Todavía no hay comprobantes pagados.'
-                          : 'Este proveedor no tiene comprobantes cargados.'}
-                  </td>
-                </tr>
-              )}
-              {visibles.map((c) => {
-                const nc = esNotaCredito(c)
-                const etiqueta = etiquetaComprobanteCompra(c)
-                const seleccionable = esSeleccionableParaPago(c)
-                const badge = (nc ? ESTADO_BADGE_NC : ESTADO_BADGE)[c.estado]
-                const numero = [c.punto_venta, c.numero_comprobante].filter(Boolean).join('-') || 'sin número'
-                const acciones: RowActionsMenuItem[] = [
-                  { label: 'Ver detalle', icon: Eye, onClick: () => setDetalleId(c.id) },
-                  ...(seleccionable && !nc
-                    ? [{ label: 'Pagar este comprobante', icon: Wallet, onClick: () => setPago({ facturaIds: [c.id], notaCreditoIds: [] }) }]
-                    : []),
-                  ...(onCopiar ? [{ label: 'Copiar', icon: Copy, onClick: () => onCopiar(c) }] : []),
-                  ...(permitirEditarAnular && !c.anulada
-                    ? [
-                        { label: 'Editar', icon: Pencil, onClick: () => setEditarId(c.id) },
-                        { label: 'Anular', icon: Ban, onClick: () => setAnularId(c.id), destructive: true },
-                      ]
-                    : []),
-                ]
-                return (
-                  <tr
-                    key={c.id}
-                    onClick={() => setDetalleId(c.id)}
-                    className={`cursor-pointer border-b border-table-divider last:border-0 even:bg-table-row-alt hover:bg-accent-light/40 ${
-                      tab === 'todos' && cerrada(c) ? 'opacity-60' : ''
-                    } ${seleccion.has(c.id) ? '!bg-accent-light' : ''}`}
-                  >
-                    <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
-                      {seleccionable && (
-                        <input
-                          type="checkbox"
-                          checked={seleccion.has(c.id)}
-                          onChange={() => toggle(c.id)}
-                          aria-label={`Seleccionar ${etiqueta}`}
-                          className="h-4 w-4 accent-accent"
-                        />
-                      )}
-                    </td>
-                    <td className="px-3 py-3 text-ink-soft tabular-nums">{formatFechaCorta(c.fecha_comprobante)}</td>
-                    <td className={`px-3 py-3 [overflow-wrap:anywhere] ${nc ? 'text-success' : 'text-ink'}`}>
-                      {TIPO_COMPROBANTE_COMPRA_LABEL[c.tipo_comprobante]}
-                      {c.letra ? ` ${c.letra}` : ''}
-                    </td>
-                    <td className="px-3 py-3 [overflow-wrap:anywhere]">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setDetalleId(c.id)
-                        }}
-                        aria-label={`Ver detalle de ${etiqueta}`}
-                        className="rounded text-left text-ink hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
-                      >
-                        {numero}
-                      </button>
-                      <ChipTipoCompra tipo={c.tipo_compra} className="ml-2" />
-                    </td>
-                    <td className={`px-3 py-3 text-right font-semibold tabular-nums ${nc ? 'text-success' : 'text-ink'}`}>
-                      {nc ? negativo(Number(c.total)) : formatCurrency(Number(c.total))}
-                      <span className="block text-label-md font-normal text-ink-soft">
-                        {etiquetaCortaAlicuotaIva(c.iva_alicuota)}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3 text-right tabular-nums text-ink-soft max-xl:hidden">
-                      {formatCurrency(Number(c.total_aplicado))}
-                    </td>
-                    <td
-                      className={`px-3 py-3 text-right font-semibold tabular-nums ${
-                        nc
-                          ? Number(c.credito_disponible) > 0 ? 'text-success' : 'text-ink-soft'
-                          : Number(c.saldo_pendiente) > 0 ? 'text-error' : 'text-ink-soft'
-                      }`}
-                    >
-                      {nc
-                        ? Number(c.credito_disponible) > 0 ? negativo(Number(c.credito_disponible)) : formatCurrency(0)
-                        : formatCurrency(Number(c.saldo_pendiente))}
-                    </td>
-                    <td className="px-3 py-3">
-                      <EstadoBadge variant={badge.variant}>{badge.label}</EstadoBadge>
-                    </td>
-                    <td className="px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                      {/* docs/08 §5.2: menú solo con 2+ acciones; con una sola (ver detalle), la fila ya lo hace. */}
-                      {acciones.length >= 2 && <RowActionsMenu ariaLabel={`Acciones para ${etiqueta}`} items={acciones} />}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {/* ── Barra de selección ── */}
-      <p aria-live="polite" className="sr-only">
-        {resumenSeleccion}
-      </p>
-      {seleccion.size > 0 && (
-        <div
-          role="region"
-          aria-label="Comprobantes seleccionados"
-          className="sticky bottom-0 z-10 mt-stack-md flex flex-wrap items-center justify-between gap-stack-sm rounded-lg border border-accent bg-accent-light px-4 py-3"
-        >
-          <p className="font-sans text-body-md font-semibold text-accent-darker tabular-nums">{resumenSeleccion}</p>
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => setSeleccion(new Set())}
-              className="rounded px-4 py-2.5 font-sans text-label-bold text-ink-soft hover:bg-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
-            >
-              Quitar selección
-            </button>
-            <button
-              type="button"
-              onClick={() => setPago({ facturaIds: seleccionFacturas, notaCreditoIds: seleccionNotas })}
-              className="rounded bg-accent px-4 py-2.5 font-sans text-label-bold text-white transition hover:bg-accent-dark"
-            >
-              Pagar
-            </button>
-          </div>
-        </div>
-      )}
-
+          <TablaComprobantes
+            filas={visibles}
+            columnas={columnas}
+            getId={idDe}
+            esSeleccionable={esSeleccionableParaPago}
+            etiquetaFila={etiquetaComprobanteCompra}
+            seleccion={seleccion}
+            onToggle={toggle}
+            onToggleVisibles={toggleVisibles}
+            onAbrir={(c) => setDetalleId(c.id)}
+            claseFila={(c) => (tab === 'todos' && cerrada(c) ? 'opacity-60' : '')}
+            cargando={comprobantesQ.isPending}
+            vacio={
+              hayFiltros
+                ? 'Ningún comprobante coincide con los filtros.'
+                : tab === 'pendientes'
+                  ? 'No hay comprobantes pendientes ni notas de crédito con saldo.'
+                  : tab === 'pagados'
+                    ? 'Todavía no hay comprobantes pagados.'
+                    : 'Este proveedor no tiene comprobantes cargados.'
+            }
+          />
+        )
+      }
+      barraSeleccion={
+        seleccion.size > 0
+          ? {
+              resumen: resumenSeleccion,
+              accionLabel: 'Pagar',
+              onAccion: () => setPago({ facturaIds: seleccionFacturas, notaCreditoIds: seleccionNotas }),
+              onQuitar: () => setSeleccion(new Set()),
+            }
+          : null
+      }
+    >
       {pago && (
         <PagarProveedorModal
           supabase={supabase}
@@ -766,16 +611,7 @@ export function ProveedorCuentaCorriente({
           }}
         />
       )}
-    </section>
-  )
-}
-
-function Kpi({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <li className="rounded-lg border border-line p-4">
-      <p className="font-sans text-label-bold uppercase text-ink-soft">{label}</p>
-      <p className="mt-1 font-display text-headline-md text-accent-darker tabular-nums">{children}</p>
-    </li>
+    </CuentaCorrienteLayout>
   )
 }
 

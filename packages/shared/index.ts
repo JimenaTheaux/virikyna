@@ -109,3 +109,10 @@ export * from './src/components/ObservacionesProveedor'
 // Carga inicial de inventario (docs/34, docs/34b): hooks + pantalla compartida por las tres apps.
 export * from './lib/cargaInicial'
 export { CargaInicial } from './src/components/cargaInicial/CargaInicial'
+// Cuenta corriente de clientes (docs/68): esqueleto compartido con proveedores, pantalla, cobro y listado.
+export * from './lib/cuentaCorrienteCliente'
+export * from './src/components/CuentaCorrienteLayout'
+export * from './src/components/ClienteCuentaCorriente'
+export * from './src/components/CobrarClienteModal'
+export * from './src/components/ClientesPage'
+export * from './src/components/ClienteFormModal'

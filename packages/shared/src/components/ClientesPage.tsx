@@ -1,19 +1,31 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState, type ComponentType } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Eye, Pencil, Trash2 } from 'lucide-react'
-import type { ClienteSaldo } from '@virikyna/shared'
-import { supabase } from '../../lib/supabaseClient'
-import { formatCurrency, friendlyError, EstadoBadge, RowActionsMenu, textoParaBuscar, type RowActionsMenuItem } from '@virikyna/shared'
-import { SearchInput } from '../../components/SearchInput'
-import { ConfirmDialog } from '../../components/ConfirmDialog'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { ClienteSaldo } from '../../types/database'
+import { clienteQueryKeys, nombreCliente, useClientesSaldo } from '../../lib/cuentaCorrienteCliente'
+import { formatCurrency } from '../../lib/format'
+import { friendlyError } from '../../lib/supabaseErrors'
+import { textoParaBuscar } from '../../lib/texto'
+import { EstadoBadge } from './EstadoBadge'
+import { RowActionsMenu, type RowActionsMenuItem } from './RowActionsMenu'
+import { ConfirmDialog } from './ConfirmDialog'
 import { ClienteFormModal } from './ClienteFormModal'
-import { ClienteDetalleModal } from './ClienteDetalleModal'
 
-export function ClientesPage() {
-  const [clientes, setClientes] = useState<ClienteSaldo[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+type Props = {
+  supabase: SupabaseClient
+  // Cada app tiene su buscador (mismo aspecto, su propio ícono).
+  SearchInput: ComponentType<{ value: string; onChange: (value: string) => void; placeholder: string }>
+  onAbrirCuenta: (clienteId: string) => void // /clientes/:id
+}
+
+// Listado de clientes con su saldo (docs/04, módulo 8). Igual en Local y Gestión (antes, una copia
+// por app). Abrir un cliente lleva a su cuenta corriente (ClienteCuentaCorriente, docs/68).
+export function ClientesPage({ supabase, SearchInput, onAbrirCuenta }: Props) {
+  const queryClient = useQueryClient()
+  const clientesQ = useClientesSaldo(supabase)
+  const clientes = useMemo(() => clientesQ.data ?? [], [clientesQ.data])
   const [modal, setModal] = useState<'nuevo' | ClienteSaldo | null>(null)
-  const [verDetalle, setVerDetalle] = useState<ClienteSaldo | null>(null)
   const [busqueda, setBusqueda] = useState('')
 
   const [aEliminar, setAEliminar] = useState<ClienteSaldo | null>(null)
@@ -28,26 +40,7 @@ export function ClientesPage() {
     )
   }, [clientes, busqueda])
 
-  async function cargar() {
-    setLoading(true)
-    setError(null)
-    // `clientes_saldo` (nunca `clientes` a secas): el saldo es saldo_inicial + ventas a cta.
-    // cte. − pagos, siempre calculado en la base, nunca a mano en el frontend.
-    const { data, error: dbError } = await supabase
-      .from('clientes_saldo')
-      .select('*')
-      .order('razon_social', { ascending: true, nullsFirst: false })
-    if (dbError) {
-      setError(friendlyError(dbError))
-    } else {
-      setClientes((data ?? []) as ClienteSaldo[])
-    }
-    setLoading(false)
-  }
-
-  useEffect(() => {
-    cargar()
-  }, [])
+  const recargar = () => queryClient.invalidateQueries({ queryKey: clienteQueryKeys.saldos })
 
   function cerrarEliminar() {
     setAEliminar(null)
@@ -70,7 +63,7 @@ export function ClientesPage() {
         return
       }
       cerrarEliminar()
-      cargar()
+      void recargar()
       return
     }
 
@@ -81,7 +74,7 @@ export function ClientesPage() {
       return
     }
     cerrarEliminar()
-    cargar()
+    void recargar()
   }
 
   return (
@@ -103,8 +96,8 @@ export function ClientesPage() {
         </div>
       </div>
 
-      {error && (
-        <p className="mt-stack-md rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{error}</p>
+      {clientesQ.error && (
+        <p className="mt-stack-md rounded bg-error/10 px-4 py-3 font-sans text-body-md text-error">{friendlyError(clientesQ.error as Error)}</p>
       )}
 
       <div className="mt-stack-md flex-1 overflow-auto rounded-xl shadow-sm">
@@ -116,25 +109,27 @@ export function ClientesPage() {
               <th className="whitespace-nowrap px-3 py-2.5">Celular</th>
               <th className="whitespace-nowrap px-3 py-2.5 text-right">Saldo cta. cte.</th>
               <th className="whitespace-nowrap px-3 py-2.5">Estado</th>
-              <th className="whitespace-nowrap px-3 py-2.5"></th>
+              <th className="whitespace-nowrap px-3 py-2.5">
+                <span className="sr-only">Acciones</span>
+              </th>
             </tr>
           </thead>
           <tbody>
-            {loading && (
+            {clientesQ.isPending && (
               <tr>
                 <td className="px-4 py-4 text-ink-soft" colSpan={6}>
                   Cargando...
                 </td>
               </tr>
             )}
-            {!loading && clientes.length > 0 && clientesFiltrados.length === 0 && (
+            {!clientesQ.isPending && clientes.length > 0 && clientesFiltrados.length === 0 && (
               <tr>
                 <td className="px-4 py-4 text-ink-soft" colSpan={6}>
                   Sin resultados para "{busqueda}".
                 </td>
               </tr>
             )}
-            {!loading && clientes.length === 0 && (
+            {!clientesQ.isPending && clientes.length === 0 && (
               <tr>
                 <td className="px-4 py-4 text-ink-soft" colSpan={6}>
                   No hay clientes cargados todavía.
@@ -142,8 +137,9 @@ export function ClientesPage() {
               </tr>
             )}
             {clientesFiltrados.map((cliente) => {
+              const nombre = nombreCliente(cliente)
               const items: RowActionsMenuItem[] = [
-                { label: 'Ver detalle', icon: Eye, onClick: () => setVerDetalle(cliente) },
+                { label: 'Ver cuenta corriente', icon: Eye, onClick: () => onAbrirCuenta(cliente.id) },
                 { label: 'Editar', icon: Pencil, onClick: () => setModal(cliente) },
               ]
               if (cliente.activo) {
@@ -155,23 +151,34 @@ export function ClientesPage() {
                 })
               }
               return (
-                <tr key={cliente.id} className="border-b border-table-divider last:border-0 even:bg-table-row-alt">
-                  <td className="px-3 py-3 text-ink">{cliente.razon_social ?? cliente.nombre_fantasia}</td>
+                <tr
+                  key={cliente.id}
+                  onClick={() => onAbrirCuenta(cliente.id)}
+                  className="cursor-pointer border-b border-table-divider last:border-0 even:bg-table-row-alt hover:bg-accent-light/40"
+                >
+                  <td className="px-3 py-3 text-ink">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onAbrirCuenta(cliente.id)
+                      }}
+                      aria-label={`Ver cuenta corriente de ${nombre}`}
+                      className="rounded text-left hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+                    >
+                      {nombre}
+                    </button>
+                  </td>
                   <td className="px-3 py-3 text-ink-soft">{cliente.cuit ?? '—'}</td>
                   <td className="px-3 py-3 text-ink-soft">{cliente.celular ?? '—'}</td>
-                  <td className={`px-3 py-3 text-right font-semibold ${cliente.saldo_actual > 0 ? 'text-error' : 'text-ink-soft'}`}>
+                  <td className={`px-3 py-3 text-right font-semibold tabular-nums ${cliente.saldo_actual > 0 ? 'text-error' : 'text-ink-soft'}`}>
                     {formatCurrency(cliente.saldo_actual)}
                   </td>
                   <td className="px-3 py-3">
-                    <EstadoBadge variant={cliente.activo ? 'green' : 'neutral'}>
-                      {cliente.activo ? 'Activo' : 'Inactivo'}
-                    </EstadoBadge>
+                    <EstadoBadge variant={cliente.activo ? 'green' : 'neutral'}>{cliente.activo ? 'Activo' : 'Inactivo'}</EstadoBadge>
                   </td>
-                  <td className="px-3 py-3 text-right">
-                    <RowActionsMenu
-                      ariaLabel={`Más acciones para ${cliente.razon_social ?? cliente.nombre_fantasia}`}
-                      items={items}
-                    />
+                  <td className="px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                    <RowActionsMenu ariaLabel={`Más acciones para ${nombre}`} items={items} />
                   </td>
                 </tr>
               )
@@ -182,20 +189,13 @@ export function ClientesPage() {
 
       {modal && (
         <ClienteFormModal
+          supabase={supabase}
           cliente={modal === 'nuevo' ? undefined : modal}
           onClose={() => setModal(null)}
           onSaved={() => {
             setModal(null)
-            cargar()
+            void recargar()
           }}
-        />
-      )}
-
-      {verDetalle && (
-        <ClienteDetalleModal
-          cliente={verDetalle}
-          onClose={() => setVerDetalle(null)}
-          onChanged={cargar}
         />
       )}
 
@@ -204,8 +204,8 @@ export function ClientesPage() {
           title={errorEliminar ? 'No se pudo eliminar' : 'Eliminar cliente'}
           mensaje={
             errorEliminar
-              ? `${errorEliminar} ¿Querés inactivar a "${aEliminar.razon_social ?? aEliminar.nombre_fantasia}" en su lugar?`
-              : `¿Eliminar a "${aEliminar.razon_social ?? aEliminar.nombre_fantasia}"?`
+              ? `${errorEliminar} ¿Querés inactivar a "${nombreCliente(aEliminar)}" en su lugar?`
+              : `¿Eliminar a "${nombreCliente(aEliminar)}"?`
           }
           confirmLabel={errorEliminar ? 'Inactivar' : 'Eliminar'}
           confirmando={procesandoEliminar}

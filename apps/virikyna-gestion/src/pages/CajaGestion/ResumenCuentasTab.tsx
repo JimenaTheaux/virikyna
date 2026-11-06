@@ -136,7 +136,6 @@ export function ResumenCuentasTab() {
       {modalCobro && (
         <PendienteCobroModal
           onClose={() => setModalCobro(false)}
-          onChanged={cargar}
         />
       )}
 

@@ -30,6 +30,12 @@ export function CierreDetalleModal({ cierre, onClose }: { cierre: CierreCajaConU
     cierre.total_devoluciones_transferencia +
     cierre.total_devoluciones_qr +
     cierre.total_devoluciones_tarjeta
+  // docs/68: los cierres anteriores no tienen estas columnas en la respuesta vieja; 0 por las dudas.
+  const totalCobros =
+    Number(cierre.total_cobros_efectivo ?? 0) +
+    Number(cierre.total_cobros_transferencia ?? 0) +
+    Number(cierre.total_cobros_qr ?? 0) +
+    Number(cierre.total_cobros_tarjeta ?? 0)
 
   return (
     <Modal
@@ -64,6 +70,20 @@ export function CierreDetalleModal({ cierre, onClose }: { cierre: CierreCajaConU
             <p className="pt-1 font-sans text-label-md text-ink-soft">
               Negativo = se devolvió plata al cliente. El neto en efectivo ya está incluido en el efectivo esperado.
             </p>
+          </>
+        )}
+
+        {(cierre.cantidad_cobros ?? 0) > 0 && (
+          <>
+            <p className="mt-stack-md font-sans text-label-bold text-ink-soft">
+              Cobros de cuenta corriente ({cierre.cantidad_cobros}) — aparte de las ventas
+            </p>
+            <Fila label="Efectivo" valor={formatCurrency(cierre.total_cobros_efectivo)} />
+            <Fila label="Transferencia (Mercado Pago)" valor={formatCurrency(cierre.total_cobros_transferencia)} />
+            <Fila label="QR" valor={formatCurrency(cierre.total_cobros_qr)} />
+            <Fila label="Tarjeta (débito/crédito)" valor={formatCurrency(cierre.total_cobros_tarjeta)} />
+            <Fila label="Total cobrado" valor={formatCurrency(totalCobros)} destacado />
+            <p className="pt-1 font-sans text-label-md text-ink-soft">El efectivo cobrado ya está incluido en el efectivo esperado.</p>
           </>
         )}
 

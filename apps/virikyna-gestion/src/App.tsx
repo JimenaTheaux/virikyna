@@ -7,7 +7,7 @@ import { DashboardPage } from './pages/DashboardPage'
 import { InventarioPage } from './pages/InventarioPage'
 import { ProveedoresPage } from './pages/ProveedoresPage'
 import { ProveedorDetallePage } from './pages/Proveedores/ProveedorDetallePage'
-import { ClientesPage } from './pages/ClientesPage'
+import { ClienteCuentaCorrientePage, ClientesListadoPage } from './pages/Clientes/ClientesRutas'
 import { FacturacionPage } from './pages/Facturacion/FacturacionPage'
 import { CajaGestionPage } from './pages/CajaGestionPage'
 import { EgresosPage } from './pages/EgresosPage'
@@ -34,7 +34,8 @@ export default function App() {
             <Route path="/inventario" element={<InventarioPage />} />
             <Route path="/proveedores" element={<ProveedoresPage />} />
             <Route path="/proveedores/:id" element={<ProveedorDetallePage />} />
-            <Route path="/clientes" element={<ClientesPage />} />
+            <Route path="/clientes" element={<ClientesListadoPage />} />
+            <Route path="/clientes/:id" element={<ClienteCuentaCorrientePage />} />
             <Route path="/facturacion" element={<FacturacionPage />} />
             <Route path="/caja-gestion" element={<CajaGestionPage />} />
             <Route path="/egresos" element={<EgresosPage />} />

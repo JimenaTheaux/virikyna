@@ -117,6 +117,8 @@ export type Cliente = {
   saldo_inicial: number
   condicion_iva: CondicionIvaCliente
   created_at: string
+  tipo: TipoCliente // docs/68: interno = dueña o empleado (solo un admin lo cambia)
+  perfil_id: string | null // docs/68: usuario del sistema que es este cliente interno
   // docs/69: cuándo y quién cargó (o corrigió) el saldo inicial. Null = nunca se cargó.
   saldo_inicial_fecha: string | null
   saldo_inicial_usuario_id: string | null
@@ -381,6 +383,10 @@ export type PagoCliente = {
   usuario_id: string
   revierte_pago_cliente_id: string | null // Fase 8: si esta fila revierte a otra, apunta a la original
   created_at: string
+  // docs/68
+  origen: OrigenEgreso // turno = caja de Local · general = Gestión
+  fecha: string // DATE
+  nota: string | null
 }
 
 export type CierreCaja = {
@@ -410,6 +416,13 @@ export type CierreCaja = {
   total_devoluciones_transferencia: number
   total_devoluciones_qr: number
   total_devoluciones_tarjeta: number
+  // docs/68: cobros de cuenta corriente hechos en la caja de Local ese día (origen 'turno'). El
+  // efectivo ya está sumado en efectivo_esperado; lo demás va a su cuenta al validar el Z.
+  cantidad_cobros: number
+  total_cobros_efectivo: number
+  total_cobros_transferencia: number
+  total_cobros_qr: number
+  total_cobros_tarjeta: number
   created_at: string
 }
 
@@ -516,6 +529,72 @@ export type ProveedorSaldo = Proveedor & SaldoInicialResumen & {
 
 export type ClienteSaldo = Cliente & SaldoInicialResumen & {
   saldo_actual: number
+  // docs/68 (vista clientes_saldo)
+  deuda_comprobantes: number // saldo de las ventas cobrables (no internas)
+  consumo_interno_pendiente: number // internas pendientes (no se cobran, se finalizan)
+  a_cuenta: number // cobros sin comprobante
+  saldo_cobrable: number // saldo_actual − consumo interno pendiente: tope de un cobro
+  comprobantes_abiertos: number
+}
+
+// ─── docs/68: cuentas corrientes de clientes ─────────────────
+export type TipoCliente = 'externo' | 'interno'
+export type EstadoVentaInterna = 'pendiente' | 'finalizado'
+export type EstadoCuentaVenta = 'a_revisar' | 'finalizado' | 'pendiente' | 'parcial' | 'pagada' | 'anulada'
+// Medios con los que se cobra una cuenta corriente: los de venta, sin cuenta corriente ni combinado.
+export type FormaPagoCobro = Exclude<FormaPagoVenta, 'cuenta_corriente' | 'combinado'>
+
+// Vista ventas_cuenta_corriente_saldo: una fila por venta a cta. cte.
+export type VentaCuentaCorrienteSaldo = {
+  id: string
+  numero: number
+  cliente_id: string
+  created_at: string
+  usuario_id: string
+  estado: EstadoComprobante
+  estado_interno: EstadoVentaInterna | null
+  nota: string | null
+  subtotal: number
+  descuento_porcentaje: number
+  recargo_porcentaje: number
+  total: number
+  total_original: number | null
+  descuento_global_original: number | null
+  finalizada_at: string | null
+  finalizada_por: string | null
+  editada_at: string | null
+  editada_por: string | null
+  reabierta_at: string | null
+  reabierta_por: string | null
+  reabierta_motivo: string | null
+  version: number
+  total_aplicado: number // cobros aplicados vigentes
+  total_devuelto: number // devoluciones imputadas a la cuenta (D12)
+  saldo_pendiente: number
+  credito: number // aplicado + devuelto − total, si sobra
+  estado_cuenta: EstadoCuentaVenta
+}
+
+export type PagoClienteMedio = {
+  id: string
+  pago_cliente_id: string
+  forma_pago: FormaPagoCobro
+  monto: number // negativo solo en el espejo de una reversión
+  orden: number
+  revierte_medio_id: string | null
+  created_at: string
+}
+
+export type PagoClienteAplicacion = {
+  id: string
+  pago_cliente_id: string
+  venta_id: string
+  monto: number
+  operacion_id: string
+  usuario_id: string
+  revertida_at: string | null
+  revertida_por: string | null
+  created_at: string
 }
 
 export type CuentaSaldo = Cuenta & {

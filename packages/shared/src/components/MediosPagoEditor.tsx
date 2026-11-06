@@ -17,15 +17,15 @@ import { Field, inputClass, selectClass } from './FormField'
 // Estado de los medios de un pago (docs/65). Arranca con un efectivo por el total; mientras haya un
 // solo medio y nadie haya tocado su monto, sigue al total del pago. Al editar el monto o agregar un
 // medio, deja de seguirlo.
-export function useMediosPago(totalTexto: string) {
-  const [medios, setMedios] = useState<MedioPagoForm[]>(() => [nuevoMedio('efectivo', totalTexto)])
+export function useMediosPago<M extends string = FormaPagoEgreso>(totalTexto: string, medioInicial: M = 'efectivo' as M) {
+  const [medios, setMedios] = useState<MedioPagoForm<M>[]>(() => [nuevoMedio<M>(medioInicial, totalTexto)])
   const [sigueTotal, setSigueTotal] = useState(true)
 
   useEffect(() => {
     if (sigueTotal) setMedios((ms) => (ms.length === 1 ? [{ ...ms[0], monto: totalTexto }] : ms))
   }, [totalTexto, sigueTotal])
 
-  function cambiar(siguientes: MedioPagoForm[]) {
+  function cambiar(siguientes: MedioPagoForm<M>[]) {
     if (siguientes.length !== 1 || siguientes[0].monto !== medios[0]?.monto) setSigueTotal(false)
     setMedios(siguientes)
   }
@@ -33,14 +33,23 @@ export function useMediosPago(totalTexto: string) {
   return { medios, cambiar }
 }
 
-type Props = {
-  medios: MedioPagoForm[]
-  onChange: (medios: MedioPagoForm[]) => void
+export type OpcionMedio<M extends string> = { value: M; label: string }
+
+const OPCIONES_EGRESO: OpcionMedio<FormaPagoEgreso>[] = FORMAS_PAGO_EGRESO.map((f) => ({ value: f, label: FORMA_PAGO_EGRESO_LABEL[f] }))
+
+type Props<M extends string> = {
+  medios: MedioPagoForm<M>[]
+  onChange: (medios: MedioPagoForm<M>[]) => void
   total: number // total del pago (NaN si el campo está vacío)
   fechaPago: string // fecha del pago: base de "Generar cheques"
   // false cuando el modal muestra ResumenMedios en su pie fijo (con muchos medios la lista scrollea
   // y el resumen tiene que verse siempre, al lado de Guardar).
   conResumen?: boolean
+  // docs/68: el cobro a clientes usa otros medios y no lleva cheques. Default: pago a proveedor.
+  opciones?: OpcionMedio<M>[]
+  conCheques?: boolean
+  titulo?: string
+  medioNuevo?: M // el que propone "+ Agregar medio"
 }
 
 const ESTADO_DIFERENCIA = {
@@ -50,7 +59,7 @@ const ESTADO_DIFERENCIA = {
 } as const
 
 // "Suman $ X · Falta $ Y" (o "Cierra con el total").
-export function ResumenMedios({ medios, total, className = '' }: { medios: MedioPagoForm[]; total: number; className?: string }) {
+export function ResumenMedios({ medios, total, className = '' }: { medios: MedioPagoForm<string>[]; total: number; className?: string }) {
   const dif = Number.isFinite(total) ? diferenciaMedios(total, medios) : null
   return (
     <div className={`flex flex-wrap items-center gap-3 font-sans text-body-md ${className}`} aria-live="polite">
@@ -70,22 +79,33 @@ export function ResumenMedios({ medios, total, className = '' }: { medios: Medio
 // Lista de medios de un pago a proveedor: cualquier combinación, tipos repetidos, sin límite (con
 // 6–10 renglones la lista scrollea sola). Cheques y eCheqs piden número, banco y fecha de pago.
 // "Generar cheques" arma varios de una vez (cantidad, monto o total a repartir, cada X días).
-export function MediosPagoEditor({ medios, onChange, total, fechaPago, conResumen = true }: Props) {
+export function MediosPagoEditor<M extends string = FormaPagoEgreso>({
+  medios,
+  onChange,
+  total,
+  fechaPago,
+  conResumen = true,
+  opciones = OPCIONES_EGRESO as unknown as OpcionMedio<M>[],
+  conCheques = true,
+  titulo = 'Medios de pago',
+  medioNuevo = 'transferencia' as M,
+}: Props<M>) {
   const idBase = useId()
   const [generando, setGenerando] = useState(false)
   const dif = Number.isFinite(total) ? diferenciaMedios(total, medios) : null
 
-  function actualizar(key: string, cambios: Partial<MedioPagoForm>) {
+  function actualizar(key: string, cambios: Partial<MedioPagoForm<M>>) {
     onChange(medios.map((m) => (m.key === key ? { ...m, ...cambios } : m)))
   }
 
   function agregar() {
     // El nuevo medio propone lo que falta, así el caso común (dos medios) cierra solo.
     const falta = dif?.estado === 'falta' ? dif.monto.toFixed(2) : ''
-    onChange([...medios, nuevoMedio('transferencia', falta)])
+    onChange([...medios, nuevoMedio<M>(medioNuevo, falta)])
   }
 
-  function agregarCheques(filas: MedioPagoForm[]) {
+  function agregarCheques(filasCheques: MedioPagoForm[]) {
+    const filas = filasCheques as unknown as MedioPagoForm<M>[] // solo con conCheques (medios de egreso)
     // Un único renglón vacío (recién abierto) se reemplaza en vez de quedar colgado.
     const vacios = medios.filter((m) => !Number.isFinite(montoDe(m)))
     onChange([...(vacios.length === medios.length ? [] : medios.filter((m) => Number.isFinite(montoDe(m)))), ...filas])
@@ -96,7 +116,7 @@ export function MediosPagoEditor({ medios, onChange, total, fechaPago, conResume
     <section aria-labelledby={`${idBase}-titulo`} className="flex flex-col gap-stack-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 id={`${idBase}-titulo`} className="font-sans text-label-bold text-ink">
-          Medios de pago <span className="font-normal text-ink-soft">({medios.length})</span>
+          {titulo} <span className="font-normal text-ink-soft">({medios.length})</span>
         </h3>
         <div className="flex gap-2">
           <button
@@ -106,18 +126,20 @@ export function MediosPagoEditor({ medios, onChange, total, fechaPago, conResume
           >
             + Agregar medio
           </button>
-          <button
-            type="button"
-            aria-expanded={generando}
-            onClick={() => setGenerando((g) => !g)}
-            className="rounded border border-line bg-surface px-3 py-2 font-sans text-label-bold text-accent-dark transition hover:border-accent hover:bg-accent-light"
-          >
-            + Generar cheques
-          </button>
+          {conCheques && (
+            <button
+              type="button"
+              aria-expanded={generando}
+              onClick={() => setGenerando((g) => !g)}
+              className="rounded border border-line bg-surface px-3 py-2 font-sans text-label-bold text-accent-dark transition hover:border-accent hover:bg-accent-light"
+            >
+              + Generar cheques
+            </button>
+          )}
         </div>
       </div>
 
-      {generando && (
+      {conCheques && generando && (
         <GenerarChequesPanel
           fechaPago={fechaPago}
           falta={dif?.estado === 'falta' ? dif.monto : 0}
@@ -140,12 +162,12 @@ export function MediosPagoEditor({ medios, onChange, total, fechaPago, conResume
                   <select
                     aria-label={`Medio ${n}`}
                     value={m.medio}
-                    onChange={(e) => actualizar(m.key, { medio: e.target.value as FormaPagoEgreso })}
+                    onChange={(e) => actualizar(m.key, { medio: e.target.value as M })}
                     className={selectClass}
                   >
-                    {FORMAS_PAGO_EGRESO.map((f) => (
-                      <option key={f} value={f}>
-                        {FORMA_PAGO_EGRESO_LABEL[f]}
+                    {opciones.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
                       </option>
                     ))}
                   </select>
@@ -166,13 +188,13 @@ export function MediosPagoEditor({ medios, onChange, total, fechaPago, conResume
                   onClick={() => onChange(medios.filter((x) => x.key !== m.key))}
                   disabled={medios.length === 1}
                   aria-label={`Quitar medio ${n}`}
-                  title={medios.length === 1 ? 'Un pago tiene al menos un medio' : 'Quitar'}
+                  title={medios.length === 1 ? (conCheques ? 'Un pago tiene al menos un medio' : 'Un cobro tiene al menos un medio') : 'Quitar'}
                   className="mb-0.5 flex h-10 w-10 items-center justify-center rounded text-ink-soft transition hover:bg-error/10 hover:text-error disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ink-soft"
                 >
                   <span aria-hidden="true">✕</span>
                 </button>
               </div>
-              {cheque && (
+              {conCheques && cheque && (
                 <div className="mt-2 grid grid-cols-3 gap-2 pl-8 pr-12">
                   <Field label="N° de cheque" compact>
                     <input

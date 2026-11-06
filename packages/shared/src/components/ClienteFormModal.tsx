@@ -1,28 +1,22 @@
 import { useState, type FormEvent } from 'react'
-import type { Cliente, CondicionIvaCliente } from '@virikyna/shared'
-import { supabase } from '../../lib/supabaseClient'
-import { friendlyError } from '@virikyna/shared'
-import { Modal } from '../../components/Modal'
-import { ConfirmDialog } from '../../components/ConfirmDialog'
-import { Field, ErrorText, inputClass } from '../../components/FormField'
-
-// Necesaria para Factura C (RG 5616) — sin este dato, ARCA rechaza el comprobante para
-// cualquier cliente que no sea Consumidor Final. Ver supabase/functions/arca-emitir-factura.
-const CONDICION_IVA_LABEL: Record<CondicionIvaCliente, string> = {
-  consumidor_final: 'Consumidor Final',
-  responsable_inscripto: 'Responsable Inscripto',
-  monotributista: 'Monotributista',
-  exento: 'Exento',
-  no_categorizado: 'No categorizado',
-}
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Cliente, CondicionIvaCliente } from '../../types/database'
+import { friendlyError } from '../../lib/supabaseErrors'
+import { CONDICION_IVA_LABEL } from '../../lib/cuentaCorrienteCliente'
+import { Modal } from './Modal'
+import { ConfirmDialog } from './ConfirmDialog'
+import { Field, ErrorText, inputClass } from './FormField'
 
 type Props = {
+  supabase: SupabaseClient
   cliente?: Cliente
   onClose: () => void
   onSaved: () => void
 }
 
-export function ClienteFormModal({ cliente, onClose, onSaved }: Props) {
+// Alta y edición de un cliente (docs/04, módulo 8). Igual en Local y Gestión: escribe la tabla
+// clientes directo (RLS clientes_todos); tipo interno/externo lo cambia solo un admin (docs/68).
+export function ClienteFormModal({ supabase, cliente, onClose, onSaved }: Props) {
   const [razonSocial, setRazonSocial] = useState(cliente?.razon_social ?? '')
   const [nombreFantasia, setNombreFantasia] = useState(cliente?.nombre_fantasia ?? '')
   const [cuit, setCuit] = useState(cliente?.cuit ?? '')
@@ -52,6 +46,7 @@ export function ClienteFormModal({ cliente, onClose, onSaved }: Props) {
     const razonSocialLimpia = razonSocial.trim()
     const nombreFantasiaLimpio = nombreFantasia.trim()
 
+    // Mismo chequeo que chk_cliente_tiene_nombre en el schema: al menos un nombre identificatorio.
     if (!razonSocialLimpia && !nombreFantasiaLimpio) {
       setError('Ingresá al menos una razón social o un nombre de fantasía.')
       return

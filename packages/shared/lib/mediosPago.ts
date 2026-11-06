@@ -2,23 +2,29 @@
 // manda a registrar_pago_proveedor_v3. Las cuentas van en centavos para que 3 cheques de un total
 // repartido sumen exacto. El RPC vuelve a validar todo; esto evita el viaje y arma la vista.
 // Sin imports de valores: lo corre node --test directo (tests/mediosPago.test.ts).
-import type { FormaPagoEgreso } from '../types/database'
+import type { FormaPagoCobro, FormaPagoEgreso } from '../types/database'
 
-export type MedioPagoForm = {
+// M = el tipo de medio: los de un pago a proveedor (default) o los de un cobro a cliente (docs/68,
+// FormaPagoCobro, sin cheques). La aritmética es la misma para los dos.
+export type MedioPagoForm<M extends string = FormaPagoEgreso> = {
   key: string // estable para React (no se manda)
-  medio: FormaPagoEgreso
+  medio: M
   monto: string // lo que está escrito en el campo
   numero: string // cheque / eCheq
   banco: string
   fechaPago: string // 'AAAA-MM-DD', cuándo se cobra el cheque
 }
 
-export function esChequeMedio(medio: FormaPagoEgreso): boolean {
+export function esChequeMedio(medio: string): boolean {
   return medio === 'cheque' || medio === 'echeq'
 }
 
 let secuencia = 0
-export function nuevoMedio(medio: FormaPagoEgreso = 'efectivo', monto = '', extra: Partial<MedioPagoForm> = {}): MedioPagoForm {
+export function nuevoMedio<M extends string = FormaPagoEgreso>(
+  medio: M = 'efectivo' as M,
+  monto = '',
+  extra: Partial<MedioPagoForm<M>> = {},
+): MedioPagoForm<M> {
   secuencia += 1
   return { key: `medio-${secuencia}`, medio, monto, numero: '', banco: '', fechaPago: '', ...extra }
 }
@@ -43,7 +49,7 @@ export function diferenciaMedios(total: number, medios: Pick<MedioPagoForm, 'mon
 
 // null si se puede guardar. `fechaPago` del pago: un cheque no puede cobrarse antes de salir.
 export function validarMedios(
-  medios: MedioPagoForm[],
+  medios: MedioPagoForm<string>[],
   total: number,
   { permiteSinMedios = false, fechaPagoProveedor = '' }: { permiteSinMedios?: boolean; fechaPagoProveedor?: string } = {},
 ): string | null {
@@ -114,6 +120,11 @@ export function generarCheques(input: GenerarChequesInput): MedioPagoForm[] {
 
 // p_medios de registrar_pago_proveedor_v3. La fecha de salida de los cheques es la del pago (la
 // pone el RPC).
+// docs/68: p_medios de registrar_cobro_cliente ({forma_pago, monto}; sin cheques).
+export function payloadMediosCobro(medios: MedioPagoForm<FormaPagoCobro>[]) {
+  return medios.map((m) => ({ forma_pago: m.medio, monto: Math.round(montoDe(m) * 100) / 100 }))
+}
+
 export function payloadMedios(medios: MedioPagoForm[]) {
   return medios.map((m) => {
     const cheque = esChequeMedio(m.medio)

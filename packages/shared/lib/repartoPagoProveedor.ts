@@ -129,3 +129,40 @@ export function simularRepartoPago(input: {
     error,
   }
 }
+
+// ── Cobros a clientes (docs/68) ──────────────────────────────────────────────────────────────
+// Mismo algoritmo, sin notas de crédito: espejo de registrar_cobro_cliente (elegidas o las más
+// viejas por created_at, id; lo que sobra queda a cuenta). Una venta interna o anulada nunca se
+// cobra. La fecha de orden es created_at completo (en ventas no hay fecha de comprobante aparte).
+export type VentaReparto = {
+  id: string
+  created_at: string
+  estado: string // 'anulada' no se cobra
+  estado_interno: string | null // interna: se finaliza, no se cobra
+  saldo_pendiente: number | string
+}
+
+export function esCobrable(v: VentaReparto): boolean {
+  return v.estado !== 'anulada' && v.estado_interno === null && Number(v.saldo_pendiente) > 0
+}
+
+export function aComprobanteReparto(v: VentaReparto): ComprobanteReparto {
+  return {
+    id: v.id,
+    tipo_comprobante: 'factura',
+    fecha_comprobante: v.created_at,
+    created_at: v.created_at,
+    anulada: !esCobrable(v),
+    saldo_pendiente: v.saldo_pendiente,
+    credito_disponible: 0,
+  }
+}
+
+export function simularRepartoCobro(input: { ventas: VentaReparto[]; ventaIds: string[]; monto: number }): ResultadoReparto {
+  return simularRepartoPago({
+    comprobantes: input.ventas.map(aComprobanteReparto),
+    facturaIds: input.ventaIds,
+    notaCreditoIds: [],
+    monto: input.monto,
+  })
+}

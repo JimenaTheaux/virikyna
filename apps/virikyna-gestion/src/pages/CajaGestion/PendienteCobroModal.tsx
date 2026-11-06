@@ -1,24 +1,23 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Eye } from 'lucide-react'
 import type { ClienteSaldo } from '@virikyna/shared'
 import { formatCurrency, friendlyError } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { Modal } from '../../components/Modal'
-import { ClienteDetalleModal } from '../Clientes/ClienteDetalleModal'
 
 type Props = {
   onClose: () => void
-  onChanged: () => void // avisa a Resumen Cuentas para refrescar el total de la card
 }
 
 // Listado de clientes con saldo de cuenta corriente pendiente, abierto desde la card "Pendiente
-// de cobro" de Resumen Cuentas. El detalle y el cobro en sí reusan el mismo ClienteDetalleModal
-// (con su botón "Cobrar") que ya usa la página de Clientes — nada nuevo ahí.
-export function PendienteCobroModal({ onClose, onChanged }: Props) {
+// de cobro" de Resumen Cuentas. El detalle y el cobro están en la cuenta corriente del cliente
+// (/clientes/:id, docs/68): el ojo cierra este modal y lleva ahí.
+export function PendienteCobroModal({ onClose }: Props) {
   const [clientes, setClientes] = useState<ClienteSaldo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [detalle, setDetalle] = useState<ClienteSaldo | null>(null)
+  const navigate = useNavigate()
 
   async function cargar() {
     setLoading(true)
@@ -37,7 +36,6 @@ export function PendienteCobroModal({ onClose, onChanged }: Props) {
 
     const clientesData = (data ?? []) as ClienteSaldo[]
     setClientes(clientesData)
-    setDetalle((actual) => (actual ? (clientesData.find((c) => c.id === actual.id) ?? null) : actual))
     setLoading(false)
   }
 
@@ -83,9 +81,12 @@ export function PendienteCobroModal({ onClose, onChanged }: Props) {
                   <td className="px-3 py-2 text-right">
                     <button
                       type="button"
-                      onClick={() => setDetalle(c)}
-                      title="Ver detalle"
-                      aria-label="Ver detalle"
+                      onClick={() => {
+                        onClose()
+                        navigate(`/clientes/${c.id}`)
+                      }}
+                      title="Ver cuenta corriente"
+                      aria-label={`Ver cuenta corriente de ${c.razon_social ?? c.nombre_fantasia}`}
                       className="rounded px-3 py-1.5 text-accent-dark hover:bg-accent-light"
                     >
                       <Eye size={18} strokeWidth={1.5} />
@@ -98,16 +99,6 @@ export function PendienteCobroModal({ onClose, onChanged }: Props) {
         </div>
       </div>
 
-      {detalle && (
-        <ClienteDetalleModal
-          cliente={detalle}
-          onClose={() => setDetalle(null)}
-          onChanged={() => {
-            cargar()
-            onChanged()
-          }}
-        />
-      )}
     </Modal>
   )
 }

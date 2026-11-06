@@ -9,7 +9,7 @@ import { InventarioPage } from './pages/Inventario/InventarioPage'
 import { ProveedoresPage } from './pages/Proveedores/ProveedoresPage'
 import { ProveedorDetallePage } from './pages/Proveedores/ProveedorDetallePage'
 import { DashboardPage } from './pages/DashboardPage'
-import { ClientesPage } from './pages/Clientes/ClientesPage'
+import { ClienteCuentaCorrientePage, ClientesListadoPage } from './pages/Clientes/ClientesRutas'
 import { ConfiguracionPage } from './pages/ConfiguracionPage'
 import { CierreCajaPage } from './pages/CierreCaja/CierreCajaPage'
 import { NotasPage } from './pages/Notas/NotasPage'
@@ -29,7 +29,8 @@ export default function App() {
           <Route path="/proveedores" element={<ProveedoresPage />} />
           <Route path="/proveedores/:id" element={<ProveedorDetallePage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/clientes" element={<ClientesPage />} />
+          <Route path="/clientes" element={<ClientesListadoPage />} />
+          <Route path="/clientes/:id" element={<ClienteCuentaCorrientePage />} />
           <Route path="/cierre-caja" element={<CierreCajaPage />} />
           <Route path="/notas" element={<NotasPage />} />
           <Route path="/carga-inicial" element={<CargaInicialPage />} />

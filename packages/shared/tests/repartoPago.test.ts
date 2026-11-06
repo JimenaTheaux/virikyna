@@ -143,3 +143,49 @@ test('centavos: sin error de punto flotante', () => {
   assert.equal(r.error, null)
   assert.equal(r.saldoFinal.get('b'), 0)
 })
+
+// ── docs/68: cobros a clientes (mismos casos que la PARTE C de docs/68, C7–C9) ──
+import { simularRepartoCobro, type VentaReparto } from '../lib/repartoPagoProveedor.ts'
+
+function venta(id: string, creada: string, saldo: number, extra: Partial<VentaReparto> = {}): VentaReparto {
+  return { id, created_at: creada, estado: 'sin_facturar', estado_interno: null, saldo_pendiente: saldo, ...extra }
+}
+
+test('cobro: sin selección va a las más viejas y lo que sobra queda a cuenta', () => {
+  const r = simularRepartoCobro({
+    ventas: [venta('b', '2026-11-02T10:00:00Z', 300), venta('a', '2026-11-01T10:00:00Z', 200)],
+    ventaIds: [],
+    monto: 600,
+  })
+  assert.deepEqual(r.aplicaciones.map((a) => [a.comprobanteId, a.monto]), [['a', 200], ['b', 300]])
+  assert.equal(r.aCuenta, 100)
+})
+
+test('cobro: con selección no toca otras ventas; el sobrante queda a cuenta', () => {
+  const r = simularRepartoCobro({
+    ventas: [venta('a', '2026-11-01T10:00:00Z', 200), venta('b', '2026-11-02T10:00:00Z', 300)],
+    ventaIds: ['b'],
+    monto: 310,
+  })
+  assert.deepEqual(r.aplicaciones.map((a) => [a.comprobanteId, a.monto]), [['b', 300]])
+  assert.equal(r.aCuenta, 10)
+  assert.equal(r.restanteTrasNotas, 300)
+})
+
+test('cobro: parcial deja saldo en la venta', () => {
+  const r = simularRepartoCobro({ ventas: [venta('a', '2026-11-01T10:00:00Z', 1000)], ventaIds: ['a'], monto: 150.5 })
+  assert.equal(r.saldoFinal.get('a'), 849.5)
+})
+
+test('cobro: internas y anuladas nunca se cobran', () => {
+  const r = simularRepartoCobro({
+    ventas: [
+      venta('i', '2026-11-01T10:00:00Z', 500, { estado_interno: 'pendiente' }),
+      venta('x', '2026-11-01T11:00:00Z', 500, { estado: 'anulada' }),
+      venta('a', '2026-11-02T10:00:00Z', 100),
+    ],
+    ventaIds: [],
+    monto: 100,
+  })
+  assert.deepEqual(r.aplicaciones.map((a) => a.comprobanteId), ['a'])
+})
