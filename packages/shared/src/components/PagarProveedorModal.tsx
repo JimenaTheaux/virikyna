@@ -21,6 +21,7 @@ import { useEnterComoTab } from '../../lib/useEnterComoTab'
 import { Modal } from './Modal'
 import { ConfirmDialog } from './ConfirmDialog'
 import { ConfirmarPagoDialog, mediosParaConfirmar, type FilaRepartoConfirmacion } from './ConfirmarPagoDialog'
+import { MontoInput } from './MontoInput'
 import { Field, ErrorText, inputClass, selectClass } from './FormField'
 import { EstadoBadge } from './EstadoBadge'
 
@@ -284,13 +285,10 @@ export function PagarProveedorModal({
             label={variosMedios ? 'Total del pago' : 'Monto'}
             hint={conSeleccion ? `A pagar: ${formatCurrency(aPagar)} — si pagás más, lo que sobre queda a cuenta` : undefined}
           >
-            <input
-              type="number"
-              step="0.01"
-              min={0}
+            <MontoInput
               data-autofocus
               value={monto}
-              onChange={(e) => setMonto(e.target.value)}
+              onChange={setMonto}
               aria-describedby={!conSeleccion ? avisoId : undefined}
               className={`${inputClass} text-right tabular-nums`}
             />

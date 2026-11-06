@@ -18,6 +18,7 @@ import {
 import { normalizarCodigoBarras } from '../../../lib/productoBusqueda'
 import { formatCurrency } from '../../../lib/format'
 import { ScanButton } from '../ScanButton'
+import { MontoInput } from '../MontoInput'
 import { RowActionsMenu, type RowActionsMenuItem } from '../RowActionsMenu'
 import { BotonesDialogo, claseCampoTexto, Dialogo, ResultadoFinalizar, textoAccion, useCierreConCambios } from './comunes'
 
@@ -592,6 +593,9 @@ function Entrada({
     'aria-describedby': errores[campo as keyof ErroresFila] ? `err-carga-${campo}` : undefined,
     className: claseCampoTexto(inputClass, campo),
   })
+  // Precio con formato argentino (MontoInput): mismas props, onChange con el valor normalizado.
+  const { onChange: _onChangePrecio, ...propsPrecioBase } = props('precio', precioRef)
+  const propsPrecio = { ...propsPrecioBase, onChange: (v: string) => set('precio', v) }
 
   const inputCodigo = (
     <div className="flex items-center gap-1.5">
@@ -690,7 +694,7 @@ function Entrada({
         <div className="grid grid-cols-[1fr_1fr_auto] items-end gap-2">
           <Etiqueta htmlFor="carga-precio" texto="Precio">
             <div className="flex items-center gap-1">
-              <input id="carga-precio" type="number" inputMode="decimal" min="0" step="0.01" readOnly={bloqueaPrecio} {...props('precio', precioRef)} />
+              <MontoInput id="carga-precio" readOnly={bloqueaPrecio} {...propsPrecio} />
               {candado}
             </div>
           </Etiqueta>
@@ -748,7 +752,7 @@ function Entrada({
             </td>
             <td className="px-1.5">
               <div className="flex items-center gap-1">
-                <input id="carga-precio" type="number" min="0" step="0.01" readOnly={bloqueaPrecio} {...props('precio', precioRef)} />
+                <MontoInput id="carga-precio" readOnly={bloqueaPrecio} {...propsPrecio} />
                 {candado}
               </div>
             </td>

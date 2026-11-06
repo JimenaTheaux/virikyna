@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { CATEGORIA_EGRESO_LABEL, CATEGORIAS_EGRESO_GENERAL, FORMA_PAGO_EGRESO_LABEL } from '../../lib/caja'
 import { Field, ErrorText, inputClass, selectClass } from '../../components/FormField'
 import { useEnterComoTab } from '@virikyna/shared'
+import { MontoInput } from '@virikyna/shared'
 
 const FORMAS_PAGO_EGRESO = Object.keys(FORMA_PAGO_EGRESO_LABEL) as FormaPagoEgreso[]
 
@@ -92,7 +93,7 @@ export function RegistrarEgresoTab() {
           </Field>
         </div>
         <Field label="Monto">
-          <input type="number" step="0.01" value={monto} onChange={(e) => setMonto(e.target.value)} className={inputClass} />
+          <MontoInput value={monto} onChange={setMonto} />
         </Field>
         <Field label="Forma de pago">
           <select value={formaPago} onChange={(e) => setFormaPago(e.target.value as FormaPagoEgreso)} className={selectClass}>

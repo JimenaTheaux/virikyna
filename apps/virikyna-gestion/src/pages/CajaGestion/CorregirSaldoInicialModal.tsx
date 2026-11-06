@@ -10,6 +10,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field, ErrorText, inputClass } from '../../components/FormField'
+import { MontoInput } from '@virikyna/shared'
 
 export type CuentaACorregir = {
   tipo: TipoCuentaSaldoInicial
@@ -131,24 +132,23 @@ export function CorregirSaldoInicialModal({ cuenta, onClose, onCorregido }: Prop
         </p>
 
         <Field label="Monto nuevo">
-          <input
-            type="number"
-            step="0.01"
+          <MontoInput
+            negativo
             data-autofocus
             value={monto}
-            onChange={(e) => setMonto(e.target.value)}
+            onChange={setMonto}
             aria-describedby={ayudaMontoId}
             className={`${inputClass} text-right tabular-nums`}
           />
         </Field>
-        {/* Formato argentino de lo que se va a guardar: "4.500" en este campo es 4,50 (punto decimal). */}
+        {/* Lo que se va a guardar, en formato argentino (MontoInput lee "4.500" como 4500). */}
         <p id={ayudaMontoId} aria-live="polite" className="-mt-2 font-sans text-body-md text-ink-soft">
           {montoValido ? (
             <>
               Se va a registrar: <strong className="tabular-nums text-ink">{formatCurrency(montoNum)}</strong>
             </>
           ) : (
-            'Usá punto o coma para los centavos, sin separador de miles.'
+            'Podés escribir 4.500,40 o 4500.40.'
           )}
         </p>
 

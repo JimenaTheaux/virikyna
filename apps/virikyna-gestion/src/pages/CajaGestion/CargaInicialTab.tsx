@@ -14,6 +14,7 @@ import { usePerfil } from '../../auth/AuthContext'
 import { Modal } from '../../components/Modal'
 import { inputClass } from '../../components/FormField'
 import { CorregirSaldoInicialModal, type CuentaACorregir } from './CorregirSaldoInicialModal'
+import { MontoInput } from '@virikyna/shared'
 
 // Carga inicial de saldos (docs/69). El saldo inicial es ÚNICO por cuenta: cada fila tiene su propio
 // estado. Las que ya lo tienen se ven en solo lectura (monto, fecha y quién) y se corrigen con
@@ -381,11 +382,10 @@ function SeccionSaldos({
                         )}
                       </>
                     ) : (
-                      <input
-                        type="number"
-                        step="0.01"
+                      <MontoInput
+                        negativo
                         value={montos[f.clave] ?? ''}
-                        onChange={(e) => onMonto(f.clave, e.target.value)}
+                        onChange={(v) => onMonto(f.clave, v)}
                         aria-label={`Saldo inicial de ${f.nombre}`}
                         aria-describedby={ayudaId}
                         placeholder="$ 0,00"

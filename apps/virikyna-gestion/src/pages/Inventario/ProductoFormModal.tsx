@@ -27,6 +27,7 @@ import { Field, ErrorText, inputClass } from '../../components/FormField'
 import { AjustarStockModal } from './AjustarStockModal'
 import { HistorialPrecioTab } from './HistorialPrecioTab'
 import type { ProductoConRelaciones } from './types'
+import { MontoInput } from '@virikyna/shared'
 
 // Input compacto para que el formulario completo entre en una sola pantalla sin scroll interno.
 const inputCompacto = inputClass.replace('px-4 py-2.5', 'px-3 py-1.5').replace('text-body-md', 'text-[15px]')
@@ -418,12 +419,9 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, codigo
             <p className="mb-1 font-sans text-label-bold text-ink">Precio</p>
             <div className="grid grid-cols-3 gap-2">
               <Field compact label="Costo">
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                <MontoInput
                   value={costo}
-                  onChange={(e) => setCosto(e.target.value)}
+                  onChange={setCosto}
                   placeholder={conPrecioManual ? 'Sin costo' : '$ 0,00'}
                   className={inputCompacto}
                 />
@@ -464,14 +462,7 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, codigo
             {sigueManual && (
               <div className="mt-2 grid grid-cols-[1fr_2fr] items-end gap-2">
                 <Field compact label="Precio de venta (manual)">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={precioManual}
-                    onChange={(e) => setPrecioManual(e.target.value)}
-                    className={inputCompacto}
-                  />
+                  <MontoInput value={precioManual} onChange={setPrecioManual} className={inputCompacto} />
                 </Field>
                 <p className="pb-1.5 font-sans text-label-md text-ink-soft">
                   Se calcula automáticamente con la primera factura de compra.

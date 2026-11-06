@@ -6,6 +6,7 @@ import { MAYUSCULAS } from '../../lib/productoTexto'
 import { totalItemFacturaCompra, type ItemFacturaCompraUI } from '../../lib/facturasCompra'
 import type { CambioPrecioFactura } from '../../lib/precios'
 import { selectClass } from './FormField'
+import { MontoInput } from './MontoInput'
 import { AvisoCambioPrecioFactura } from './AvisoCambioPrecioFactura'
 import { AvisoProductoInactivoFactura } from './AvisosCopiaFactura'
 import {
@@ -159,13 +160,10 @@ function FilaArticulo({
           />
         </td>
         <td className="px-2 py-1.5 align-top">
-          <input
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="0.01"
+          <MontoInput
             value={item.precioUnitarioSinIva}
-            onChange={(e) => onChange({ precioUnitarioSinIva: e.target.value })}
+            onChange={(v) => onChange({ precioUnitarioSinIva: v })}
+            aria-label={`Precio unitario sin IVA del ítem ${index + 1}`}
             className={cellInputRightClass}
           />
         </td>
@@ -279,13 +277,9 @@ function FilaServicio({
         />
       </td>
       <td className="px-2 py-1.5 align-top">
-        <input
-          type="number"
-          inputMode="decimal"
-          min="0"
-          step="0.01"
+        <MontoInput
           value={item.precioUnitarioSinIva}
-          onChange={(e) => onChange({ precioUnitarioSinIva: e.target.value })}
+          onChange={(v) => onChange({ precioUnitarioSinIva: v })}
           aria-label={`Importe sin IVA del ítem ${index + 1}`}
           className={cellInputRightClass}
         />

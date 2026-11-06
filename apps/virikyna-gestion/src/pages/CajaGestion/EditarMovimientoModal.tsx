@@ -7,6 +7,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field, ErrorText, inputClass } from '../../components/FormField'
 import type { MovimientoCuentaConUsuario } from './types'
 import { useEnterComoTab } from '@virikyna/shared'
+import { MontoInput } from '@virikyna/shared'
 
 type Props = {
   movimiento: MovimientoCuentaConUsuario
@@ -80,14 +81,7 @@ export function EditarMovimientoModal({ movimiento, onClose, onSaved }: Props) {
         </p>
 
         <Field label="Monto">
-          <input
-            autoFocus
-            type="number"
-            step="0.01"
-            value={monto}
-            onChange={(e) => setMonto(e.target.value)}
-            className={inputClass}
-          />
+          <MontoInput autoFocus value={monto} onChange={setMonto} />
         </Field>
 
         <Field label="Descripción">

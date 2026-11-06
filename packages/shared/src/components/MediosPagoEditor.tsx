@@ -13,6 +13,7 @@ import {
   type MedioPagoForm,
 } from '../../lib/mediosPago'
 import { Field, inputClass, selectClass } from './FormField'
+import { MontoInput } from './MontoInput'
 
 // Estado de los medios de un pago (docs/65). Arranca con un efectivo por el total; mientras haya un
 // solo medio y nadie haya tocado su monto, sigue al total del pago. Al editar el monto o agregar un
@@ -173,13 +174,10 @@ export function MediosPagoEditor<M extends string = FormaPagoEgreso>({
                   </select>
                 </Field>
                 <Field label="Monto" compact>
-                  <input
+                  <MontoInput
                     aria-label={`Monto del medio ${n}`}
-                    type="number"
-                    step="0.01"
-                    min={0}
                     value={m.monto}
-                    onChange={(e) => actualizar(m.key, { monto: e.target.value })}
+                    onChange={(v) => actualizar(m.key, { monto: v })}
                     className={`${inputClass} text-right tabular-nums`}
                   />
                 </Field>
@@ -309,7 +307,7 @@ function GenerarChequesPanel({
       </fieldset>
       <div className="grid grid-cols-3 gap-2">
         <Field label={modo === 'total' ? 'Total a repartir' : 'Monto de cada uno'} compact>
-          <input type="number" step="0.01" min={0} value={monto} onChange={(e) => setMonto(e.target.value)} className={`${inputClass} text-right tabular-nums`} />
+          <MontoInput value={monto} onChange={setMonto} className={`${inputClass} text-right tabular-nums`} />
         </Field>
         <Field label="Banco" compact>
           <input value={banco} onChange={(e) => setBanco(e.target.value)} className={inputClass} />

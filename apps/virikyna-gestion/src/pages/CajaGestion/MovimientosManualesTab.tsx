@@ -9,6 +9,7 @@ import { Field, ErrorText, inputClass, selectClass } from '../../components/Form
 import { EditarMovimientoModal } from './EditarMovimientoModal'
 import type { MovimientoCuentaConUsuario } from './types'
 import { useEnterComoTab } from '@virikyna/shared'
+import { MontoInput } from '@virikyna/shared'
 
 type TipoManual = 'ingreso_manual' | 'egreso'
 
@@ -194,7 +195,7 @@ export function MovimientosManualesTab() {
             </select>
           </Field>
           <Field label="Monto">
-            <input type="number" step="0.01" value={monto} onChange={(e) => setMonto(e.target.value)} className={inputClass} />
+            <MontoInput value={monto} onChange={setMonto} />
           </Field>
           <Field label="Descripción">
             <input value={descripcion} onChange={(e) => setDescripcion(e.target.value)} className={inputClass} />
@@ -240,13 +241,7 @@ export function MovimientosManualesTab() {
             </select>
           </Field>
           <Field label="Monto">
-            <input
-              type="number"
-              step="0.01"
-              value={montoTransferencia}
-              onChange={(e) => setMontoTransferencia(e.target.value)}
-              className={inputClass}
-            />
+            <MontoInput value={montoTransferencia} onChange={setMontoTransferencia} />
           </Field>
           <Field label="Descripción">
             <input

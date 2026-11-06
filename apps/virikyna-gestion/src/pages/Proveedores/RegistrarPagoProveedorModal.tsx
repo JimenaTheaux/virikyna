@@ -23,6 +23,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field, ErrorText, inputClass } from '../../components/FormField'
+import { MontoInput } from '@virikyna/shared'
 
 type Props = {
   proveedorId: string
@@ -173,15 +174,7 @@ export function RegistrarPagoProveedorModal({
             label="Total del pago"
             hint={facturaCompraId && saldoPendiente !== undefined ? 'Si pagás más que el saldo, lo que sobre queda a cuenta' : undefined}
           >
-            <input
-              type="number"
-              step="0.01"
-              min={0}
-              data-autofocus
-              value={monto}
-              onChange={(e) => setMonto(e.target.value)}
-              className={`${inputClass} text-right tabular-nums`}
-            />
+            <MontoInput data-autofocus value={monto} onChange={setMonto} className={`${inputClass} text-right tabular-nums`} />
           </Field>
           <Field label="Fecha del pago">
             <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className={inputClass} />
