@@ -445,8 +445,8 @@ BEGIN
     RAISE EXCEPTION 'Solo un administrador puede ajustar stock manualmente';
   END IF;
 
-  INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, motivo, usuario_id)
-  VALUES (p_producto_id, p_ubicacion, 'ajuste', p_cantidad, p_motivo, auth.uid());
+  INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, motivo, usuario_id, origen)  -- docs/70: origen
+  VALUES (p_producto_id, p_ubicacion, 'ajuste', p_cantidad, p_motivo, auth.uid(), 'ajuste_manual');
 
   INSERT INTO stock_ubicaciones (producto_id, ubicacion, cantidad)
   VALUES (p_producto_id, p_ubicacion, p_cantidad)
@@ -498,10 +498,10 @@ BEGIN
     -- Un devuelto defectuoso (reingresa_stock = false) nunca tocó el stock: no hay nada que revertir.
     IF v_item.tipo = 'devuelto' AND NOT v_item.reingresa_stock THEN CONTINUE; END IF;
 
-    INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, motivo, referencia_id, usuario_id)
+    INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, motivo, referencia_id, usuario_id, origen)  -- docs/70: origen
     VALUES (v_item.producto_id, 'local', 'ajuste',
             CASE WHEN v_item.tipo = 'devuelto' THEN -v_item.cantidad ELSE v_item.cantidad END,
-            'Anulación de devolución #' || v_dev.numero || ': ' || p_motivo, p_devolucion_id, auth.uid());
+            'Anulación de devolución #' || v_dev.numero || ': ' || p_motivo, p_devolucion_id, auth.uid(), 'anulacion_devolucion');
     INSERT INTO stock_ubicaciones (producto_id, ubicacion, cantidad)
     VALUES (v_item.producto_id, 'local',
             CASE WHEN v_item.tipo = 'devuelto' THEN -v_item.cantidad ELSE v_item.cantidad END)
@@ -572,9 +572,9 @@ BEGIN
     GROUP BY producto_id, ubicacion
     HAVING SUM(cantidad) <> 0
   LOOP
-    INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, motivo, referencia_id, usuario_id)
+    INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, motivo, referencia_id, usuario_id, origen)  -- docs/70: origen
     VALUES (v_mov.producto_id, v_mov.ubicacion, 'ajuste', -1 * v_mov.neto,
-            'Anulación de factura de compra: ' || p_motivo, p_factura_id, auth.uid());
+            'Anulación de factura de compra: ' || p_motivo, p_factura_id, auth.uid(), 'anulacion_compra');
 
     INSERT INTO stock_ubicaciones (producto_id, ubicacion, cantidad)
     VALUES (v_mov.producto_id, v_mov.ubicacion, -1 * v_mov.neto)
@@ -616,9 +616,9 @@ BEGIN
   END IF;
 
   FOR v_item IN SELECT * FROM venta_items WHERE venta_id = p_venta_id LOOP
-    INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, motivo, referencia_id, usuario_id)
+    INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, motivo, referencia_id, usuario_id, origen)  -- docs/70: origen
     VALUES (v_item.producto_id, 'local', 'ajuste', v_item.cantidad,
-            'Reposición por anulación de venta: ' || p_motivo, p_venta_id, auth.uid());
+            'Reposición por anulación de venta: ' || p_motivo, p_venta_id, auth.uid(), 'anulacion_venta');
 
     INSERT INTO stock_ubicaciones (producto_id, ubicacion, cantidad)
     VALUES (v_item.producto_id, 'local', v_item.cantidad)
@@ -714,12 +714,17 @@ BEGIN
     RAISE EXCEPTION 'No hay saldo pendiente en las ventas al que aplicar el cobro a cuenta';
   END IF;
 
+  -- docs/69: solo lo libre (lo que cancela el saldo inicial no se aplica a ventas).
   SELECT COALESCE(array_agg(p.id ORDER BY p.fecha, p.created_at, p.id), '{}'),
-         COALESCE(array_agg(p.a_cuenta ORDER BY p.fecha, p.created_at, p.id), '{}')
+         COALESCE(array_agg(p.a_cuenta_libre ORDER BY p.fecha, p.created_at, p.id), '{}')
   INTO v_pag_ids, v_pag_disp
   FROM pagos_cliente_a_cuenta p
-  WHERE p.cliente_id = p_cliente_id AND p.a_cuenta > 0 AND (v_pago_ids IS NULL OR p.id = ANY(v_pago_ids));
+  WHERE p.cliente_id = p_cliente_id AND p.a_cuenta_libre > 0 AND (v_pago_ids IS NULL OR p.id = ANY(v_pago_ids));
   IF cardinality(v_pag_ids) = 0 THEN
+    IF EXISTS (SELECT 1 FROM pagos_cliente_a_cuenta p
+               WHERE p.cliente_id = p_cliente_id AND p.a_cuenta > 0 AND (v_pago_ids IS NULL OR p.id = ANY(v_pago_ids))) THEN
+      RAISE EXCEPTION 'Los cobros a cuenta de este cliente cancelan su saldo inicial: no queda nada para aplicar a ventas';
+    END IF;
     RAISE EXCEPTION 'Este cliente no tiene cobros a cuenta para aplicar';
   END IF;
 
@@ -738,7 +743,7 @@ BEGIN
 
   RETURN jsonb_build_object(
     'aplicado', v_total,
-    'a_cuenta_restante', (SELECT COALESCE(SUM(a_cuenta), 0) FROM pagos_cliente_a_cuenta WHERE cliente_id = p_cliente_id),
+    'a_cuenta_restante', (SELECT COALESCE(SUM(a_cuenta_libre), 0) FROM pagos_cliente_a_cuenta WHERE cliente_id = p_cliente_id),
     'aplicaciones', COALESCE((
       SELECT jsonb_agg(jsonb_build_object('id', a.id, 'pago_cliente_id', a.pago_cliente_id, 'venta_id', a.venta_id, 'monto', a.monto)
                        ORDER BY array_position(v_ids, a.id))
@@ -889,17 +894,22 @@ BEGIN
     RAISE EXCEPTION 'No hay saldo pendiente en los comprobantes al que aplicar el pago a cuenta';
   END IF;
 
-  -- ── Pagos con saldo a cuenta, más viejos primero ──
+  -- ── Pagos con saldo a cuenta LIBRE (docs/69: lo que cancela el saldo inicial no se aplica) ──
   SELECT COALESCE(array_agg(p.id ORDER BY p.fecha, p.created_at, p.id), '{}'),
-         COALESCE(array_agg(p.a_cuenta ORDER BY p.fecha, p.created_at, p.id), '{}')
+         COALESCE(array_agg(p.a_cuenta_libre ORDER BY p.fecha, p.created_at, p.id), '{}')
   INTO v_pag_ids, v_pag_disp
   FROM pagos_proveedor_a_cuenta p
   WHERE p.proveedor_id = p_proveedor_id
-    AND p.a_cuenta > 0
+    AND p.a_cuenta_libre > 0
     AND (v_pago_ids IS NULL OR p.id = ANY(v_pago_ids));
   v_m := cardinality(v_pag_ids);
 
   IF v_m = 0 THEN
+    IF EXISTS (SELECT 1 FROM pagos_proveedor_a_cuenta p
+               WHERE p.proveedor_id = p_proveedor_id AND p.a_cuenta > 0
+                 AND (v_pago_ids IS NULL OR p.id = ANY(v_pago_ids))) THEN
+      RAISE EXCEPTION 'Los pagos a cuenta de este proveedor cancelan su saldo inicial: no queda nada para aplicar a comprobantes';
+    END IF;
     RAISE EXCEPTION 'Este proveedor no tiene pagos a cuenta para aplicar';
   END IF;
 
@@ -920,7 +930,7 @@ BEGIN
 
   RETURN jsonb_build_object(
     'aplicado', v_total,
-    'a_cuenta_restante', (SELECT COALESCE(SUM(a_cuenta), 0) FROM pagos_proveedor_a_cuenta WHERE proveedor_id = p_proveedor_id),
+    'a_cuenta_restante', (SELECT COALESCE(SUM(a_cuenta_libre), 0) FROM pagos_proveedor_a_cuenta WHERE proveedor_id = p_proveedor_id),
     'aplicaciones', COALESCE((
       SELECT jsonb_agg(jsonb_build_object(
                'id', a.id,
@@ -1118,9 +1128,16 @@ BEGIN
     v_delta := p_cantidad_local - v_actual;
 
     IF v_delta <> 0 THEN
-      INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, motivo, usuario_id)
+      -- docs/70 (D7): con la carga inicial cerrada, el stock no se corrige desde acá (fijaba la
+      -- cantidad absoluta, pisando las ventas del medio, y sin motivo). Se usa "Ajustar stock".
+      IF NOT COALESCE((SELECT carga_inicial_abierta FROM configuracion), false) THEN
+        RAISE EXCEPTION 'La carga inicial está cerrada: para corregir el stock usá "Ajustar stock" en Inventario, con el motivo.'
+          USING ERRCODE = 'VKH02';
+      END IF;
+
+      INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, motivo, usuario_id, origen)  -- docs/70: origen
       VALUES (p_producto_id, 'local', 'inicial', v_delta,
-              format('Carga inicial: corrección de cantidad (%s → %s)', v_actual, p_cantidad_local), auth.uid());
+              format('Carga inicial: corrección de cantidad (%s → %s)', v_actual, p_cantidad_local), auth.uid(), 'carga_inicial_correccion');
 
       INSERT INTO stock_ubicaciones (producto_id, ubicacion, cantidad)
       VALUES (p_producto_id, 'local', p_cantidad_local)
@@ -1255,8 +1272,8 @@ BEGIN
     END IF;
 
     -- Stock: siempre en 'local', sumando.
-    INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, motivo, referencia_id, usuario_id)
-    VALUES (v_producto_id, 'local', 'inicial', v_item.cantidad, 'Carga inicial', v_item.id, auth.uid());
+    INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, motivo, referencia_id, usuario_id, origen)  -- docs/70: origen
+    VALUES (v_producto_id, 'local', 'inicial', v_item.cantidad, 'Carga inicial', v_item.id, auth.uid(), 'carga_inicial');
 
     INSERT INTO stock_ubicaciones (producto_id, ubicacion, cantidad)
     VALUES (v_producto_id, 'local', v_item.cantidad)
@@ -1677,20 +1694,20 @@ BEGIN
     -- mercadería, resta lo devuelto (ajuste con referencia a la NC, igual que las devoluciones de
     -- venta de docs/24: el Historial no lo ofrece revertir suelto, se revierte anulando la NC).
     IF v_producto_id IS NOT NULL AND NOT v_nc THEN
-      INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, referencia_id, usuario_id)
+      INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, referencia_id, usuario_id, origen)  -- docs/70: origen
       VALUES (v_producto_id, COALESCE((v_item->>'ubicacion')::ubicacion_stock,'local'),
-             'compra', (v_item->>'cantidad')::NUMERIC, v_factura_id, auth.uid());
+             'compra', (v_item->>'cantidad')::NUMERIC, v_factura_id, auth.uid(), 'compra');
 
       INSERT INTO stock_ubicaciones (producto_id, ubicacion, cantidad)
       VALUES (v_producto_id, COALESCE((v_item->>'ubicacion')::ubicacion_stock,'local'), (v_item->>'cantidad')::NUMERIC)
       ON CONFLICT (producto_id, ubicacion)
       DO UPDATE SET cantidad = stock_ubicaciones.cantidad + (v_item->>'cantidad')::NUMERIC;
     ELSIF v_producto_id IS NOT NULL AND v_devuelve THEN
-      INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, motivo, referencia_id, usuario_id)
+      INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, motivo, referencia_id, usuario_id, origen)  -- docs/70: origen
       VALUES (v_producto_id, COALESCE((v_item->>'ubicacion')::ubicacion_stock,'local'), 'ajuste',
              -1 * (v_item->>'cantidad')::NUMERIC,
              'Devolucion a proveedor: NC ' || COALESCE(NULLIF(btrim(p_numero_comprobante), ''), 'sin numero'),
-             v_factura_id, auth.uid());
+             v_factura_id, auth.uid(), 'devolucion_proveedor');
 
       UPDATE stock_ubicaciones SET cantidad = cantidad - (v_item->>'cantidad')::NUMERIC
       WHERE producto_id = v_producto_id AND ubicacion = COALESCE((v_item->>'ubicacion')::ubicacion_stock,'local');
@@ -1831,38 +1848,115 @@ CREATE OR REPLACE FUNCTION "public"."cargar_saldos_iniciales"("p_saldos_cuentas"
     SET "search_path" TO 'public'
     AS $$
 DECLARE
-  v_item JSONB;
-  v_saldo_actual NUMERIC;
+  v_cuentas jsonb := COALESCE(p_saldos_cuentas, '[]'::jsonb);
+  v_proveedores jsonb := COALESCE(p_saldos_proveedores, '[]'::jsonb);
+  v_clientes jsonb := COALESCE(p_saldos_clientes, '[]'::jsonb);
+  v_item jsonb;
+  v_monto numeric;
+  v_conflictos text;
+  v_ant jsonb;
+  v_nue jsonb;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM perfiles WHERE id = auth.uid() AND rol = 'admin' AND activo = true) THEN
     RAISE EXCEPTION 'Solo un administrador puede cargar los saldos iniciales';
   END IF;
 
-  FOR v_item IN SELECT * FROM jsonb_array_elements(p_saldos_cuentas) LOOP
+  -- ── Montos: numéricos y distintos de cero ──
+  IF EXISTS (
+    SELECT 1 FROM (
+      SELECT e FROM jsonb_array_elements(v_cuentas) e
+      UNION ALL SELECT e FROM jsonb_array_elements(v_proveedores) e
+      UNION ALL SELECT e FROM jsonb_array_elements(v_clientes) e
+    ) s
+    WHERE jsonb_typeof(s.e->'monto') IS DISTINCT FROM 'number' OR (s.e->>'monto')::numeric = 0
+  ) THEN
+    RAISE EXCEPTION 'Cada saldo inicial necesita un monto distinto de cero';
+  END IF;
+
+  -- ── Sin repetidos y todos existentes ──
+  IF (SELECT count(*) FROM jsonb_array_elements(v_cuentas)) <> (SELECT count(DISTINCT e->>'cuenta_id') FROM jsonb_array_elements(v_cuentas) e)
+     OR (SELECT count(*) FROM jsonb_array_elements(v_proveedores)) <> (SELECT count(DISTINCT e->>'proveedor_id') FROM jsonb_array_elements(v_proveedores) e)
+     OR (SELECT count(*) FROM jsonb_array_elements(v_clientes)) <> (SELECT count(DISTINCT e->>'cliente_id') FROM jsonb_array_elements(v_clientes) e) THEN
+    RAISE EXCEPTION 'Hay una cuenta repetida en la carga inicial';
+  END IF;
+  IF (SELECT count(*) FROM cuentas WHERE id IN (SELECT (e->>'cuenta_id')::uuid FROM jsonb_array_elements(v_cuentas) e)) <> jsonb_array_length(v_cuentas)
+     OR (SELECT count(*) FROM proveedores WHERE id IN (SELECT (e->>'proveedor_id')::uuid FROM jsonb_array_elements(v_proveedores) e)) <> jsonb_array_length(v_proveedores)
+     OR (SELECT count(*) FROM clientes WHERE id IN (SELECT (e->>'cliente_id')::uuid FROM jsonb_array_elements(v_clientes) e)) <> jsonb_array_length(v_clientes) THEN
+    RAISE EXCEPTION 'Alguna de las cuentas de la carga inicial no existe (recargá la pantalla)';
+  END IF;
+
+  -- ── Lock: dos cargas simultáneas de la misma cuenta se serializan ──
+  PERFORM 1 FROM cuentas WHERE id IN (SELECT (e->>'cuenta_id')::uuid FROM jsonb_array_elements(v_cuentas) e) FOR UPDATE;
+  PERFORM 1 FROM proveedores WHERE id IN (SELECT (e->>'proveedor_id')::uuid FROM jsonb_array_elements(v_proveedores) e) FOR UPDATE;
+  PERFORM 1 FROM clientes WHERE id IN (SELECT (e->>'cliente_id')::uuid FROM jsonb_array_elements(v_clientes) e) FOR UPDATE;
+
+  -- ── Único: si alguna ya tiene saldo inicial, no se escribe nada y se nombran todas ──
+  SELECT string_agg(t.x, '; ' ORDER BY t.orden, t.x) INTO v_conflictos
+  FROM (
+    SELECT 1 AS orden, c.nombre || ' (' || formato_pesos(m.monto) || ')' AS x
+    FROM jsonb_array_elements(v_cuentas) e
+    JOIN cuentas c ON c.id = (e->>'cuenta_id')::uuid
+    JOIN movimientos_cuenta m ON m.cuenta_id = c.id AND m.tipo = 'saldo_inicial'
+    UNION ALL
+    SELECT 2, p.razon_social || ' (' || formato_pesos(p.saldo_inicial)
+              || COALESCE(', cargado el ' || to_char(p.saldo_inicial_fecha AT TIME ZONE 'America/Argentina/Buenos_Aires', 'DD/MM/YYYY'), '') || ')'
+    FROM jsonb_array_elements(v_proveedores) e
+    JOIN proveedores p ON p.id = (e->>'proveedor_id')::uuid
+    WHERE p.saldo_inicial <> 0 OR p.saldo_inicial_fecha IS NOT NULL
+    UNION ALL
+    SELECT 3, COALESCE(c.razon_social, c.nombre_fantasia) || ' (' || formato_pesos(c.saldo_inicial)
+              || COALESCE(', cargado el ' || to_char(c.saldo_inicial_fecha AT TIME ZONE 'America/Argentina/Buenos_Aires', 'DD/MM/YYYY'), '') || ')'
+    FROM jsonb_array_elements(v_clientes) e
+    JOIN clientes c ON c.id = (e->>'cliente_id')::uuid
+    WHERE c.saldo_inicial <> 0 OR c.saldo_inicial_fecha IS NOT NULL
+  ) t;
+  IF v_conflictos IS NOT NULL THEN
+    RAISE EXCEPTION 'Ya tienen saldo inicial cargado y no se suma: %. No se guardó nada. Si falta deuda, cargala como comprobante; si el monto está mal, usá Corregir.', v_conflictos;
+  END IF;
+
+  -- ── Cuentas de dinero: un movimiento por cuenta (índice único) ──
+  FOR v_item IN SELECT * FROM jsonb_array_elements(v_cuentas) LOOP
     INSERT INTO movimientos_cuenta (cuenta_id, tipo, monto, descripcion, usuario_id)
-    VALUES ((v_item->>'cuenta_id')::UUID, 'saldo_inicial', (v_item->>'monto')::NUMERIC, 'Carga inicial del sistema', auth.uid());
+    VALUES ((v_item->>'cuenta_id')::uuid, 'saldo_inicial', round((v_item->>'monto')::numeric, 2), 'Carga inicial del sistema', auth.uid());
   END LOOP;
 
-  FOR v_item IN SELECT * FROM jsonb_array_elements(p_saldos_proveedores) LOOP
-    SELECT saldo_inicial INTO v_saldo_actual FROM proveedores WHERE id = (v_item->>'proveedor_id')::UUID;
-    IF v_saldo_actual IS DISTINCT FROM 0 THEN
-      RAISE EXCEPTION 'El proveedor % ya tiene un saldo inicial cargado (%) — la carga inicial no se repite, corregilo por separado si hace falta', (v_item->>'proveedor_id'), v_saldo_actual;
-    END IF;
-    UPDATE proveedores SET saldo_inicial = (v_item->>'monto')::NUMERIC WHERE id = (v_item->>'proveedor_id')::UUID;
+  -- ── Proveedores y clientes: campo de la ficha + auditoria con nota ──
+  FOR v_item IN SELECT * FROM jsonb_array_elements(v_proveedores) LOOP
+    v_monto := round((v_item->>'monto')::numeric, 2);
+    SELECT to_jsonb(p) INTO v_ant FROM proveedores p WHERE p.id = (v_item->>'proveedor_id')::uuid;
+    PERFORM set_config('virikyna.suppress_audit', 'true', true);
+    UPDATE proveedores p
+    SET saldo_inicial = v_monto, saldo_inicial_fecha = now(), saldo_inicial_usuario_id = auth.uid()
+    WHERE p.id = (v_item->>'proveedor_id')::uuid
+    RETURNING to_jsonb(p) INTO v_nue;
+    PERFORM set_config('virikyna.suppress_audit', 'false', true);
+    INSERT INTO auditoria (tabla_afectada, registro_id, accion, valores_anteriores, valores_nuevos, usuario_id, nota)
+    VALUES ('proveedores', (v_item->>'proveedor_id')::uuid, 'edicion', v_ant, v_nue, auth.uid(),
+            'Carga inicial: saldo inicial ' || formato_pesos(v_monto));
   END LOOP;
 
-  FOR v_item IN SELECT * FROM jsonb_array_elements(p_saldos_clientes) LOOP
-    SELECT saldo_inicial INTO v_saldo_actual FROM clientes WHERE id = (v_item->>'cliente_id')::UUID;
-    IF v_saldo_actual IS DISTINCT FROM 0 THEN
-      RAISE EXCEPTION 'El cliente % ya tiene un saldo inicial cargado (%) — la carga inicial no se repite, corregilo por separado si hace falta', (v_item->>'cliente_id'), v_saldo_actual;
-    END IF;
-    UPDATE clientes SET saldo_inicial = (v_item->>'monto')::NUMERIC WHERE id = (v_item->>'cliente_id')::UUID;
+  FOR v_item IN SELECT * FROM jsonb_array_elements(v_clientes) LOOP
+    v_monto := round((v_item->>'monto')::numeric, 2);
+    SELECT to_jsonb(c) INTO v_ant FROM clientes c WHERE c.id = (v_item->>'cliente_id')::uuid;
+    PERFORM set_config('virikyna.suppress_audit', 'true', true);
+    UPDATE clientes c
+    SET saldo_inicial = v_monto, saldo_inicial_fecha = now(), saldo_inicial_usuario_id = auth.uid()
+    WHERE c.id = (v_item->>'cliente_id')::uuid
+    RETURNING to_jsonb(c) INTO v_nue;
+    PERFORM set_config('virikyna.suppress_audit', 'false', true);
+    INSERT INTO auditoria (tabla_afectada, registro_id, accion, valores_anteriores, valores_nuevos, usuario_id, nota)
+    VALUES ('clientes', (v_item->>'cliente_id')::uuid, 'edicion', v_ant, v_nue, auth.uid(),
+            'Carga inicial: saldo inicial ' || formato_pesos(v_monto));
   END LOOP;
 END;
 $$;
 
 
 ALTER FUNCTION "public"."cargar_saldos_iniciales"("p_saldos_cuentas" "jsonb", "p_saldos_proveedores" "jsonb", "p_saldos_clientes" "jsonb") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."cargar_saldos_iniciales"("p_saldos_cuentas" "jsonb", "p_saldos_proveedores" "jsonb", "p_saldos_clientes" "jsonb") IS 'docs/69: carga el saldo inicial de cuentas de dinero, proveedores y clientes que todavía no lo tienen. Único: si alguna ya lo tiene, rechaza todo nombrándolas. Solo admin.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."cerrar_caja"("p_tipo" "public"."tipo_cierre", "p_efectivo_contado" numeric DEFAULT NULL::numeric) RETURNS "uuid"
@@ -2012,6 +2106,38 @@ $$;
 
 
 ALTER FUNCTION "public"."cerrar_carga_inicial"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."clasificar_movimiento_stock"("p_tipo" "public"."tipo_movimiento_stock", "p_cantidad" numeric, "p_motivo" "text", "p_referencia_id" "uuid") RETURNS "text"
+    LANGUAGE "sql" STABLE
+    SET "search_path" TO 'public'
+    AS $$
+  SELECT CASE
+    WHEN p_tipo = 'venta' THEN 'venta'
+    WHEN p_tipo = 'compra' AND quitar_acentos(COALESCE(p_motivo, '')) ILIKE 'Correccion factura%' THEN 'compra_correccion'
+    WHEN p_tipo = 'compra' THEN 'compra'
+    WHEN p_tipo = 'inicial' AND p_referencia_id IS NULL AND p_motivo IS NOT NULL THEN 'carga_inicial_correccion'
+    WHEN p_tipo = 'inicial' THEN 'carga_inicial'
+    -- ajuste
+    WHEN p_referencia_id IS NOT NULL AND EXISTS (SELECT 1 FROM ventas WHERE id = p_referencia_id) THEN 'anulacion_venta'
+    WHEN p_referencia_id IS NOT NULL AND EXISTS (SELECT 1 FROM devoluciones WHERE id = p_referencia_id) THEN
+      CASE WHEN quitar_acentos(COALESCE(p_motivo, '')) ILIKE 'Anulacion de devolucion%' THEN 'anulacion_devolucion'
+           WHEN p_cantidad > 0 THEN 'devolucion_cliente'
+           ELSE 'cambio_entrega' END
+    WHEN p_referencia_id IS NOT NULL AND EXISTS (SELECT 1 FROM facturas_compra WHERE id = p_referencia_id) THEN
+      CASE WHEN quitar_acentos(COALESCE(p_motivo, '')) ILIKE 'Devolucion a proveedor%' THEN 'devolucion_proveedor'
+           ELSE 'anulacion_compra' END
+    WHEN quitar_acentos(COALESCE(p_motivo, '')) ILIKE 'Reversion de ajuste%' THEN 'reversion_ajuste'
+    ELSE 'ajuste_manual'
+  END;
+$$;
+
+
+ALTER FUNCTION "public"."clasificar_movimiento_stock"("p_tipo" "public"."tipo_movimiento_stock", "p_cantidad" numeric, "p_motivo" "text", "p_referencia_id" "uuid") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."clasificar_movimiento_stock"("p_tipo" "public"."tipo_movimiento_stock", "p_cantidad" numeric, "p_motivo" "text", "p_referencia_id" "uuid") IS 'docs/70: deduce movimientos_stock.origen (backfill y respaldo del trigger). Las RPCs lo escriben explícito.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."codigo_barras_variantes"("p_codigo" "text") RETURNS "text"[]
@@ -2171,8 +2297,8 @@ BEGIN
             (v_item->>'precio_unitario')::NUMERIC, COALESCE((v_item->>'descuento_porcentaje')::NUMERIC,0), v_importe,
             v_nombre, v_marca, v_costo, v_con_iva);
 
-    INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, referencia_id, usuario_id)
-    VALUES ((v_item->>'producto_id')::UUID, 'local', 'venta', -1 * (v_item->>'cantidad')::NUMERIC, v_venta_id, auth.uid());
+    INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, referencia_id, usuario_id, origen)  -- docs/70: origen
+    VALUES ((v_item->>'producto_id')::UUID, 'local', 'venta', -1 * (v_item->>'cantidad')::NUMERIC, v_venta_id, auth.uid(), 'venta');
 
     INSERT INTO stock_ubicaciones (producto_id, ubicacion, cantidad)
     VALUES ((v_item->>'producto_id')::UUID, 'local', -1 * (v_item->>'cantidad')::NUMERIC)
@@ -2186,6 +2312,84 @@ $$;
 
 
 ALTER FUNCTION "public"."confirmar_venta"("p_cliente_id" "uuid", "p_forma_pago" "public"."forma_pago_venta", "p_items" "jsonb", "p_descuento_porcentaje" numeric, "p_nota" "text", "p_recargo_porcentaje" numeric, "p_pagos" "jsonb", "p_precio_cobrado" numeric, "p_client_id" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."corregir_saldo_inicial"("p_tipo" "text", "p_id" "uuid", "p_monto_nuevo" numeric, "p_motivo" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_motivo text := btrim(COALESCE(p_motivo, ''));
+  v_nuevo numeric := round(p_monto_nuevo, 2);
+  v_tabla text;
+  v_ant jsonb;
+  v_nue jsonb;
+  v_anterior numeric;
+  v_fecha timestamptz;
+  v_nombre text;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM perfiles WHERE id = auth.uid() AND rol = 'admin' AND activo = true) THEN
+    RAISE EXCEPTION 'Solo un administrador puede corregir un saldo inicial';
+  END IF;
+  IF p_tipo IS NULL OR p_tipo NOT IN ('proveedor', 'cliente') THEN
+    RAISE EXCEPTION 'Tipo de cuenta no válido (proveedor o cliente)';
+  END IF;
+  IF v_nuevo IS NULL THEN
+    RAISE EXCEPTION 'Ingresá el monto nuevo';
+  END IF;
+  IF length(v_motivo) < 3 THEN
+    RAISE EXCEPTION 'Ingresá el motivo de la corrección';
+  END IF;
+
+  IF p_tipo = 'proveedor' THEN
+    v_tabla := 'proveedores';
+    SELECT to_jsonb(p), p.saldo_inicial, p.saldo_inicial_fecha, p.razon_social
+    INTO v_ant, v_anterior, v_fecha, v_nombre
+    FROM proveedores p WHERE p.id = p_id FOR UPDATE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'Proveedor no encontrado'; END IF;
+  ELSE
+    v_tabla := 'clientes';
+    SELECT to_jsonb(c), c.saldo_inicial, c.saldo_inicial_fecha, COALESCE(c.razon_social, c.nombre_fantasia)
+    INTO v_ant, v_anterior, v_fecha, v_nombre
+    FROM clientes c WHERE c.id = p_id FOR UPDATE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'Cliente no encontrado'; END IF;
+  END IF;
+
+  IF v_anterior = 0 AND v_fecha IS NULL THEN
+    RAISE EXCEPTION '% no tiene saldo inicial cargado: cargalo desde la carga inicial', v_nombre;
+  END IF;
+  IF v_nuevo = v_anterior THEN
+    RAISE EXCEPTION 'El monto nuevo es igual al actual (%)', formato_pesos(v_anterior);
+  END IF;
+
+  PERFORM set_config('virikyna.suppress_audit', 'true', true);
+  IF p_tipo = 'proveedor' THEN
+    UPDATE proveedores p
+    SET saldo_inicial = v_nuevo, saldo_inicial_fecha = now(), saldo_inicial_usuario_id = auth.uid()
+    WHERE p.id = p_id
+    RETURNING to_jsonb(p) INTO v_nue;
+  ELSE
+    UPDATE clientes c
+    SET saldo_inicial = v_nuevo, saldo_inicial_fecha = now(), saldo_inicial_usuario_id = auth.uid()
+    WHERE c.id = p_id
+    RETURNING to_jsonb(c) INTO v_nue;
+  END IF;
+  PERFORM set_config('virikyna.suppress_audit', 'false', true);
+
+  INSERT INTO auditoria (tabla_afectada, registro_id, accion, valores_anteriores, valores_nuevos, usuario_id, nota)
+  VALUES (v_tabla, p_id, 'edicion', v_ant, v_nue, auth.uid(),
+          'Corrección de saldo inicial: ' || formato_pesos(v_anterior) || ' → ' || formato_pesos(v_nuevo) || '. Motivo: ' || v_motivo);
+
+  RETURN jsonb_build_object('anterior', v_anterior, 'nuevo', v_nuevo);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."corregir_saldo_inicial"("p_tipo" "text", "p_id" "uuid", "p_monto_nuevo" numeric, "p_motivo" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."corregir_saldo_inicial"("p_tipo" "text", "p_id" "uuid", "p_monto_nuevo" numeric, "p_motivo" "text") IS 'docs/69: reemplaza (no suma) el saldo inicial de un proveedor o cliente que ya lo tiene. Solo admin, motivo obligatorio; queda en auditoria con el motivo.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."crear_devolucion"("p_venta_id" "uuid", "p_motivo" "public"."motivo_devolucion", "p_motivo_detalle" "text", "p_observaciones" "text", "p_items_devueltos" "jsonb", "p_items_nuevos" "jsonb" DEFAULT NULL::"jsonb", "p_forma_pago" "public"."forma_pago_venta" DEFAULT NULL::"public"."forma_pago_venta", "p_pagos" "jsonb" DEFAULT NULL::"jsonb") RETURNS "uuid"
@@ -2390,9 +2594,9 @@ BEGIN
             v_nombre, v_marca);
 
     IF v_reingresa THEN
-      INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, motivo, referencia_id, usuario_id)
+      INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, motivo, referencia_id, usuario_id, origen)  -- docs/70: origen
       VALUES (v_row.producto_id, 'local', 'ajuste', v_row.cantidad,
-              'Devolución de venta #' || v_venta.numero || ' (' || p_motivo::text || ')', v_devolucion_id, auth.uid());
+              'Devolución de venta #' || v_venta.numero || ' (' || p_motivo::text || ')', v_devolucion_id, auth.uid(), 'devolucion_cliente');
       INSERT INTO stock_ubicaciones (producto_id, ubicacion, cantidad)
       VALUES (v_row.producto_id, 'local', v_row.cantidad)
       ON CONFLICT (producto_id, ubicacion)
@@ -2412,9 +2616,9 @@ BEGIN
     VALUES (v_devolucion_id, 'nuevo', v_row.producto_id, v_row.cantidad, v_row.precio_unitario, true,
             v_nombre, v_marca);
 
-    INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, motivo, referencia_id, usuario_id)
+    INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, motivo, referencia_id, usuario_id, origen)  -- docs/70: origen
     VALUES (v_row.producto_id, 'local', 'ajuste', -1 * v_row.cantidad,
-            'Cambio sobre venta #' || v_venta.numero, v_devolucion_id, auth.uid());
+            'Cambio sobre venta #' || v_venta.numero, v_devolucion_id, auth.uid(), 'cambio_entrega');
     INSERT INTO stock_ubicaciones (producto_id, ubicacion, cantidad)
     VALUES (v_row.producto_id, 'local', -1 * v_row.cantidad)
     ON CONFLICT (producto_id, ubicacion)
@@ -3181,6 +3385,22 @@ $$;
 ALTER FUNCTION "public"."fn_auditoria_generica"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_movimiento_stock_origen"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+  IF NEW.origen IS NULL THEN
+    NEW.origen := clasificar_movimiento_stock(NEW.tipo, NEW.cantidad, NEW.motivo, NEW.referencia_id);
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_movimiento_stock_origen"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_productos_precio_historial"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -3319,6 +3539,51 @@ $$;
 ALTER FUNCTION "public"."fn_proteger_margen_proveedor"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_proteger_saldo_inicial"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_admin boolean;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RETURN NEW;
+  END IF;
+  v_admin := EXISTS (SELECT 1 FROM perfiles WHERE id = auth.uid() AND rol = 'admin' AND activo = true);
+
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.saldo_inicial <> 0 OR NEW.saldo_inicial_fecha IS NOT NULL OR NEW.saldo_inicial_usuario_id IS NOT NULL THEN
+      IF NOT v_admin THEN
+        RAISE EXCEPTION 'Solo un administrador puede cargar el saldo inicial';
+      END IF;
+      IF NEW.saldo_inicial <> 0 AND NEW.saldo_inicial_fecha IS NULL THEN
+        NEW.saldo_inicial_fecha := now();
+        NEW.saldo_inicial_usuario_id := auth.uid();
+      END IF;
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF NEW.saldo_inicial IS DISTINCT FROM OLD.saldo_inicial
+     OR NEW.saldo_inicial_fecha IS DISTINCT FROM OLD.saldo_inicial_fecha
+     OR NEW.saldo_inicial_usuario_id IS DISTINCT FROM OLD.saldo_inicial_usuario_id THEN
+    IF NOT v_admin THEN
+      RAISE EXCEPTION 'Solo un administrador puede modificar el saldo inicial (se corrige desde Caja Gestión → Carga inicial)';
+    END IF;
+    IF NEW.saldo_inicial IS DISTINCT FROM OLD.saldo_inicial
+       AND NEW.saldo_inicial_fecha IS NOT DISTINCT FROM OLD.saldo_inicial_fecha THEN
+      NEW.saldo_inicial_fecha := now();
+      NEW.saldo_inicial_usuario_id := auth.uid();
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_proteger_saldo_inicial"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_proteger_tipo_cliente"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -3369,6 +3634,22 @@ $$;
 ALTER FUNCTION "public"."fn_sin_acentos"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."formato_pesos"("p" numeric) RETURNS "text"
+    LANGUAGE "sql" IMMUTABLE
+    SET "search_path" TO 'public'
+    AS $_$
+  SELECT CASE WHEN p < 0 THEN '−$ ' ELSE '$ ' END
+         || translate(to_char(abs(p), 'FM999,999,999,990.00'), ',.', '.,')
+$_$;
+
+
+ALTER FUNCTION "public"."formato_pesos"("p" numeric) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."formato_pesos"("p" numeric) IS 'docs/69: "$ 1.972.962,10" (formato argentino) para mensajes de error de las RPCs.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."generar_codigo_interno"() RETURNS "text"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -3397,6 +3678,152 @@ ALTER FUNCTION "public"."generar_codigo_interno"() OWNER TO "postgres";
 
 
 COMMENT ON FUNCTION "public"."generar_codigo_interno"() IS 'Código numérico de 13 dígitos (20 + secuencia + verificador EAN-13) para productos sin código. Lo usan carga_inicial_finalizar y los formularios de producto de las 3 apps (docs/49).';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."historial_producto"("p_producto_id" "uuid", "p_desde" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_hasta" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_clases" "text"[] DEFAULT NULL::"text"[]) RETURNS TABLE("orden" bigint, "fecha" timestamp with time zone, "clase" "text", "detalle" "text", "proveedor" "text", "ubicacion" "public"."ubicacion_stock", "cantidad" numeric, "stock_resultante" numeric, "usuario_id" "uuid", "usuario_nombre" "text", "ref_tabla" "text", "ref_id" "uuid", "ref_numero" "text", "precio_anterior" numeric, "precio_nuevo" numeric, "precio_origen" "text", "cambios" "jsonb")
+    LANGUAGE "sql" STABLE
+    SET "search_path" TO 'public'
+    AS $$
+WITH
+prod AS (
+  SELECT p.id, p.created_at FROM productos p WHERE p.id = p_producto_id
+),
+dif AS (
+  SELECT COALESCE((SELECT sum(s.cantidad) FROM stock_ubicaciones s WHERE s.producto_id = p_producto_id), 0)
+       - COALESCE((SELECT sum(m.cantidad) FROM movimientos_stock m WHERE m.producto_id = p_producto_id), 0) AS d
+),
+mov AS (
+  SELECT m.id, m.created_at, m.origen, m.motivo, m.ubicacion, m.cantidad, m.usuario_id, m.referencia_id,
+         (SELECT d FROM dif) + sum(m.cantidad) OVER (ORDER BY m.created_at, m.id) AS stock_resultante,
+         row_number() OVER (ORDER BY m.created_at, m.id) AS n
+  FROM movimientos_stock m
+  WHERE m.producto_id = p_producto_id
+),
+mov_ref AS (
+  SELECT mv.*,
+         CASE WHEN v.id IS NOT NULL THEN 'venta' WHEN dv.id IS NOT NULL THEN 'devolucion'
+              WHEN f.id IS NOT NULL THEN 'factura_compra' END AS ref_tabla,
+         COALESCE(v.id, dv.id, f.id) AS ref_id,
+         COALESCE(v.numero::text, dv.numero::text,
+                  CASE WHEN f.id IS NOT NULL THEN
+                    concat_ws(' ', upper(replace(f.tipo_comprobante::text, '_', ' ')), f.letra::text,
+                              NULLIF(concat_ws('-', NULLIF(btrim(f.punto_venta), ''), NULLIF(btrim(f.numero_comprobante), '')), ''))
+                  END) AS ref_numero,
+         pr.razon_social AS proveedor
+  FROM mov mv
+  LEFT JOIN ventas v           ON v.id = mv.referencia_id
+  LEFT JOIN devoluciones dv    ON dv.id = mv.referencia_id
+  LEFT JOIN facturas_compra f  ON f.id = mv.referencia_id
+  LEFT JOIN proveedores pr     ON pr.id = f.proveedor_id
+),
+compra_instante AS (
+  SELECT DISTINCT ON (created_at) created_at, id AS mov_id
+  FROM mov WHERE origen IN ('compra', 'compra_correccion')
+  ORDER BY created_at, n DESC
+),
+aud AS (
+  SELECT a.id, a.created_at, a.usuario_id, a.accion,
+         (SELECT jsonb_object_agg(
+                   CASE WHEN k.campo = 'proveedor_id' THEN 'proveedor' ELSE k.campo END,
+                   CASE WHEN k.campo = 'proveedor_id' THEN
+                     jsonb_build_object(
+                       'antes',   (SELECT to_jsonb(x.razon_social) FROM proveedores x WHERE x.id = (a.valores_anteriores ->> 'proveedor_id')::uuid),
+                       'despues', (SELECT to_jsonb(x.razon_social) FROM proveedores x WHERE x.id = (a.valores_nuevos ->> 'proveedor_id')::uuid))
+                   ELSE jsonb_build_object('antes', a.valores_anteriores -> k.campo, 'despues', a.valores_nuevos -> k.campo)
+                   END)
+          FROM unnest(ARRAY['costo', 'margen_1', 'margen_2', 'iva_porcentaje', 'proveedor_id', 'nombre', 'marca',
+                            'codigo_barras', 'estado', 'stock_minimo']) AS k(campo)
+          WHERE a.valores_anteriores ? k.campo
+            AND (a.valores_anteriores -> k.campo) IS DISTINCT FROM (a.valores_nuevos -> k.campo)) AS cambios
+  FROM auditoria a
+  WHERE a.tabla_afectada = 'productos' AND a.registro_id = p_producto_id AND a.accion IN ('edicion', 'reversion')
+),
+aud_util AS (
+  SELECT aud.*, ci.mov_id AS compra_mov_id,
+         (ci.mov_id IS NULL AND
+          (SELECT count(*) FROM auditoria b
+           WHERE b.tabla_afectada = 'productos' AND b.accion = 'edicion'
+             AND b.created_at = aud.created_at AND b.usuario_id IS NOT DISTINCT FROM aud.usuario_id) >= 20) AS masiva
+  FROM aud
+  LEFT JOIN compra_instante ci ON ci.created_at = aud.created_at
+  WHERE aud.cambios IS NOT NULL
+),
+cambios_compra AS (
+  SELECT compra_mov_id AS mov_id, jsonb_object_agg(kv.key, kv.value ORDER BY au.id) AS cambios
+  FROM aud_util au, jsonb_each(au.cambios) kv
+  WHERE au.compra_mov_id IS NOT NULL
+  GROUP BY compra_mov_id
+),
+precio_alta AS (
+  SELECT DISTINCT ON (h.producto_id) h.precio_nuevo, h.usuario_id
+  FROM productos_precios_historial h
+  WHERE h.producto_id = p_producto_id AND h.origen = 'alta'
+  ORDER BY h.producto_id, h.created_at, h.id
+),
+eventos AS (
+  -- alta
+  SELECT pr.created_at AS fecha, 0 AS prioridad, 0::bigint AS sub, 'alta'::text AS clase,
+         NULL::text AS detalle, NULL::text AS proveedor, NULL::ubicacion_stock AS ubicacion, NULL::numeric AS cantidad,
+         COALESCE((SELECT m.stock_resultante FROM mov m WHERE m.created_at < pr.created_at ORDER BY m.n DESC LIMIT 1),
+                  (SELECT d FROM dif)) AS stock_resultante,
+         COALESCE((SELECT a.usuario_id FROM auditoria a WHERE a.tabla_afectada = 'productos' AND a.registro_id = pr.id
+                     AND a.accion = 'alta' ORDER BY a.created_at LIMIT 1),
+                  (SELECT pa.usuario_id FROM precio_alta pa)) AS usuario_id,
+         NULL::text AS ref_tabla, NULL::uuid AS ref_id, NULL::text AS ref_numero,
+         NULL::numeric AS precio_anterior, (SELECT pa.precio_nuevo FROM precio_alta pa) AS precio_nuevo,
+         NULL::text AS precio_origen, NULL::jsonb AS cambios
+  FROM prod pr
+  UNION ALL
+  -- stock − Σ movimientos ≠ 0: la diferencia exacta, al principio, sin usuario
+  SELECT pr.created_at, 1, 0, 'sin_registro', 'Diferencia entre el stock y los movimientos registrados', NULL, NULL,
+         dif.d, dif.d, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+  FROM prod pr, dif WHERE dif.d <> 0
+  UNION ALL
+  -- movimientos de stock
+  SELECT m.created_at, 2, m.n, m.origen, m.motivo, m.proveedor, m.ubicacion, m.cantidad, m.stock_resultante,
+         m.usuario_id, m.ref_tabla, m.ref_id, m.ref_numero, NULL, NULL, NULL, cc.cambios
+  FROM mov_ref m
+  LEFT JOIN cambios_compra cc ON cc.mov_id = m.id
+  UNION ALL
+  -- cambios de precio (el del alta va en la fila del alta)
+  SELECT h.created_at, 3, h.id, 'precio', NULL, mr.proveedor, NULL, NULL,
+         COALESCE((SELECT m.stock_resultante FROM mov m WHERE m.created_at <= h.created_at ORDER BY m.n DESC LIMIT 1),
+                  (SELECT d FROM dif)),
+         h.usuario_id, mr.ref_tabla, mr.ref_id, mr.ref_numero, h.precio_anterior, h.precio_nuevo, h.origen, NULL
+  FROM productos_precios_historial h
+  LEFT JOIN compra_instante ci ON h.origen = 'factura' AND ci.created_at = h.created_at
+  LEFT JOIN mov_ref mr ON mr.id = ci.mov_id
+  WHERE h.producto_id = p_producto_id AND h.origen <> 'alta'
+  UNION ALL
+  -- cambios de datos sueltos (no de una factura, no masivos)
+  SELECT au.created_at, 4, 0, 'datos', CASE WHEN au.accion = 'reversion' THEN 'reversion' END, NULL, NULL, NULL,
+         COALESCE((SELECT m.stock_resultante FROM mov m WHERE m.created_at <= au.created_at ORDER BY m.n DESC LIMIT 1),
+                  (SELECT d FROM dif)),
+         au.usuario_id, NULL, NULL, NULL, NULL, NULL, NULL, au.cambios
+  FROM aud_util au
+  WHERE au.compra_mov_id IS NULL AND NOT au.masiva
+),
+ordenados AS (
+  SELECT e.*, row_number() OVER (ORDER BY e.fecha, e.prioridad, e.sub) AS orden
+  FROM eventos e
+)
+SELECT o.orden, o.fecha, o.clase, o.detalle, o.proveedor, o.ubicacion, o.cantidad, o.stock_resultante,
+       o.usuario_id, ph.nombre, o.ref_tabla, o.ref_id, o.ref_numero,
+       o.precio_anterior, o.precio_nuevo, o.precio_origen, o.cambios
+FROM ordenados o
+LEFT JOIN perfiles_historial ph ON ph.id = o.usuario_id
+WHERE (p_desde IS NULL OR o.fecha >= p_desde)
+  AND (p_hasta IS NULL OR o.fecha < p_hasta)
+  AND (p_clases IS NULL OR o.clase = ANY (p_clases))
+ORDER BY o.orden DESC;
+$$;
+
+
+ALTER FUNCTION "public"."historial_producto"("p_producto_id" "uuid", "p_desde" timestamp with time zone, "p_hasta" timestamp with time zone, "p_clases" "text"[]) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."historial_producto"("p_producto_id" "uuid", "p_desde" timestamp with time zone, "p_hasta" timestamp with time zone, "p_clases" "text"[]) IS 'docs/70: línea de tiempo del producto (stock con saldo por fila, precio, datos, alta). SECURITY INVOKER: la RLS decide qué ve cada rol.';
 
 
 
@@ -3838,13 +4265,15 @@ CREATE OR REPLACE FUNCTION "public"."precios_cambiados"("p_solo_pendientes" bool
   ult AS (
     SELECT DISTINCT ON (h.producto_id) h.producto_id, h.created_at, h.origen
     FROM productos_precios_historial h CROSS JOIN lim
-    WHERE p_solo_pendientes OR h.created_at >= lim.desde
+    WHERE (p_solo_pendientes OR h.created_at >= lim.desde)
+      AND NOT h.reconstruido  -- docs/70: las altas reconstruidas no son cambios para la alerta
     ORDER BY h.producto_id, h.created_at DESC, h.id DESC
   ),
   pri AS (
     SELECT DISTINCT ON (h.producto_id) h.producto_id, h.precio_anterior
     FROM productos_precios_historial h CROSS JOIN lim
     WHERE NOT p_solo_pendientes AND h.created_at >= lim.desde
+      AND NOT h.reconstruido  -- docs/70
     ORDER BY h.producto_id, h.created_at, h.id
   )
   SELECT b.id, b.nombre, b.marca, b.codigo_barras, b.codigo_interno,
@@ -4930,6 +5359,47 @@ $$;
 ALTER FUNCTION "public"."reservar_emision_factura_c"("p_venta_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."resumen_historial_producto"("p_producto_id" "uuid", "p_desde" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_hasta" timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS TABLE("stock_actual" numeric, "stock_inicial" numeric, "entradas" numeric, "salidas" numeric, "ajustes" numeric, "diferencia_sin_registro" numeric, "ultimo_movimiento_fecha" timestamp with time zone, "ultimo_movimiento_clase" "text")
+    LANGUAGE "sql" STABLE
+    SET "search_path" TO 'public'
+    AS $$
+WITH
+actual AS (
+  SELECT COALESCE((SELECT sum(s.cantidad) FROM stock_ubicaciones s WHERE s.producto_id = p_producto_id), 0) AS stock,
+         COALESCE((SELECT sum(m.cantidad) FROM movimientos_stock m WHERE m.producto_id = p_producto_id), 0) AS suma
+),
+m AS (
+  SELECT x.origen, x.cantidad
+  FROM movimientos_stock x
+  WHERE x.producto_id = p_producto_id
+    AND (p_desde IS NULL OR x.created_at >= p_desde)
+    AND (p_hasta IS NULL OR x.created_at < p_hasta)
+),
+ult AS (
+  SELECT x.created_at, x.origen FROM movimientos_stock x
+  WHERE x.producto_id = p_producto_id ORDER BY x.created_at DESC, x.id DESC LIMIT 1
+)
+SELECT a.stock,
+       COALESCE((SELECT sum(cantidad) FROM m WHERE origen IN ('carga_inicial', 'carga_inicial_correccion')), 0),
+       COALESCE((SELECT sum(cantidad) FROM m WHERE origen IN ('compra', 'compra_correccion', 'devolucion_cliente', 'anulacion_venta')
+                                                 OR (origen = 'anulacion_devolucion' AND cantidad < 0)), 0),
+       -COALESCE((SELECT sum(cantidad) FROM m WHERE origen IN ('venta', 'cambio_entrega', 'devolucion_proveedor', 'anulacion_compra')
+                                                  OR (origen = 'anulacion_devolucion' AND cantidad > 0)), 0),
+       COALESCE((SELECT sum(cantidad) FROM m WHERE origen IN ('ajuste_manual', 'reversion_ajuste')), 0),
+       a.stock - a.suma,
+       (SELECT created_at FROM ult),
+       (SELECT origen FROM ult)
+FROM actual a;
+$$;
+
+
+ALTER FUNCTION "public"."resumen_historial_producto"("p_producto_id" "uuid", "p_desde" timestamp with time zone, "p_hasta" timestamp with time zone) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."resumen_historial_producto"("p_producto_id" "uuid", "p_desde" timestamp with time zone, "p_hasta" timestamp with time zone) IS 'docs/70 (D3): totales del historial de un producto. Stock actual y último movimiento nunca dependen del filtro.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."resumen_stock_inventario"() RETURNS TABLE("activos" integer, "sin_stock" integer, "negativo" integer, "bajo" integer, "sin_minimo" integer)
     LANGUAGE "sql" STABLE
     SET "search_path" TO 'public'
@@ -5002,6 +5472,8 @@ CREATE OR REPLACE FUNCTION "public"."revertir_edicion"("p_auditoria_id" "uuid") 
 DECLARE
   v_auditoria auditoria%ROWTYPE;
   v_set_clause TEXT;
+  -- docs/69: campos que solo cambian cargar_saldos_iniciales / corregir_saldo_inicial.
+  v_campos_saldo CONSTANT text[] := ARRAY['saldo_inicial', 'saldo_inicial_fecha', 'saldo_inicial_usuario_id'];
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM perfiles WHERE id = auth.uid() AND rol = 'admin' AND activo = true) THEN
     RAISE EXCEPTION 'Solo un administrador puede revertir acciones';
@@ -5017,10 +5489,21 @@ BEGIN
     RAISE EXCEPTION 'Esta acción ya fue revertida';
   END IF;
 
+  -- Una edición que solo tocó el saldo inicial no se revierte acá (se corrige con motivo).
+  IF v_auditoria.tabla_afectada IN ('proveedores', 'clientes')
+     AND EXISTS (SELECT 1 FROM jsonb_each(v_auditoria.valores_anteriores) a
+                 WHERE a.key = ANY(v_campos_saldo) AND a.value IS DISTINCT FROM v_auditoria.valores_nuevos->a.key)
+     AND NOT EXISTS (SELECT 1 FROM jsonb_each(v_auditoria.valores_anteriores) a
+                     WHERE a.key <> ALL(v_campos_saldo) AND a.key NOT IN ('id', 'created_at', 'updated_at')
+                       AND a.value IS DISTINCT FROM v_auditoria.valores_nuevos->a.key) THEN
+    RAISE EXCEPTION 'Este cambio es del saldo inicial: se corrige desde Caja Gestión → Carga inicial (Corregir), con motivo';
+  END IF;
+
   SELECT string_agg(format('%I = %L', kv.key, kv.value), ', ')
   INTO v_set_clause
   FROM jsonb_each_text(v_auditoria.valores_anteriores) AS kv(key, value)
-  WHERE kv.key NOT IN ('id', 'created_at', 'updated_at', 'precio_venta', 'precio_calculado');
+  WHERE kv.key NOT IN ('id', 'created_at', 'updated_at', 'precio_venta', 'precio_calculado')
+    AND kv.key <> ALL(v_campos_saldo);
 
   IF v_set_clause IS NULL THEN RAISE EXCEPTION 'No hay valores anteriores para restaurar'; END IF;
 
@@ -5076,9 +5559,9 @@ BEGIN
       RAISE EXCEPTION 'Solo se puede revertir un ajuste de stock manual (no una venta, compra, ni una reposición automática)';
     END IF;
 
-    INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, motivo, usuario_id)
+    INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, motivo, usuario_id, origen)  -- docs/70: origen
     VALUES ((v_row->>'producto_id')::UUID, (v_row->>'ubicacion')::ubicacion_stock, 'ajuste',
-            -1 * (v_row->>'cantidad')::NUMERIC, 'Reversión de ajuste (auditoría)', auth.uid());
+            -1 * (v_row->>'cantidad')::NUMERIC, 'Reversión de ajuste (auditoría)', auth.uid(), 'reversion_ajuste');
 
     INSERT INTO stock_ubicaciones (producto_id, ubicacion, cantidad)
     VALUES ((v_row->>'producto_id')::UUID, (v_row->>'ubicacion')::ubicacion_stock, -1 * (v_row->>'cantidad')::NUMERIC)
@@ -5366,9 +5849,9 @@ BEGIN
   UPDATE facturas_compra_items SET producto_id = p_producto_id, descripcion = v_nombre WHERE id = p_item_id;
 
   -- Mismo par de escrituras que cargar_factura_compra para un ítem vinculado.
-  INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, motivo, referencia_id, usuario_id)
+  INSERT INTO movimientos_stock (producto_id, ubicacion, tipo, cantidad, motivo, referencia_id, usuario_id, origen)  -- docs/70: origen
   VALUES (p_producto_id, v_item.ubicacion, 'compra', v_item.cantidad,
-          'Ítem de factura vinculado después de cargada', v_item.factura_compra_id, auth.uid());
+          'Ítem de factura vinculado después de cargada', v_item.factura_compra_id, auth.uid(), 'compra');
 
   INSERT INTO stock_ubicaciones (producto_id, ubicacion, cantidad)
   VALUES (p_producto_id, v_item.ubicacion, v_item.cantidad)
@@ -5553,14 +6036,28 @@ CREATE TABLE IF NOT EXISTS "public"."proveedores" (
     "margen_2_default" numeric(6,2) DEFAULT 0 NOT NULL,
     "saldo_inicial" numeric(12,2) DEFAULT 0 NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "observaciones" "text"
+    "observaciones" "text",
+    "saldo_inicial_fecha" timestamp with time zone,
+    "saldo_inicial_usuario_id" "uuid"
 );
 
 
 ALTER TABLE "public"."proveedores" OWNER TO "postgres";
 
 
+COMMENT ON COLUMN "public"."proveedores"."saldo_inicial" IS 'Deuda con la que arranca en el sistema. Único: se carga una vez (cargar_saldos_iniciales) y se corrige con motivo (corregir_saldo_inicial). Solo admin. docs/69.';
+
+
+
 COMMENT ON COLUMN "public"."proveedores"."observaciones" IS 'Notas internas libres sobre el proveedor (ayuda memoria). Null si no hay. Se muestran al cargar una compra y en su cuenta corriente.';
+
+
+
+COMMENT ON COLUMN "public"."proveedores"."saldo_inicial_fecha" IS 'docs/69: cuándo se cargó o corrigió por última vez el saldo inicial. NULL = nunca se cargó.';
+
+
+
+COMMENT ON COLUMN "public"."proveedores"."saldo_inicial_usuario_id" IS 'docs/69: quién cargó o corrigió por última vez el saldo inicial.';
 
 
 
@@ -5644,6 +6141,8 @@ CREATE TABLE IF NOT EXISTS "public"."clientes" (
     "condicion_iva" "public"."condicion_iva_cliente" DEFAULT 'consumidor_final'::"public"."condicion_iva_cliente" NOT NULL,
     "tipo" "public"."tipo_cliente" DEFAULT 'externo'::"public"."tipo_cliente" NOT NULL,
     "perfil_id" "uuid",
+    "saldo_inicial_fecha" timestamp with time zone,
+    "saldo_inicial_usuario_id" "uuid",
     CONSTRAINT "chk_cliente_perfil_solo_interno" CHECK ((("perfil_id" IS NULL) OR ("tipo" = 'interno'::"public"."tipo_cliente")))
 );
 
@@ -5651,11 +6150,23 @@ CREATE TABLE IF NOT EXISTS "public"."clientes" (
 ALTER TABLE "public"."clientes" OWNER TO "postgres";
 
 
+COMMENT ON COLUMN "public"."clientes"."saldo_inicial" IS 'Deuda con la que arranca en el sistema. Único: se carga una vez (cargar_saldos_iniciales) y se corrige con motivo (corregir_saldo_inicial). Solo admin. docs/69.';
+
+
+
 COMMENT ON COLUMN "public"."clientes"."tipo" IS 'docs/68: interno = dueña o empleado (sus ventas a cta. cte. las edita y finaliza un admin, sin cobro). Solo un admin lo cambia.';
 
 
 
 COMMENT ON COLUMN "public"."clientes"."perfil_id" IS 'docs/68: usuario del sistema que es este cliente interno (opcional).';
+
+
+
+COMMENT ON COLUMN "public"."clientes"."saldo_inicial_fecha" IS 'docs/69: cuándo se cargó o corrigió por última vez el saldo inicial. NULL = nunca se cargó.';
+
+
+
+COMMENT ON COLUMN "public"."clientes"."saldo_inicial_usuario_id" IS 'docs/69: quién cargó o corrigió por última vez el saldo inicial.';
 
 
 
@@ -5708,32 +6219,64 @@ ALTER TABLE "public"."pagos_cliente_aplicaciones" OWNER TO "postgres";
 
 
 CREATE OR REPLACE VIEW "public"."pagos_cliente_a_cuenta" WITH ("security_invoker"='on') AS
- SELECT "pc"."id",
-    "pc"."cliente_id",
-    "pc"."fecha",
-    "pc"."created_at",
-    "pc"."monto",
-    "pc"."origen",
-    "ap"."aplicado",
-    "v"."vigente",
-        CASE
-            WHEN "v"."vigente" THEN ("pc"."monto" - "ap"."aplicado")
-            ELSE (0)::numeric
-        END AS "a_cuenta"
-   FROM (("public"."pagos_cliente" "pc"
-     CROSS JOIN LATERAL ( SELECT COALESCE("sum"("a"."monto"), (0)::numeric) AS "aplicado"
-           FROM "public"."pagos_cliente_aplicaciones" "a"
-          WHERE (("a"."pago_cliente_id" = "pc"."id") AND ("a"."revertida_at" IS NULL))) "ap")
-     CROSS JOIN LATERAL ( SELECT (("pc"."monto" > (0)::numeric) AND ("pc"."revierte_pago_cliente_id" IS NULL) AND (NOT (EXISTS ( SELECT 1
-                   FROM "public"."pagos_cliente" "r"
-                  WHERE ("r"."revierte_pago_cliente_id" = "pc"."id"))))) AS "vigente") "v");
+ SELECT "id",
+    "cliente_id",
+    "fecha",
+    "created_at",
+    "monto",
+    "origen",
+    "aplicado",
+    "vigente",
+    "a_cuenta",
+    ("a_cuenta" - "a_cuenta_libre") AS "cancela_saldo_inicial",
+    "a_cuenta_libre"
+   FROM ( SELECT "x"."id",
+            "x"."cliente_id",
+            "x"."fecha",
+            "x"."created_at",
+            "x"."monto",
+            "x"."origen",
+            "x"."aplicado",
+            "x"."vigente",
+            "x"."a_cuenta",
+            GREATEST((0)::numeric, LEAST("x"."a_cuenta", ("sum"(GREATEST("x"."a_cuenta", (0)::numeric)) OVER (PARTITION BY "x"."cliente_id" ORDER BY "x"."fecha", "x"."created_at", "x"."id") - GREATEST("c"."saldo_inicial", (0)::numeric)))) AS "a_cuenta_libre"
+           FROM (( SELECT "pc"."id",
+                    "pc"."cliente_id",
+                    "pc"."fecha",
+                    "pc"."created_at",
+                    "pc"."monto",
+                    "pc"."origen",
+                    "ap"."aplicado",
+                    "v"."vigente",
+                        CASE
+                            WHEN "v"."vigente" THEN ("pc"."monto" - "ap"."aplicado")
+                            ELSE (0)::numeric
+                        END AS "a_cuenta"
+                   FROM (("public"."pagos_cliente" "pc"
+                     CROSS JOIN LATERAL ( SELECT COALESCE("sum"("a"."monto"), (0)::numeric) AS "aplicado"
+                           FROM "public"."pagos_cliente_aplicaciones" "a"
+                          WHERE (("a"."pago_cliente_id" = "pc"."id") AND ("a"."revertida_at" IS NULL))) "ap")
+                     CROSS JOIN LATERAL ( SELECT (("pc"."monto" > (0)::numeric) AND ("pc"."revierte_pago_cliente_id" IS NULL) AND (NOT (EXISTS ( SELECT 1
+                                   FROM "public"."pagos_cliente" "r"
+                                  WHERE ("r"."revierte_pago_cliente_id" = "pc"."id"))))) AS "vigente") "v")) "x"
+             JOIN "public"."clientes" "c" ON (("c"."id" = "x"."cliente_id")))) "b";
 
 
 ALTER VIEW "public"."pagos_cliente_a_cuenta" OWNER TO "postgres";
 
 
-COMMENT ON VIEW "public"."pagos_cliente_a_cuenta" IS 'docs/68: por cobro, lo aplicado vigente y lo que queda a cuenta (0 en reversiones y revertidos).';
+COMMENT ON VIEW "public"."pagos_cliente_a_cuenta" IS 'docs/68 + docs/69: por cobro, lo aplicado vigente y lo que queda a cuenta (0 en reversiones y revertidos). cancela_saldo_inicial = parte que cancela el saldo inicial (cobros más viejos primero); a_cuenta_libre = lo que se puede aplicar a ventas.';
 
+
+
+CREATE OR REPLACE VIEW "public"."perfiles_publico" AS
+ SELECT "id",
+    "nombre"
+   FROM "public"."perfiles"
+  WHERE ("activo" = true);
+
+
+ALTER VIEW "public"."perfiles_publico" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."ventas" (
@@ -5869,8 +6412,13 @@ CREATE OR REPLACE VIEW "public"."clientes_saldo" WITH ("security_invoker"='on') 
     COALESCE("vt"."interno_pendiente", (0)::numeric) AS "consumo_interno_pendiente",
     COALESCE("ac"."a_cuenta", (0)::numeric) AS "a_cuenta",
     ((("c"."saldo_inicial" + COALESCE("vt"."neto", (0)::numeric)) - COALESCE("vt"."interno_pendiente", (0)::numeric)) - COALESCE("pg"."total_pagado", (0)::numeric)) AS "saldo_cobrable",
-    COALESCE("vt"."comprobantes_abiertos", (0)::bigint) AS "comprobantes_abiertos"
-   FROM ((("public"."clientes" "c"
+    COALESCE("vt"."comprobantes_abiertos", (0)::bigint) AS "comprobantes_abiertos",
+    "c"."saldo_inicial_fecha",
+    "c"."saldo_inicial_usuario_id",
+    "u"."nombre" AS "saldo_inicial_usuario_nombre",
+    ("c"."saldo_inicial" - COALESCE(("ac"."a_cuenta" - "ac"."a_cuenta_libre"), (0)::numeric)) AS "saldo_inicial_pendiente",
+    COALESCE("ac"."a_cuenta_libre", (0)::numeric) AS "a_cuenta_libre"
+   FROM (((("public"."clientes" "c"
      LEFT JOIN ( SELECT "s"."cliente_id",
             "sum"(("s"."total" - "s"."total_devuelto")) FILTER (WHERE ("s"."estado_interno" IS DISTINCT FROM 'finalizado'::"public"."estado_venta_interna")) AS "neto",
             "sum"("s"."saldo_pendiente") FILTER (WHERE ("s"."estado_interno" IS NULL)) AS "deuda_comprobantes",
@@ -5884,15 +6432,17 @@ CREATE OR REPLACE VIEW "public"."clientes_saldo" WITH ("security_invoker"='on') 
            FROM "public"."pagos_cliente"
           GROUP BY "pagos_cliente"."cliente_id") "pg" ON (("pg"."cliente_id" = "c"."id")))
      LEFT JOIN ( SELECT "pagos_cliente_a_cuenta"."cliente_id",
-            "sum"("pagos_cliente_a_cuenta"."a_cuenta") AS "a_cuenta"
+            "sum"("pagos_cliente_a_cuenta"."a_cuenta") AS "a_cuenta",
+            "sum"("pagos_cliente_a_cuenta"."a_cuenta_libre") AS "a_cuenta_libre"
            FROM "public"."pagos_cliente_a_cuenta"
-          GROUP BY "pagos_cliente_a_cuenta"."cliente_id") "ac" ON (("ac"."cliente_id" = "c"."id")));
+          GROUP BY "pagos_cliente_a_cuenta"."cliente_id") "ac" ON (("ac"."cliente_id" = "c"."id")))
+     LEFT JOIN "public"."perfiles_publico" "u" ON (("u"."id" = "c"."saldo_inicial_usuario_id")));
 
 
 ALTER VIEW "public"."clientes_saldo" OWNER TO "postgres";
 
 
-COMMENT ON VIEW "public"."clientes_saldo" IS 'docs/68: saldo de cuenta corriente por cliente. saldo_actual excluye internas finalizadas y descuenta devoluciones imputadas; saldo_cobrable además excluye internas pendientes (no se cobran, se finalizan).';
+COMMENT ON VIEW "public"."clientes_saldo" IS 'docs/68 + docs/69: saldo de cuenta corriente por cliente. saldo_actual excluye internas finalizadas y descuenta devoluciones imputadas; saldo_cobrable además excluye internas pendientes. saldo_inicial_pendiente / a_cuenta_libre: los cobros sin venta cancelan primero el saldo inicial.';
 
 
 
@@ -6249,11 +6799,17 @@ CREATE TABLE IF NOT EXISTS "public"."movimientos_stock" (
     "motivo" "text",
     "referencia_id" "uuid",
     "usuario_id" "uuid" NOT NULL,
-    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "origen" "text" NOT NULL,
+    CONSTRAINT "chk_movimientos_stock_origen" CHECK (((("tipo" = 'venta'::"public"."tipo_movimiento_stock") AND ("origen" = 'venta'::"text")) OR (("tipo" = 'compra'::"public"."tipo_movimiento_stock") AND ("origen" = ANY (ARRAY['compra'::"text", 'compra_correccion'::"text"]))) OR (("tipo" = 'inicial'::"public"."tipo_movimiento_stock") AND ("origen" = ANY (ARRAY['carga_inicial'::"text", 'carga_inicial_correccion'::"text"]))) OR (("tipo" = 'ajuste'::"public"."tipo_movimiento_stock") AND ("origen" = ANY (ARRAY['anulacion_venta'::"text", 'devolucion_cliente'::"text", 'cambio_entrega'::"text", 'anulacion_devolucion'::"text", 'devolucion_proveedor'::"text", 'anulacion_compra'::"text", 'ajuste_manual'::"text", 'reversion_ajuste'::"text"])))))
 );
 
 
 ALTER TABLE "public"."movimientos_stock" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."movimientos_stock"."origen" IS 'docs/70: qué fue el movimiento (venta, anulacion_venta, devolucion_cliente, cambio_entrega, anulacion_devolucion, compra, compra_correccion, devolucion_proveedor, anulacion_compra, ajuste_manual, reversion_ajuste, carga_inicial, carga_inicial_correccion). Coherente con tipo (CHECK).';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."notas_internas" (
@@ -6315,41 +6871,67 @@ ALTER TABLE "public"."pagos_cliente_medios" OWNER TO "postgres";
 
 
 CREATE OR REPLACE VIEW "public"."pagos_proveedor_a_cuenta" WITH ("security_invoker"='on') AS
- SELECT "pp"."id",
-    "pp"."proveedor_id",
-    "pp"."fecha",
-    "pp"."created_at",
-    "pp"."monto",
-    "ap"."aplicado",
-    "v"."vigente",
-        CASE
-            WHEN "v"."vigente" THEN ("pp"."monto" - "ap"."aplicado")
-            ELSE (0)::numeric
-        END AS "a_cuenta"
-   FROM (("public"."pagos_proveedor" "pp"
-     CROSS JOIN LATERAL ( SELECT COALESCE("sum"("a"."monto"), (0)::numeric) AS "aplicado"
-           FROM "public"."pagos_proveedor_aplicaciones" "a"
-          WHERE (("a"."pago_proveedor_id" = "pp"."id") AND ("a"."revertida_at" IS NULL))) "ap")
-     CROSS JOIN LATERAL ( SELECT (("pp"."monto" > (0)::numeric) AND ("pp"."revierte_pago_proveedor_id" IS NULL) AND (NOT (EXISTS ( SELECT 1
-                   FROM "public"."pagos_proveedor" "r"
-                  WHERE ("r"."revierte_pago_proveedor_id" = "pp"."id"))))) AS "vigente") "v");
+ SELECT "id",
+    "proveedor_id",
+    "fecha",
+    "created_at",
+    "monto",
+    "aplicado",
+    "vigente",
+    "a_cuenta",
+    ("a_cuenta" - "a_cuenta_libre") AS "cancela_saldo_inicial",
+    "a_cuenta_libre"
+   FROM ( SELECT "x"."id",
+            "x"."proveedor_id",
+            "x"."fecha",
+            "x"."created_at",
+            "x"."monto",
+            "x"."aplicado",
+            "x"."vigente",
+            "x"."a_cuenta",
+            GREATEST((0)::numeric, LEAST("x"."a_cuenta", ("sum"(GREATEST("x"."a_cuenta", (0)::numeric)) OVER (PARTITION BY "x"."proveedor_id" ORDER BY "x"."fecha", "x"."created_at", "x"."id") - GREATEST("p"."saldo_inicial", (0)::numeric)))) AS "a_cuenta_libre"
+           FROM (( SELECT "pp"."id",
+                    "pp"."proveedor_id",
+                    "pp"."fecha",
+                    "pp"."created_at",
+                    "pp"."monto",
+                    "ap"."aplicado",
+                    "v"."vigente",
+                        CASE
+                            WHEN "v"."vigente" THEN ("pp"."monto" - "ap"."aplicado")
+                            ELSE (0)::numeric
+                        END AS "a_cuenta"
+                   FROM (("public"."pagos_proveedor" "pp"
+                     CROSS JOIN LATERAL ( SELECT COALESCE("sum"("a"."monto"), (0)::numeric) AS "aplicado"
+                           FROM "public"."pagos_proveedor_aplicaciones" "a"
+                          WHERE (("a"."pago_proveedor_id" = "pp"."id") AND ("a"."revertida_at" IS NULL))) "ap")
+                     CROSS JOIN LATERAL ( SELECT (("pp"."monto" > (0)::numeric) AND ("pp"."revierte_pago_proveedor_id" IS NULL) AND (NOT (EXISTS ( SELECT 1
+                                   FROM "public"."pagos_proveedor" "r"
+                                  WHERE ("r"."revierte_pago_proveedor_id" = "pp"."id"))))) AS "vigente") "v")) "x"
+             JOIN "public"."proveedores" "p" ON (("p"."id" = "x"."proveedor_id")))) "b";
 
 
 ALTER VIEW "public"."pagos_proveedor_a_cuenta" OWNER TO "postgres";
 
 
-COMMENT ON VIEW "public"."pagos_proveedor_a_cuenta" IS 'docs/52: por pago, lo aplicado vigente y lo que queda a cuenta (0 en reversiones, revertidos y operaciones solo de NC).';
+COMMENT ON VIEW "public"."pagos_proveedor_a_cuenta" IS 'docs/52 + docs/69: por pago, lo aplicado vigente y lo que queda a cuenta (0 en reversiones, revertidos y operaciones solo de NC). cancela_saldo_inicial = parte que cancela el saldo inicial (pagos más viejos primero); a_cuenta_libre = lo que se puede aplicar a comprobantes.';
 
 
 
-CREATE OR REPLACE VIEW "public"."perfiles_publico" AS
+CREATE OR REPLACE VIEW "public"."perfiles_historial" WITH ("security_barrier"='true') AS
  SELECT "id",
     "nombre"
-   FROM "public"."perfiles"
-  WHERE ("activo" = true);
+   FROM "public"."perfiles" "p"
+  WHERE (EXISTS ( SELECT 1
+           FROM "public"."perfiles" "yo"
+          WHERE (("yo"."id" = "auth"."uid"()) AND "yo"."activo")));
 
 
-ALTER VIEW "public"."perfiles_publico" OWNER TO "postgres";
+ALTER VIEW "public"."perfiles_historial" OWNER TO "postgres";
+
+
+COMMENT ON VIEW "public"."perfiles_historial" IS 'docs/70 (D6): id + nombre de todos los usuarios (incluye inactivos), para mostrar quién hizo cada evento del historial. Solo para perfiles activos.';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."productos" (
@@ -6407,11 +6989,16 @@ CREATE TABLE IF NOT EXISTS "public"."productos_precios_historial" (
     "origen" "text" NOT NULL,
     "usuario_id" "uuid",
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "reconstruido" boolean DEFAULT false NOT NULL,
     CONSTRAINT "productos_precios_historial_origen_check" CHECK (("origen" = ANY (ARRAY['manual'::"text", 'factura'::"text", 'masivo'::"text", 'margen'::"text", 'iva'::"text", 'reversion'::"text", 'alta'::"text"])))
 );
 
 
 ALTER TABLE "public"."productos_precios_historial" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."productos_precios_historial"."reconstruido" IS 'docs/70: fila agregada después, desde auditoria (precio del alta de productos anteriores al trigger). La alerta de precios no la cuenta.';
+
 
 
 ALTER TABLE "public"."productos_precios_historial" ALTER COLUMN "id" ADD GENERATED ALWAYS AS IDENTITY (
@@ -6428,7 +7015,8 @@ ALTER TABLE "public"."productos_precios_historial" ALTER COLUMN "id" ADD GENERAT
 CREATE OR REPLACE VIEW "public"."proveedores_a_cuenta" WITH ("security_invoker"='on') AS
  SELECT "proveedor_id",
     "sum"("a_cuenta") AS "a_cuenta",
-    "count"(*) FILTER (WHERE ("a_cuenta" > (0)::numeric)) AS "pagos_con_saldo"
+    "count"(*) FILTER (WHERE ("a_cuenta" > (0)::numeric)) AS "pagos_con_saldo",
+    "sum"("a_cuenta_libre") AS "a_cuenta_libre"
    FROM "public"."pagos_proveedor_a_cuenta"
   GROUP BY "proveedor_id";
 
@@ -6436,7 +7024,7 @@ CREATE OR REPLACE VIEW "public"."proveedores_a_cuenta" WITH ("security_invoker"=
 ALTER VIEW "public"."proveedores_a_cuenta" OWNER TO "postgres";
 
 
-COMMENT ON VIEW "public"."proveedores_a_cuenta" IS 'docs/52: total a cuenta (pagos sin aplicar) por proveedor.';
+COMMENT ON VIEW "public"."proveedores_a_cuenta" IS 'docs/52 + docs/69: total a cuenta (pagos sin aplicar) por proveedor; a_cuenta_libre descuenta lo que cancela el saldo inicial.';
 
 
 
@@ -6453,8 +7041,13 @@ CREATE OR REPLACE VIEW "public"."proveedores_saldo" WITH ("security_invoker"='on
     "p"."saldo_inicial",
     "p"."created_at",
     (("p"."saldo_inicial" + COALESCE("facturado"."total_facturado", (0)::numeric)) - COALESCE("pagado"."total_pagado", (0)::numeric)) AS "saldo_actual",
-    "p"."observaciones"
-   FROM (("public"."proveedores" "p"
+    "p"."observaciones",
+    "p"."saldo_inicial_fecha",
+    "p"."saldo_inicial_usuario_id",
+    "u"."nombre" AS "saldo_inicial_usuario_nombre",
+    ("p"."saldo_inicial" - COALESCE(("ac"."a_cuenta" - "ac"."a_cuenta_libre"), (0)::numeric)) AS "saldo_inicial_pendiente",
+    COALESCE("ac"."a_cuenta_libre", (0)::numeric) AS "a_cuenta_libre"
+   FROM (((("public"."proveedores" "p"
      LEFT JOIN ( SELECT "facturas_compra"."proveedor_id",
             "sum"(
                 CASE
@@ -6467,7 +7060,9 @@ CREATE OR REPLACE VIEW "public"."proveedores_saldo" WITH ("security_invoker"='on
      LEFT JOIN ( SELECT "pagos_proveedor"."proveedor_id",
             "sum"("pagos_proveedor"."monto") AS "total_pagado"
            FROM "public"."pagos_proveedor"
-          GROUP BY "pagos_proveedor"."proveedor_id") "pagado" ON (("pagado"."proveedor_id" = "p"."id")));
+          GROUP BY "pagos_proveedor"."proveedor_id") "pagado" ON (("pagado"."proveedor_id" = "p"."id")))
+     LEFT JOIN "public"."proveedores_a_cuenta" "ac" ON (("ac"."proveedor_id" = "p"."id")))
+     LEFT JOIN "public"."perfiles_publico" "u" ON (("u"."id" = "p"."saldo_inicial_usuario_id")));
 
 
 ALTER VIEW "public"."proveedores_saldo" OWNER TO "postgres";
@@ -6877,7 +7472,7 @@ CREATE INDEX "idx_movimientos_cuenta_cuenta" ON "public"."movimientos_cuenta" US
 
 
 
-CREATE INDEX "idx_movimientos_stock_producto" ON "public"."movimientos_stock" USING "btree" ("producto_id");
+CREATE INDEX "idx_movimientos_stock_producto_fecha" ON "public"."movimientos_stock" USING "btree" ("producto_id", "created_at", "id");
 
 
 
@@ -7104,6 +7699,10 @@ CREATE OR REPLACE TRIGGER "trg_borradores_mantener" BEFORE INSERT OR UPDATE ON "
 
 
 
+CREATE OR REPLACE TRIGGER "trg_movimiento_stock_origen" BEFORE INSERT ON "public"."movimientos_stock" FOR EACH ROW EXECUTE FUNCTION "public"."fn_movimiento_stock_origen"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_normalizar_descripcion_item_libre" BEFORE INSERT OR UPDATE ON "public"."facturas_compra_items" FOR EACH ROW EXECUTE FUNCTION "public"."normalizar_descripcion_item_libre"();
 
 
@@ -7149,6 +7748,14 @@ CREATE OR REPLACE TRIGGER "trg_proteger_margen_producto" BEFORE UPDATE ON "publi
 
 
 CREATE OR REPLACE TRIGGER "trg_proteger_margen_proveedor" BEFORE UPDATE ON "public"."proveedores" FOR EACH ROW EXECUTE FUNCTION "public"."fn_proteger_margen_proveedor"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_proteger_saldo_inicial" BEFORE INSERT OR UPDATE ON "public"."clientes" FOR EACH ROW EXECUTE FUNCTION "public"."fn_proteger_saldo_inicial"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_proteger_saldo_inicial" BEFORE INSERT OR UPDATE ON "public"."proveedores" FOR EACH ROW EXECUTE FUNCTION "public"."fn_proteger_saldo_inicial"();
 
 
 
@@ -7304,6 +7911,11 @@ ALTER TABLE ONLY "public"."cierres_caja"
 
 ALTER TABLE ONLY "public"."clientes"
     ADD CONSTRAINT "clientes_perfil_id_fkey" FOREIGN KEY ("perfil_id") REFERENCES "public"."perfiles"("id");
+
+
+
+ALTER TABLE ONLY "public"."clientes"
+    ADD CONSTRAINT "clientes_saldo_inicial_usuario_id_fkey" FOREIGN KEY ("saldo_inicial_usuario_id") REFERENCES "public"."perfiles"("id");
 
 
 
@@ -7604,6 +8216,11 @@ ALTER TABLE ONLY "public"."productos_precios_historial"
 
 ALTER TABLE ONLY "public"."productos"
     ADD CONSTRAINT "productos_proveedor_id_fkey" FOREIGN KEY ("proveedor_id") REFERENCES "public"."proveedores"("id");
+
+
+
+ALTER TABLE ONLY "public"."proveedores"
+    ADD CONSTRAINT "proveedores_saldo_inicial_usuario_id_fkey" FOREIGN KEY ("saldo_inicial_usuario_id") REFERENCES "public"."perfiles"("id");
 
 
 
@@ -8436,6 +9053,11 @@ GRANT ALL ON FUNCTION "public"."cerrar_carga_inicial"() TO "service_role";
 
 
 
+REVOKE ALL ON FUNCTION "public"."clasificar_movimiento_stock"("p_tipo" "public"."tipo_movimiento_stock", "p_cantidad" numeric, "p_motivo" "text", "p_referencia_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."clasificar_movimiento_stock"("p_tipo" "public"."tipo_movimiento_stock", "p_cantidad" numeric, "p_motivo" "text", "p_referencia_id" "uuid") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."codigo_barras_variantes"("p_codigo" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."codigo_barras_variantes"("p_codigo" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."codigo_barras_variantes"("p_codigo" "text") TO "service_role";
@@ -8445,6 +9067,12 @@ GRANT ALL ON FUNCTION "public"."codigo_barras_variantes"("p_codigo" "text") TO "
 REVOKE ALL ON FUNCTION "public"."confirmar_venta"("p_cliente_id" "uuid", "p_forma_pago" "public"."forma_pago_venta", "p_items" "jsonb", "p_descuento_porcentaje" numeric, "p_nota" "text", "p_recargo_porcentaje" numeric, "p_pagos" "jsonb", "p_precio_cobrado" numeric, "p_client_id" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."confirmar_venta"("p_cliente_id" "uuid", "p_forma_pago" "public"."forma_pago_venta", "p_items" "jsonb", "p_descuento_porcentaje" numeric, "p_nota" "text", "p_recargo_porcentaje" numeric, "p_pagos" "jsonb", "p_precio_cobrado" numeric, "p_client_id" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."confirmar_venta"("p_cliente_id" "uuid", "p_forma_pago" "public"."forma_pago_venta", "p_items" "jsonb", "p_descuento_porcentaje" numeric, "p_nota" "text", "p_recargo_porcentaje" numeric, "p_pagos" "jsonb", "p_precio_cobrado" numeric, "p_client_id" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."corregir_saldo_inicial"("p_tipo" "text", "p_id" "uuid", "p_monto_nuevo" numeric, "p_motivo" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."corregir_saldo_inicial"("p_tipo" "text", "p_id" "uuid", "p_monto_nuevo" numeric, "p_motivo" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."corregir_saldo_inicial"("p_tipo" "text", "p_id" "uuid", "p_monto_nuevo" numeric, "p_motivo" "text") TO "service_role";
 
 
 
@@ -8579,6 +9207,11 @@ GRANT ALL ON FUNCTION "public"."fn_auditoria_generica"() TO "service_role";
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_movimiento_stock_origen"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_movimiento_stock_origen"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_productos_precio_historial"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_productos_precio_historial"() TO "service_role";
 
@@ -8610,6 +9243,11 @@ GRANT ALL ON FUNCTION "public"."fn_proteger_margen_proveedor"() TO "service_role
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_proteger_saldo_inicial"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_proteger_saldo_inicial"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_proteger_tipo_cliente"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_proteger_tipo_cliente"() TO "service_role";
 
@@ -8620,9 +9258,21 @@ GRANT ALL ON FUNCTION "public"."fn_sin_acentos"() TO "service_role";
 
 
 
+REVOKE ALL ON FUNCTION "public"."formato_pesos"("p" numeric) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."formato_pesos"("p" numeric) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."formato_pesos"("p" numeric) TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."generar_codigo_interno"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."generar_codigo_interno"() TO "service_role";
 GRANT ALL ON FUNCTION "public"."generar_codigo_interno"() TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."historial_producto"("p_producto_id" "uuid", "p_desde" timestamp with time zone, "p_hasta" timestamp with time zone, "p_clases" "text"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."historial_producto"("p_producto_id" "uuid", "p_desde" timestamp with time zone, "p_hasta" timestamp with time zone, "p_clases" "text"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."historial_producto"("p_producto_id" "uuid", "p_desde" timestamp with time zone, "p_hasta" timestamp with time zone, "p_clases" "text"[]) TO "service_role";
 
 
 
@@ -8824,6 +9474,12 @@ GRANT ALL ON FUNCTION "public"."reservar_emision_factura_c"("p_venta_id" "uuid")
 
 
 
+REVOKE ALL ON FUNCTION "public"."resumen_historial_producto"("p_producto_id" "uuid", "p_desde" timestamp with time zone, "p_hasta" timestamp with time zone) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."resumen_historial_producto"("p_producto_id" "uuid", "p_desde" timestamp with time zone, "p_hasta" timestamp with time zone) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."resumen_historial_producto"("p_producto_id" "uuid", "p_desde" timestamp with time zone, "p_hasta" timestamp with time zone) TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."resumen_stock_inventario"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."resumen_stock_inventario"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."resumen_stock_inventario"() TO "service_role";
@@ -8963,6 +9619,11 @@ GRANT SELECT ON TABLE "public"."pagos_cliente_a_cuenta" TO "authenticated";
 
 
 
+GRANT SELECT,MAINTAIN ON TABLE "public"."perfiles_publico" TO "authenticated";
+GRANT ALL ON TABLE "public"."perfiles_publico" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."ventas" TO "authenticated";
 GRANT ALL ON TABLE "public"."ventas" TO "service_role";
 
@@ -9088,8 +9749,8 @@ GRANT SELECT ON TABLE "public"."pagos_proveedor_a_cuenta" TO "authenticated";
 
 
 
-GRANT SELECT,MAINTAIN ON TABLE "public"."perfiles_publico" TO "authenticated";
-GRANT ALL ON TABLE "public"."perfiles_publico" TO "service_role";
+GRANT ALL ON TABLE "public"."perfiles_historial" TO "service_role";
+GRANT SELECT ON TABLE "public"."perfiles_historial" TO "authenticated";
 
 
 
@@ -9118,8 +9779,8 @@ GRANT SELECT ON TABLE "public"."proveedores_a_cuenta" TO "authenticated";
 
 
 
-GRANT SELECT,MAINTAIN ON TABLE "public"."proveedores_saldo" TO "authenticated";
 GRANT ALL ON TABLE "public"."proveedores_saldo" TO "service_role";
+GRANT SELECT ON TABLE "public"."proveedores_saldo" TO "authenticated";
 
 
 

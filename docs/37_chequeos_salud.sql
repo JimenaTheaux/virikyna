@@ -16,8 +16,9 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 
 -- S1. stock_ubicaciones = suma de movimientos_stock, por producto y ubicación.
---     Una diferencia = alguien escribió stock_ubicaciones sin movimiento (la policy ALL lo permite)
---     o se borró un movimiento.
+--     Una diferencia = alguien escribió stock_ubicaciones sin movimiento (desde docs/38 no hay
+--     policy de escritura: solo un script SQL puede) o se borró un movimiento. El historial del
+--     producto (docs/70) la muestra como "Diferencia sin registro".
 SELECT COALESCE(s.producto_id, m.producto_id) AS producto_id,
        COALESCE(s.ubicacion, m.ubicacion) AS ubicacion,
        s.cantidad AS stock_ubicaciones,
@@ -70,6 +71,16 @@ SELECT s.producto_id, p.nombre, s.ubicacion, s.cantidad
 FROM stock_ubicaciones s JOIN productos p ON p.id = s.producto_id
 WHERE s.cantidad < 0
 ORDER BY s.cantidad;
+
+-- S6. (docs/70) Movimiento cuyo origen no coincide con lo que se deduce de tipo + referencia + motivo.
+--     Las RPCs escriben origen explícito; una diferencia = una RPC o un script lo etiquetó mal (o
+--     cambió el texto de un motivo y la clasificación ya no lo reconoce). Revisar antes de corregir.
+SELECT m.id, m.producto_id, m.tipo, m.origen,
+       clasificar_movimiento_stock(m.tipo, m.cantidad, m.motivo, m.referencia_id) AS origen_deducido,
+       m.motivo, m.referencia_id, m.created_at
+FROM movimientos_stock m
+WHERE m.origen IS DISTINCT FROM clasificar_movimiento_stock(m.tipo, m.cantidad, m.motivo, m.referencia_id)
+ORDER BY m.created_at DESC;
 
 
 -- ════════════════════════════════════════════════════════════════════════════════════════════

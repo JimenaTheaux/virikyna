@@ -2699,3 +2699,41 @@ SQL, verificaciones y tests en `docs/69_saldo_inicial_unico.sql`. Base: `docs/DI
 **Sin cambios.** El orden de imputación de `registrar_pago_proveedor_v2/_v3` y `registrar_cobro_cliente` (comprobantes más viejos; el sobrante queda a cuenta y, por la vista, cancela el saldo inicial). Revertir el saldo inicial de una **cuenta de dinero** desde el Historial sigue chocando con el índice único `ux_movimientos_cuenta_saldo_inicial_por_cuenta` (pendiente).
 
 **Apps.** Caja Gestión → Carga inicial: estado por fila (las cargadas en solo lectura con monto, fecha y usuario, y "Corregir" con motivo), filtro Con/Sin saldo inicial, verificación contra la base y confirmación antes de cargar; sin bloqueo global. `usePagosACuenta` / `obtenerACuentaProveedor` leen `a_cuenta_libre` (caen a `a_cuenta` en una base sin docs/69).
+
+## 38. Historial de movimientos del producto
+
+SQL, verificaciones y tests en `docs/70_historial_movimientos_producto.sql`. Base: `docs/DIAGNOSTICO_HISTORIAL_MOVIMIENTOS.md` (decisiones D1–D10). Aplicada el 2026-11-06 (backup `virikyna_2026-11-06_pre-docs70-aplicar`). Fase 1: sin UI.
+
+**`movimientos_stock.origen`** (text NOT NULL, CHECK coherente con `tipo`). Qué fue cada movimiento:
+
+| tipo | origen | Lo escribe |
+|---|---|---|
+| venta | `venta` | `confirmar_venta` |
+| compra | `compra` | `cargar_factura_compra`, `vincular_item_factura_compra` |
+| compra | `compra_correccion` | scripts de corrección de factura (docs/63) |
+| inicial | `carga_inicial` | `carga_inicial_finalizar` |
+| inicial | `carga_inicial_correccion` | `carga_inicial_editar_producto` (y el script del 27/10) |
+| ajuste | `anulacion_venta` | `anular_venta` |
+| ajuste | `devolucion_cliente` / `cambio_entrega` | `crear_devolucion` (devuelto que reingresa / producto entregado) |
+| ajuste | `anulacion_devolucion` | `anular_devolucion` |
+| ajuste | `devolucion_proveedor` | `cargar_factura_compra` (NC con devolución de mercadería) |
+| ajuste | `anulacion_compra` | `anular_factura_compra` |
+| ajuste | `ajuste_manual` / `reversion_ajuste` | `ajustar_stock` / `revertir_movimiento` |
+
+Las 11 RPCs lo escriben explícito (misma firma). Backfill y respaldo: `clasificar_movimiento_stock(tipo, cantidad, motivo, referencia_id)` (interna, sin EXECUTE para la API) deduce el origen por tipo + tabla a la que apunta `referencia_id` + texto del motivo; el trigger `trg_movimiento_stock_origen` (BEFORE INSERT) la usa solo si el INSERT no trae origen. docs/37 S6 lista los movimientos cuyo origen no coincide con lo deducido. Índice `idx_movimientos_stock_producto_fecha (producto_id, created_at, id)` (reemplaza `idx_movimientos_stock_producto`).
+
+**Carga inicial cerrada (D7).** `carga_inicial_editar_producto` rechaza corregir la cantidad cuando `configuracion.carga_inicial_abierta = false`, también para admin (error `VKH02`: "La carga inicial está cerrada: para corregir el stock usá "Ajustar stock" en Inventario, con el motivo."). Nombre, marca, descripción y precio se siguen editando. Antes, un admin la usaba como ajuste (31 veces después del cierre del 19/10): fijaba la cantidad absoluta, pisando las ventas del medio, y sin motivo.
+
+**`perfiles_historial`** (vista: id + nombre, **incluye inactivos**, D6). No es `security_invoker` a propósito, igual que `perfiles_publico` (con invoker, la RLS de `perfiles` dejaría ver solo la fila propia); la vista exige un perfil activo que la lea. Solo `authenticated`.
+
+**Precio del alta reconstruido (D5).** `productos_precios_historial.reconstruido` (boolean). 2164 filas `alta` agregadas desde `auditoria` (precio, fecha y usuario reales) para los productos anteriores al trigger de docs/67. `precios_cambiados` (alerta de etiquetas) ignora las reconstruidas: la alerta no cambió (md5 igual antes y después).
+
+**RPC `historial_producto(p_producto_id, p_desde, p_hasta, p_clases text[]) → filas`** — SQL STABLE **SECURITY INVOKER** (la RLS de cada tabla decide: un cajero no recibe filas de `auditoria`). Columnas: `orden` (posición cronológica estable; ordenar DESC), `fecha`, `clase` (el origen del movimiento, o `alta`, `precio`, `datos`, `sin_registro`), `detalle` (motivo), `proveedor`, `ubicacion`, `cantidad` (con signo; NULL en precio/datos/alta), `stock_resultante`, `usuario_id`, `usuario_nombre`, `ref_tabla` (`venta` | `devolucion` | `factura_compra`), `ref_id`, `ref_numero` (N° de venta o devolución; "FACTURA A 0001-123"), `precio_anterior`, `precio_nuevo`, `precio_origen`, `cambios` (jsonb `{campo: {antes, despues}}`). `p_hasta` exclusivo.
+- **Stock resultante:** (stock actual − Σ movimientos) + suma acumulada en orden (created_at, id), sobre **todos** los movimientos y antes de filtrar: filtrar no cambia ninguna fila y la última da el stock actual. Las filas sin cantidad toman el stock del último movimiento con fecha ≤ la suya (el alta, el de antes). Si stock ≠ Σ movimientos aparece una fila `sin_registro` al principio, con la diferencia exacta (hoy en ningún producto).
+- **Cambios de datos (D4):** costo, margen_1, margen_2, iva_porcentaje, proveedor (por nombre), nombre, marca, codigo_barras, estado, stock_minimo. Sin cambio real en esos campos → sin fila. Hechos por una factura (mismo instante que una compra del producto) → en `cambios` de la fila de la compra. **Masivos ocultos:** mismo usuario y mismo instante en ≥ 20 productos (en prod: los lotes de IVA del 24/10, 445 y 57 productos).
+- **Precio de origen factura** en el mismo instante que una compra: lleva `ref_*` de esa factura.
+- El alta lleva el precio inicial y su usuario (de `auditoria` para admin; del historial de precios para el cajero).
+
+**RPC `resumen_historial_producto(p_producto_id, p_desde, p_hasta)`** — SQL STABLE SECURITY INVOKER (D3). `stock_actual` y `ultimo_movimiento_fecha/_clase`: siempre del producto entero. Del rango: `stock_inicial` (carga inicial + correcciones), `entradas` (compras + correcciones de compra + devoluciones de cliente + anulaciones de venta), `salidas` (ventas + cambios entregados + devoluciones a proveedor + anulaciones de compra, en positivo), `ajustes` (manuales + reversiones, neto). Una anulación de devolución resta de la columna del movimiento que anula. `diferencia_sin_registro` = stock − Σ movimientos. Sin filtro: `stock_inicial + entradas − salidas + ajustes + diferencia_sin_registro = stock_actual` (verificado en los 2370 productos).
+
+**Regla para scripts de datos.** Todo script que toque stock deja un **movimiento compensatorio** con motivo claro (el trigger le pone origen si no lo trae) y **nunca borra movimientos**, salvo una decisión explícita de "como si nunca hubiera existido" (docs/46). Un UPDATE de `stock_ubicaciones` sin movimiento rompe docs/37 S1 y aparece en el historial como "Diferencia sin registro".
