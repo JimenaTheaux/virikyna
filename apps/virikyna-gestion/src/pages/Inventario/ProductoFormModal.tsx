@@ -1,8 +1,8 @@
 import { useEffect, useId, useState, type FormEvent } from 'react'
 import type { PostgrestError } from '@supabase/supabase-js'
-import type { Auditoria, CambioMargenProducto, EstadoProducto, Proveedor, UbicacionStock } from '@virikyna/shared'
+import type { EstadoProducto, Proveedor, UbicacionStock } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
-import { friendlyError, nombresPorId } from '@virikyna/shared'
+import { friendlyError } from '@virikyna/shared'
 import {
   calcularPrecio,
   useEliminarProducto,
@@ -11,7 +11,11 @@ import {
   formatCurrency,
   formatFechaHora,
   generarCodigoInterno,
-  historialDeMargen,
+  HistorialMovimientosTab,
+  HistorialPrecioTab,
+  PanelPestana,
+  Pestanas,
+  useHistorialMargen,
   IVA_PRODUCTO_DEFAULT,
   MAYUSCULAS,
   nombreConMarca,
@@ -24,9 +28,17 @@ import { Modal } from '../../components/Modal'
 import { CodigoBarrasBox } from '@virikyna/shared'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field, ErrorText, inputClass } from '../../components/FormField'
+import { ComprobanteModal } from '../../components/ComprobanteModal'
+import { FacturaCompraDetallePorId } from '../Proveedores/FacturaCompraDetallePorId'
 import { AjustarStockModal } from './AjustarStockModal'
-import { HistorialPrecioTab } from './HistorialPrecioTab'
 import type { ProductoConRelaciones } from './types'
+
+type PestanaProducto = 'datos' | 'precio' | 'movimientos'
+const PESTANAS_PRODUCTO: { id: PestanaProducto; label: string }[] = [
+  { id: 'datos', label: 'Datos' },
+  { id: 'precio', label: 'Historial de precio' },
+  { id: 'movimientos', label: 'Historial de movimientos' },
+]
 import { MontoInput } from '@virikyna/shared'
 
 // Input compacto para que el formulario completo entre en una sola pantalla sin scroll interno.
@@ -94,10 +106,14 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, codigo
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [confirmCerrar, setConfirmCerrar] = useState(false)
-  const [tab, setTab] = useState<'datos' | 'historial'>('datos')
-  const [cambiosMargen, setCambiosMargen] = useState<CambioMargenProducto[]>([])
-  const [usuariosCambio, setUsuariosCambio] = useState<Map<string, string>>(new Map())
-  const [cargandoHistorial, setCargandoHistorial] = useState(false)
+  const [tab, setTab] = useState<PestanaProducto>('datos')
+  const idPestanas = useId()
+  // Historial de precio: también alimenta la línea "Última modificación de margen" del formulario.
+  const {
+    cambios: cambiosMargen,
+    usuarios: usuariosCambio,
+    cargando: cargandoHistorial,
+  } = useHistorialMargen(supabase, producto?.id)
 
   function pedirCierre() {
     if (dirty) {
@@ -113,37 +129,6 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, codigo
     setMargen1(String(proveedor?.margen_1_default ?? 0))
     setMargen2(String(proveedor?.margen_2_default ?? 0))
   }, [proveedorId, margenesAuto, proveedores])
-
-  // Historial de precio (prompt 5): se deriva de `auditoria`, no de una tabla propia — un solo
-  // fetch al abrir la ficha alimenta tanto el tab "Historial de precio" como la línea de "última
-  // modificación" de más abajo.
-  useEffect(() => {
-    if (!producto) return
-    let cancelado = false
-    setCargandoHistorial(true)
-    supabase
-      .from('auditoria')
-      .select('*')
-      .eq('tabla_afectada', 'productos')
-      .eq('registro_id', producto.id)
-      .eq('accion', 'edicion')
-      .order('created_at', { ascending: false })
-      .then(async ({ data }) => {
-        const cambios = historialDeMargen((data ?? []) as unknown as Auditoria[])
-        const usuarios = await nombresPorId(
-          supabase,
-          cambios.map((c) => c.usuarioId),
-        )
-        if (cancelado) return
-        setCambiosMargen(cambios)
-        setUsuariosCambio(usuarios)
-        setCargandoHistorial(false)
-      })
-    return () => {
-      cancelado = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [producto?.id])
 
   const buscarProductoPorCodigo = async (codigo: string) => {
     const { data } = await supabase.from('productos').select('id, nombre').eq('codigo_barras', codigo).maybeSingle()
@@ -299,35 +284,30 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, codigo
       }
     >
       {producto && (
-        <div className="mb-stack-md flex gap-1 border-b border-line">
-          <button
-            type="button"
-            onClick={() => setTab('datos')}
-            className={[
-              'rounded-t px-4 py-2 font-sans text-label-bold',
-              tab === 'datos' ? 'border-b-2 border-accent text-accent-darker' : 'text-ink-soft hover:text-accent-darker',
-            ].join(' ')}
-          >
-            Datos
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('historial')}
-            className={[
-              'rounded-t px-4 py-2 font-sans text-label-bold',
-              tab === 'historial'
-                ? 'border-b-2 border-accent text-accent-darker'
-                : 'text-ink-soft hover:text-accent-darker',
-            ].join(' ')}
-          >
-            Historial de precio
-          </button>
-        </div>
+        <Pestanas
+          label="Secciones del producto"
+          idBase={idPestanas}
+          pestanas={PESTANAS_PRODUCTO}
+          activa={tab}
+          onChange={setTab}
+        />
       )}
 
-      {tab === 'historial' && producto ? (
-        <HistorialPrecioTab cambios={cambiosMargen} usuarios={usuariosCambio} loading={cargandoHistorial} />
+      {producto && tab === 'precio' ? (
+        <PanelPestana idBase={idPestanas} id="precio">
+          <HistorialPrecioTab cambios={cambiosMargen} usuarios={usuariosCambio} loading={cargandoHistorial} />
+        </PanelPestana>
+      ) : producto && tab === 'movimientos' ? (
+        <PanelPestana idBase={idPestanas} id="movimientos">
+          <HistorialMovimientosTab
+            supabase={supabase}
+            productoId={producto.id}
+            ComprobanteModal={ComprobanteModal}
+            FacturaCompraDetalle={FacturaCompraDetallePorId}
+          />
+        </PanelPestana>
       ) : (
+      <PanelPestana idBase={producto ? idPestanas : null} id="datos">
       <form
         id="producto-form"
         onSubmit={handleSubmit}
@@ -551,6 +531,7 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, codigo
           )}
         </aside>
       </form>
+      </PanelPestana>
       )}
 
       {producto && ajusteUbicacion && (

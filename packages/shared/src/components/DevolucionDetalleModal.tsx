@@ -5,6 +5,7 @@ import { MOTIVO_DEVOLUCION_LABEL } from '../../lib/devoluciones'
 import { formatCurrency, formatFechaHora } from '../../lib/format'
 import { nombreItemVendido } from '../../lib/productoTexto'
 import { FORMA_PAGO_LABEL } from '../../lib/comprobante'
+import { nombresPorId } from '../../lib/perfiles'
 import { EstadoBadge } from './EstadoBadge'
 import { Modal } from './Modal'
 
@@ -15,6 +16,20 @@ export type DevolucionConDetalle = Devolucion & {
   venta: { numero: number } | null
   items: ItemDevolucionConProducto[]
   usuarioNombre: string | null
+}
+
+// Una devolución de la que solo se tiene el id (historial del producto, docs/70): el mismo select
+// que el listado de Devoluciones.
+export async function cargarDevolucionDetalle(supabase: SupabaseClient, devolucionId: string): Promise<DevolucionConDetalle> {
+  const { data, error } = await supabase
+    .from('devoluciones')
+    .select('*, venta:ventas(numero), items:devolucion_items(*, producto:productos(nombre, marca))')
+    .eq('id', devolucionId)
+    .single()
+  if (error) throw error
+  const base = data as unknown as Omit<DevolucionConDetalle, 'usuarioNombre'>
+  const nombres = await nombresPorId(supabase, [base.usuario_id])
+  return { ...base, usuarioNombre: nombres.get(base.usuario_id) ?? null }
 }
 
 // diferencia_monto = nuevos − devueltos: > 0 paga el cliente, < 0 queda a favor del cliente.

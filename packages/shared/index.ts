@@ -83,6 +83,11 @@ export * from './src/components/MostrarMas'
 // Inventario de escritorio (Local y Gestión): tabla de productos compartida.
 export * from './src/components/inventario/ProductosTab'
 export * from './src/components/inventario/FiltrosInventario'
+// Detalle de producto (docs/70): pestañas, historial de precio e historial de movimientos.
+export * from './lib/historialProducto'
+export * from './src/components/Pestanas'
+export * from './src/components/inventario/HistorialPrecioTab'
+export * from './src/components/inventario/HistorialMovimientosTab'
 export * from './src/components/SelectBuscable'
 export * from './src/components/MediosPagoEditor'
 export * from './src/components/FormaPagoConDetalle'

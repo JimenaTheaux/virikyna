@@ -1,7 +1,8 @@
 // Datos y helpers del Comprobante X (Ventas, Local) y la Factura C (Facturación, Local y Gestión) —
 // ambos se muestran y se envían con el mismo componente (src/components/ComprobanteModal.tsx) y se
 // generan con el mismo layout en PDF (comprobantePdf.ts) e imagen JPG (comprobanteImagen.ts).
-import type { FormaPagoVenta, Producto, VentaItem } from '../types/database'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Cliente, FacturaC, FormaPagoVenta, Producto, Venta, VentaItem } from '../types/database'
 import { formatCurrency } from './format'
 import { nombreItemVendido } from './productoTexto'
 
@@ -109,4 +110,56 @@ export function nombreArchivoComprobante(datos: DatosComprobante, extension: 'pd
   const prefijo = datos.tipo === 'factura_c' ? 'factura-c' : 'comprobante-x'
   const numeroLimpio = datos.numero.replace(/[^\w-]+/g, '')
   return `${prefijo}-${numeroLimpio}.${extension}`
+}
+
+// Comprobante de una venta de la que solo se tiene el id (historial del producto, docs/70): el mismo
+// armado que Facturación y Ventas del día (Factura C si la tiene; si no, Comprobante X, con la nota).
+type VentaParaComprobante = Venta & {
+  factura_c: FacturaC | FacturaC[] | null
+  cliente: Pick<Cliente, 'razon_social' | 'nombre_fantasia' | 'mail' | 'celular'> | null
+  items: VentaItemComprobanteRow[]
+}
+
+export async function cargarComprobanteVenta(supabase: SupabaseClient, ventaId: string): Promise<DatosComprobante> {
+  const { data, error } = await supabase
+    .from('ventas')
+    .select(
+      `*, factura_c:facturas_c(*), cliente:clientes(razon_social, nombre_fantasia, mail, celular), items:venta_items(${SELECT_ITEMS_COMPROBANTE})`,
+    )
+    .eq('id', ventaId)
+    .single()
+  if (error) throw error
+  const venta = data as unknown as VentaParaComprobante
+  const factura = Array.isArray(venta.factura_c) ? (venta.factura_c[0] ?? null) : venta.factura_c
+
+  let pagos: { formaPago: FormaPagoVenta; monto: number }[] | undefined
+  if (venta.forma_pago === 'combinado') {
+    const { data: pagosData, error: errorPagos } = await supabase
+      .from('venta_pagos')
+      .select('forma_pago, monto')
+      .eq('venta_id', venta.id)
+    if (errorPagos) throw errorPagos
+    pagos = (pagosData ?? []).map((p) => ({ formaPago: p.forma_pago as FormaPagoVenta, monto: Number(p.monto) }))
+  }
+
+  return {
+    tipo: factura ? 'factura_c' : 'comprobante_x',
+    numero: factura ? `${factura.punto_venta}-${factura.numero_factura}` : String(venta.numero),
+    fecha: factura?.fecha_emision ?? venta.created_at,
+    clienteNombre: venta.cliente
+      ? venta.cliente.razon_social ?? venta.cliente.nombre_fantasia ?? 'Cliente'
+      : 'Consumidor final',
+    clienteMail: venta.cliente?.mail ?? null,
+    clienteCelular: venta.cliente?.celular ?? null,
+    formaPago: venta.forma_pago,
+    pagos,
+    items: itemsComprobanteDesdeVenta(venta.items ?? []),
+    subtotal: venta.subtotal,
+    descuentoPorcentaje: venta.descuento_porcentaje,
+    recargoPorcentaje: venta.recargo_porcentaje,
+    precioOficial: venta.precio_oficial,
+    total: venta.total,
+    cae: factura?.cae ?? null,
+    nota: venta.nota,
+  }
 }
