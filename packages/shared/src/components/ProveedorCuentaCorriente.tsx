@@ -32,6 +32,7 @@ import { AplicarACuentaModal } from './AplicarACuentaModal'
 import { EditarFacturaCompraModal } from './EditarFacturaCompraModal'
 import { AnularFacturaCompraModal } from './AnularFacturaCompraModal'
 import { ObservacionesProveedor } from './ObservacionesProveedor'
+import { datosSaldoInicial, filaSaldoInicial, KpiSaldoInicial, verFilaSaldoInicial } from './SaldoInicialCuenta'
 import {
   CuentaCorrienteLayout,
   KpiCuenta,
@@ -234,6 +235,13 @@ export function ProveedorCuentaCorriente({
   }
 
   const saldo = Number(proveedor.saldo_actual)
+  // docs/69: saldo inicial (único). Los pagos sin comprobante lo cancelan primero.
+  const saldoInicial = datosSaldoInicial(proveedor)
+  const verSaldoInicial = verFilaSaldoInicial(
+    saldoInicial,
+    tab === 'pendientes' ? 'pendientes' : tab === 'pagados' ? 'cerrados' : tab === 'todos' ? 'todos' : 'otra',
+    { desde, hasta, filtroDeComprobante: Boolean(tipo || compra || q) },
+  )
   const detalle = detalleId ? porId.get(detalleId) : undefined
   const aEditar = editarId ? porId.get(editarId) : undefined
   const aAnular = anularId ? porId.get(anularId) : undefined
@@ -381,6 +389,7 @@ export function ProveedorCuentaCorriente({
       accionPrincipal={{ label: 'Registrar pago', onClick: () => setPago({ facturaIds: [], notaCreditoIds: [] }) }}
       conSeleccion={seleccion.size > 0}
       debajoCabecera={<ObservacionesProveedor observaciones={proveedor.observaciones} className="mt-stack-md" />}
+      kpisClassName={saldoInicial ? 'sm:grid-cols-3 2xl:grid-cols-6' : undefined}
       kpis={
         <>
           <KpiCuenta label="Saldo">
@@ -389,6 +398,7 @@ export function ProveedorCuentaCorriente({
             </span>
             {saldo < 0 && <span className="block font-sans text-label-md text-ink-soft">a favor</span>}
           </KpiCuenta>
+          {saldoInicial && <KpiSaldoInicial datos={saldoInicial} />}
           <KpiCuenta label="Comprobantes pendientes">
             {formatCurrency(totalPendiente)}
             <span className="block font-sans text-label-md text-ink-soft">
@@ -496,10 +506,21 @@ export function ProveedorCuentaCorriente({
             pagos={pagosVisibles}
             porId={porId}
             aCuentaPorPago={aCuentaQ.data?.porPago}
+            saldoInicialPorPago={aCuentaQ.data?.saldoInicialPorPago}
             cargando={pagosQ.isPending || aCuentaQ.isPending}
           />
         ) : (
           <TablaComprobantes
+            filaInicial={
+              verSaldoInicial
+                ? filaSaldoInicial(saldoInicial, {
+                    columnaTipo: 'tipo',
+                    columnaTexto: 'numero',
+                    columnaCancelado: 'aplicado',
+                    textoCancelado: 'Cancelado con pagos sin comprobante',
+                  })
+                : null
+            }
             filas={visibles}
             columnas={columnas}
             getId={idDe}
@@ -544,6 +565,7 @@ export function ProveedorCuentaCorriente({
           notaCreditoIds={pago.notaCreditoIds}
           origen={origen}
           aCuenta={aCuenta}
+          saldoInicialPendiente={saldoInicial ? Math.max(saldoInicial.pendiente, 0) : 0}
           onAplicarACuenta={
             ofrecerAplicar
               ? () => {
@@ -619,11 +641,13 @@ function TablaPagos({
   pagos,
   porId,
   aCuentaPorPago,
+  saldoInicialPorPago,
   cargando,
 }: {
   pagos: PagoProveedorConDetalle[]
   porId: Map<string, FacturaCompraSaldo>
-  aCuentaPorPago: Map<string, number> | undefined // vista pagos_proveedor_a_cuenta (docs/52)
+  aCuentaPorPago: Map<string, number> | undefined // vista pagos_proveedor_a_cuenta (docs/52), ya sin lo del saldo inicial
+  saldoInicialPorPago?: Map<string, number> // docs/69: parte de cada pago que cancela el saldo inicial
   cargando: boolean
 }) {
   return (
@@ -710,6 +734,11 @@ function TablaPagos({
                         </li>
                       )
                     })}
+                    {(saldoInicialPorPago?.get(p.id) ?? 0) > 0 && (
+                      <li className="text-ink">
+                        Saldo inicial · <span className="tabular-nums">{formatCurrency(saldoInicialPorPago!.get(p.id)!)}</span>
+                      </li>
+                    )}
                     {aCuenta > 0 && (
                       <li className="text-ink">
                         A cuenta · <span className="tabular-nums">{formatCurrency(aCuenta)}</span>

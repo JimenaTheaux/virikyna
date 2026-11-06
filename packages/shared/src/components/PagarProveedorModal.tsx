@@ -31,6 +31,9 @@ type Props = {
   origen: OrigenEgreso
   aCuenta?: number // docs/52: pagos del proveedor sin comprobante, para avisar antes de pagar de nuevo
   onAplicarACuenta?: () => void // sin esto el aviso no ofrece aplicar
+  // docs/69: lo que falta cancelar del saldo inicial. Lo que sobra del pago (a cuenta) lo cancela
+  // primero; sin selección, también se suma al monto precargado.
+  saldoInicialPendiente?: number
   onClose: () => void
   onPagado: () => void
 }
@@ -52,6 +55,7 @@ export function PagarProveedorModal({
   origen,
   aCuenta = 0,
   onAplicarACuenta,
+  saldoInicialPendiente = 0,
   onClose,
   onPagado,
 }: Props) {
@@ -65,7 +69,8 @@ export function PagarProveedorModal({
     [comprobantes, facturaIds, notaCreditoIds],
   )
 
-  const [monto, setMonto] = useState(montoTexto(aPagar))
+  // Sin selección, "todo lo pendiente" incluye lo que falta del saldo inicial (docs/69).
+  const [monto, setMonto] = useState(montoTexto(conSeleccion ? aPagar : aPagar + saldoInicialPendiente))
   const [formaPago, setFormaPago] = useState<FormaPagoEgreso>('efectivo')
   const [chequeNumero, setChequeNumero] = useState('')
   const [chequeFechaSalida, setChequeFechaSalida] = useState(fechaHoyISO())
@@ -99,6 +104,9 @@ export function PagarProveedorModal({
       }),
     [comprobantes, facturaIds, notaCreditoIds, montoNum],
   )
+  // docs/69: el sobrante (a cuenta) cancela primero el saldo inicial, como la vista de la base.
+  const cancelaSaldoInicial = Math.min(Math.round(reparto.aCuenta * 100), Math.round(Math.max(saldoInicialPendiente, 0) * 100)) / 100
+  const quedaACuenta = (Math.round(reparto.aCuenta * 100) - Math.round(cancelaSaldoInicial * 100)) / 100
 
   // Una fila por comprobante alcanzado: cuánto le llega de NC y de plata, y cómo queda.
   const filasPreview = useMemo(() => {
@@ -252,7 +260,9 @@ export function PagarProveedorModal({
 
         {!conSeleccion && (
           <p id={avisoId} className="rounded bg-accent-light px-4 py-3 font-sans text-body-md text-accent-darker">
-            Se aplica a los comprobantes más antiguos. Lo que sobre queda a cuenta del proveedor.
+            {saldoInicialPendiente > 0
+              ? `Se aplica a los comprobantes más antiguos. Lo que sobre cancela el saldo inicial (falta ${formatCurrency(saldoInicialPendiente)}) y, después, queda a cuenta.`
+              : 'Se aplica a los comprobantes más antiguos. Lo que sobre queda a cuenta del proveedor.'}
           </p>
         )}
 
@@ -398,10 +408,27 @@ export function PagarProveedorModal({
                     </tr>
                   )
                 })}
-                {reparto.aCuenta > 0 && (
+                {/* docs/69: lo que sobra cancela primero el saldo inicial; el resto queda a cuenta. */}
+                {cancelaSaldoInicial > 0 && (
+                  <tr className="border-b border-table-divider last:border-0 even:bg-table-row-alt">
+                    <td className="px-3 py-3 text-ink">Saldo inicial</td>
+                    <td className="px-3 py-3 text-right font-semibold tabular-nums text-ink">{formatCurrency(cancelaSaldoInicial)}</td>
+                    <td className="px-3 py-3 text-right tabular-nums text-ink-soft">
+                      {formatCurrency(saldoInicialPendiente - cancelaSaldoInicial)}
+                    </td>
+                    <td className="px-3 py-3">
+                      {saldoInicialPendiente - cancelaSaldoInicial <= 0 ? (
+                        <EstadoBadge variant="green">Cancelado</EstadoBadge>
+                      ) : (
+                        <EstadoBadge variant="amber">Parcial</EstadoBadge>
+                      )}
+                    </td>
+                  </tr>
+                )}
+                {quedaACuenta > 0 && (
                   <tr className="border-b border-table-divider last:border-0 even:bg-table-row-alt">
                     <td className="px-3 py-3 text-ink">Queda a cuenta del proveedor</td>
-                    <td className="px-3 py-3 text-right font-semibold tabular-nums text-ink">{formatCurrency(reparto.aCuenta)}</td>
+                    <td className="px-3 py-3 text-right font-semibold tabular-nums text-ink">{formatCurrency(quedaACuenta)}</td>
                     <td className="px-3 py-3" />
                     <td className="px-3 py-3" />
                   </tr>

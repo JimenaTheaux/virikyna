@@ -33,6 +33,7 @@ import {
   useSeleccion,
   type ColumnaComprobantes,
 } from './CuentaCorrienteLayout'
+import { datosSaldoInicial, filaSaldoInicial, KpiSaldoInicial, verFilaSaldoInicial } from './SaldoInicialCuenta'
 
 type Props = {
   supabase: SupabaseClient
@@ -171,6 +172,13 @@ export function ClienteCuentaCorriente({ supabase, clienteId, origen, onVolver, 
   const nombre = nombreCliente(cliente)
   const saldo = Number(cliente.saldo_actual)
   const consumoInterno = Number(cliente.consumo_interno_pendiente)
+  // docs/69: saldo inicial (único). Los cobros sin comprobante lo cancelan primero.
+  const saldoInicial = datosSaldoInicial(cliente)
+  const verSaldoInicial = verFilaSaldoInicial(
+    saldoInicial,
+    tab === 'pendientes' ? 'pendientes' : tab === 'cobrados' ? 'cerrados' : tab === 'todos' ? 'todos' : 'otra',
+    { desde, hasta, filtroDeComprobante: Boolean(q) },
+  )
 
   const columnas: ColumnaComprobantes<VentaCuentaCorrienteSaldo>[] = [
     {
@@ -289,7 +297,7 @@ export function ClienteCuentaCorriente({ supabase, clienteId, origen, onVolver, 
               : 'No tiene saldo a cobrar.',
       }}
       conSeleccion={seleccion.size > 0}
-      kpisClassName="lg:grid-cols-4"
+      kpisClassName={saldoInicial ? 'sm:grid-cols-3 2xl:grid-cols-5' : 'lg:grid-cols-4'}
       kpis={
         <>
           <KpiCuenta label="Saldo">
@@ -299,6 +307,7 @@ export function ClienteCuentaCorriente({ supabase, clienteId, origen, onVolver, 
               <span className="block font-sans text-label-md text-ink-soft">incluye {formatCurrency(consumoInterno)} de consumo interno</span>
             )}
           </KpiCuenta>
+          {saldoInicial && <KpiSaldoInicial datos={saldoInicial} />}
           <KpiCuenta label="Comprobantes pendientes">
             {formatCurrency(Number(cliente.deuda_comprobantes))}
             <span className="block font-sans text-label-md text-ink-soft">{plural(pendientes.length, 'comprobante', 'comprobantes')}</span>
@@ -379,6 +388,15 @@ export function ClienteCuentaCorriente({ supabase, clienteId, origen, onVolver, 
           <TablaCobros cobros={cobrosVisibles} porId={porId} aCuentaPorPago={aCuentaQ.data?.porPago} cargando={cobrosQ.isPending || aCuentaQ.isPending} />
         ) : (
           <TablaComprobantes
+            filaInicial={
+              verSaldoInicial
+                ? filaSaldoInicial(saldoInicial, {
+                    columnaTexto: 'numero',
+                    columnaCancelado: 'cobrado',
+                    textoCancelado: 'Cancelado con cobros sin comprobante',
+                  })
+                : null
+            }
             filas={visibles}
             columnas={columnas}
             getId={idDe}

@@ -302,7 +302,15 @@ export type ColumnaComprobantes<F> = {
   td: (fila: F) => { className: string; contenido: ReactNode; detenerClick?: boolean }
 }
 
+// Línea fija al principio de la tabla que no es un comprobante (docs/69: el saldo inicial). Sin
+// checkbox ni click; cada celda va por id de columna (la que falte queda vacía).
+export type FilaInicialComprobantes = {
+  etiqueta: string // nombre de la línea para el lector de pantalla
+  celdas: Partial<Record<string, ReactNode>>
+}
+
 type TablaProps<F> = {
+  filaInicial?: FilaInicialComprobantes | null
   filas: F[]
   columnas: ColumnaComprobantes<F>[]
   getId: (f: F) => string
@@ -318,6 +326,7 @@ type TablaProps<F> = {
 }
 
 export function TablaComprobantes<F>({
+  filaInicial,
   filas,
   columnas,
   getId,
@@ -374,7 +383,19 @@ export function TablaComprobantes<F>({
             <td colSpan={colSpan} className="px-4 py-4 text-ink-soft">Cargando...</td>
           </tr>
         )}
-        {!cargando && filas.length === 0 && (
+        {!cargando && filaInicial && (
+          <tr className="border-b border-table-divider bg-bg">
+            <th scope="row" className="px-3 py-3 font-normal">
+              <span className="sr-only">{filaInicial.etiqueta}</span>
+            </th>
+            {columnas.map((c) => (
+              <td key={c.id} className={`px-3 py-3 ${c.thClassName ?? ''}`}>
+                {filaInicial.celdas[c.id] ?? null}
+              </td>
+            ))}
+          </tr>
+        )}
+        {!cargando && filas.length === 0 && !filaInicial && (
           <tr>
             <td colSpan={colSpan} className="px-4 py-4 text-ink-soft">
               {vacio}
