@@ -2566,7 +2566,7 @@ SQL, verificaciones y tests en `docs/57_pago_contado.sql`. No toca tablas ni vis
 **RPC `cargar_factura_compra_contado(…mismos parámetros que cargar_factura_compra sin forma de pago ni devolución…, p_origen) → JSONB`** — cualquier perfil activo; con `p_origen = 'general'` solo admin (lo exige v2).
 1. Rechaza una NC. Con `p_origen = 'turno'` exige una caja abierta (`aperturas_caja` sin `cierre_z_id`): "Abrí la caja para pagar de contado".
 2. Llama a `cargar_factura_compra(…, p_forma_pago => 'contado', …)` (borra el borrador en la misma transacción) y toma el **total calculado por el servidor**; tiene que ser > 0.
-3. Llama a `registrar_pago_proveedor_v2` en efectivo por ese total, con la factura como único comprobante y nota `Contado: <comprobante>`: pago + aplicación íntegra (la factura queda **pagada**) + egreso (`turno` entra en el cierre del día; `general` = Caja Gestión) + movimiento de la cuenta Efectivo. Usuario = el logueado.
+3. Llama a `registrar_pago_proveedor_v2` en efectivo por ese total, con la factura como único comprobante y nota `Contado: <comprobante>`: pago + aplicación íntegra (la factura queda **pagada**) + egreso (`turno` entra en el cierre del día; `general` = Caja Gestión) + movimiento de la cuenta Efectivo (desde docs/58, solo con `general`). Usuario = el logueado.
 4. Devuelve `{factura_id, pago_id, monto}`. Si algo falla no queda nada (el borrador vuelve).
 
 **`anular_factura_compra`.** Una factura de contado con su pago vigente responde "Es una factura de contado: revertí su pago desde el Historial" (antes el mensaje genérico). El camino sigue siendo revertir el pago y después anular; el contra-egreso queda con fecha del día en que se revierte.
@@ -2574,6 +2574,21 @@ SQL, verificaciones y tests en `docs/57_pago_contado.sql`. No toca tablas ni vis
 **`editar_factura_compra`.** La forma de pago es una etiqueta (cambiarla no crea ni borra pagos) y no se puede cambiar si el comprobante tiene pagos o NC aplicados vigentes.
 
 **Apps.** El default del formulario pasa a cuenta corriente (Local, Gestión, Inventario; una copia conserva la forma de pago del original). Contado pide confirmación ("Se registrará pago a … · Desde: Caja Local/Caja Gestión · Usuario") y en una NC el selector queda fijo en cuenta corriente. `cargar_factura_compra` con `contado` (apps viejas) sigue sin registrar pago.
+
+## 31. El efectivo de Local no sale de la cuenta Efectivo de Caja Gestión
+
+SQL, verificaciones, tests y corrección de datos en `docs/58_efectivo_local_no_impacta_gestion.sql`. No toca tablas ni vistas.
+
+**Regla.** Lo que se cobra y se paga en Local queda en el cajón y se controla en el Cierre Z. El efectivo entra a Caja Gestión solo por retiros, y de la cuenta Efectivo solo sale lo que se paga desde Gestión (`origen = 'general'`). Las transferencias bajan la cuenta del banco desde cualquier app.
+
+**Antes.** `registrar_pago_proveedor_v2` y `registrar_egreso_general` creaban un `movimientos_cuenta` para todo efectivo, sin mirar el origen: un pago desde el cajón de Local quedaba descontado dos veces (en el Z y en Efectivo).
+
+**Ahora.**
+- `registrar_pago_proveedor_v2`, `registrar_egreso_general` (las dos firmas): movimiento de cuenta si es transferencia, o si es efectivo con `origen = 'general'`. El egreso se registra igual (`cerrar_caja` no cambia).
+- `revertir_movimiento` (rama `pagos_proveedor`): la reversión espeja, neto por cuenta, los `movimientos_cuenta` con `referencia_id` = el pago y `tipo = 'pago_proveedor'`, en vez de recalcularlos por forma de pago.
+- Corrección del 2026-10-26: contra-asiento de los 4 pagos de Local anteriores (750.316,20), con `referencia_id` = el pago y `revierte_movimiento_id` = el movimiento original.
+
+**Resuelto en docs/68.** Los cobros de cuenta corriente tienen origen: los de Local (`turno`) entran al Cierre X/Z (`total_cobros_*`, el efectivo en el efectivo esperado) y no crean movimiento en Efectivo.
 
 ## 32. Alerta de stock solo con mínimo definido
 
