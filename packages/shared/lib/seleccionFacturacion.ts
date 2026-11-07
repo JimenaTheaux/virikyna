@@ -2,7 +2,7 @@
 // Se puede tildar cualquier venta visible —sin facturar, facturada o a revisar— para ver su total;
 // el lote de Factura C (irreversible, en producción) sale solo de las que se pueden emitir.
 // Sin imports de valores a propósito: lo corre node --test directo (tests/seleccionFacturacion.test.ts).
-// Se importa por ruta (@virikyna/shared/lib/seleccionFacturacion), no desde index.ts.
+// Se exporta desde index.ts; las apps lo importan por ruta (@virikyna/shared/lib/seleccionFacturacion).
 
 export type VentaSeleccionable = {
   id: string
