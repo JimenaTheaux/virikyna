@@ -99,10 +99,22 @@ export function linkGmail(mail: string, asunto: string, cuerpo: string): string 
 
 export function mensajeEnvio(datos: DatosComprobante): string {
   const titulo = datos.tipo === 'factura_c' ? 'Factura C' : 'Comprobante X'
+  // "2 x Lavandina · Ayudín — $ 2.400,00 ($ 1.200,00 c/u)": el nombre ya trae la marca.
+  const detalle = datos.items.map((it) => {
+    const cantidad = it.cantidad.toLocaleString('es-AR', { maximumFractionDigits: 3 })
+    const unitario = it.cantidad !== 1 ? ` (${formatCurrency(it.precioUnitario)} c/u)` : ''
+    return `${cantidad} x ${it.nombre} — ${formatCurrency(it.importe)}${unitario}`
+  })
   return [
+    'Gracias por tu compra!!!',
+    '',
+    'Compraste:',
+    ...detalle,
+    '',
     `${titulo} ${datos.numero} — Virikyna`,
     `Total: ${formatCurrency(datos.total)}`,
-    'Te comparto el comprobante de tu compra. Cualquier consulta, escribinos por acá.',
+    '',
+    'Cualquier consulta, escribinos por acá.',
   ].join('\n')
 }
 
