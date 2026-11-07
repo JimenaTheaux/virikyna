@@ -1,5 +1,36 @@
 # Novedades de Virikyna Local
 
+## 0.12.0 — noviembre 2026
+
+> Conviene actualizar: en la 0.11.0 no se pueden cobrar las cuentas corrientes de clientes desde el local, el Dashboard suma el consumo de dueñas y empleados como si fuera venta, y una devolución de una venta a cuenta corriente pide devolver plata.
+
+### Cuentas corrientes de clientes
+- **Cuenta de cada cliente.** En **Cuentas corrientes**, al abrir un cliente se ve su saldo, los comprobantes pendientes, lo cobrado a cuenta y el último cobro, con pestañas **Pendientes / Cobrados / Todos / Cobros** y filtros por fecha y número de venta. Todos los usuarios ven todas las cuentas.
+- **Registrar cobro.** Cualquier cajero puede cobrarle a cualquier cliente: con uno o varios medios (efectivo, transferencia, QR, tarjeta), un pago parcial, o un monto a cuenta sin elegir comprobantes. También se pueden tildar varios comprobantes y tocar **Cobrar**. Antes de registrar, se muestra el resumen para confirmar.
+- **Cobros en la caja.** Lo que se cobra en el local entra al Cierre X y al Cierre Z, aparte de las ventas ("Cobros de cuenta corriente"). El efectivo cobrado ya está sumado en el efectivo esperado.
+- **Saldo inicial.** Si la cuenta arrancó con un saldo anterior, aparece como primera línea y en un recuadro arriba.
+
+### Cuentas internas (dueñas y empleados)
+- Las compras de dueñas y empleados quedan en su cuenta **A revisar**. En el local se ven (comprobante, total original, estado **A revisar / Finalizado** y total por mes según la fecha de finalización), pero no se cobran: la revisión y el cierre se hacen en Virikyna Gestión.
+- No aparecen en **Facturación**: nunca llevan Factura C.
+
+### Dashboard
+- **Ventas sin consumo interno.** Ventas de hoy, tickets, ticket promedio y el gráfico de la semana cuentan solo las ventas a clientes.
+- **Consumo interno.** Una card aparte muestra lo que consumió cada dueña o empleado en el día, separado en a revisar y finalizado. Tocando el nombre se abre su cuenta. (Administradoras.)
+
+### Facturación
+- **Seleccionar y sumar.** Se puede tildar cualquier venta de la lista (sin facturar, facturada o a revisar) y arriba aparece la cantidad y el total, con el detalle de cuánto es sin facturar y cuánto ya facturado. **Emitir Factura C** usa solo las sin facturar.
+- **Devolución de una venta a cuenta corriente.** Si queda plata a favor del cliente, se descuenta de su cuenta: no se devuelve efectivo ni entra al cierre. Si el cliente se lleva más de lo que devuelve, la diferencia se cobra o se carga a la cuenta.
+
+### Inventario
+- **Historial de movimientos.** En la ficha de un producto, la pestaña **Historial de movimientos** muestra cada entrada y salida (compras, ventas, devoluciones, ajustes, carga inicial), quién la hizo, la cantidad y el stock que quedó, más los cambios de precio. Arriba: stock actual, entradas, salidas, ajustes y último movimiento. Se puede filtrar por tipo y fechas, y abrir el comprobante de cada movimiento. La ven también los cajeros.
+
+### Importes con formato argentino
+- En pagos, egresos, retiros, abrir caja, Cierre Z, pago combinado y precios de productos, los montos se escriben como en Argentina: **4.500** son cuatro mil quinientos y **4.500,50** lleva centavos. En Abrir caja y Cierre Z, debajo del campo se ve cómo se va a registrar.
+
+### Formularios
+- **Enter pasa al campo siguiente** en egresos, retiros, ajustes de stock y facturas de compra, en vez de guardar a medias. Se guarda con el botón.
+
 ## 0.11.0 — octubre 2026
 
 > La versión 0.10.0 sigue funcionando y ya está protegida contra la Factura C duplicada. Conviene actualizar para ver el aviso de precios a etiquetar y el Dashboard nuevo.
