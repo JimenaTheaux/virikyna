@@ -1,5 +1,16 @@
 # Novedades de Virikyna Local
 
+## 0.13.0 — noviembre 2026
+
+### Ajuste por redondeo
+- **En facturas y notas de crédito de proveedores** (artículos y servicios): debajo del IVA hay un renglón **Ajuste por redondeo** que suma o resta al total final, fuera del IVA. Para restar, se escribe con un **-** adelante (ej. **-0,02**). No cambia el IVA, el costo de los productos ni el stock, y la cuenta corriente del proveedor toma el total ya ajustado. También se ve en el detalle de la factura.
+- **Al pagarle a un proveedor y al cobrarle a un cliente:** si la plata difiere del saldo por unos centavos, el botón **Ajustar la diferencia** completa el ajuste y el comprobante queda saldado. El ajuste no es plata: no entra a la caja ni al cierre. Antes de confirmar se ve cuánto cancela en total.
+- **Ajuste solo:** para cerrar centavos que quedaron de antes, se puede registrar un ajuste sin plata (monto 0 + ajuste). En la cuenta aparece como "Ajuste por redondeo".
+- Lo pueden usar administradoras y cajeros, sin tope de importe.
+
+### Comprobante de venta
+- El mensaje que se arma para mandar por Gmail o WhatsApp arranca con **"Gracias por tu compra!!!"** y lista lo comprado (cantidad × artículo · marca y su importe) antes del número de comprobante y el total.
+
 ## 0.12.0 — noviembre 2026
 
 > Conviene actualizar: en la 0.11.0 no se pueden cobrar las cuentas corrientes de clientes desde el local, el Dashboard suma el consumo de dueñas y empleados como si fuera venta, y una devolución de una venta a cuenta corriente pide devolver plata.
