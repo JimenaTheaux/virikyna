@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type ComponentType, type KeyboardEvent } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { Check, Loader2, Lock, Pencil, Search } from 'lucide-react'
+import { Check, Loader2, Lock, Pencil, Search, SlidersHorizontal } from 'lucide-react'
+import type { UbicacionStock } from '../../../types/database'
 import {
   esCargaCerrada,
   formatCantidad,
@@ -21,6 +22,18 @@ import { BotonesDialogo, claseCampoTexto, Dialogo, useCierreConCambios } from '.
 type Edicion = { nombre: string; marca: string; descripcion: string; precio: string; cantidad: string; clientId: string }
 
 const TOOLTIP_COSTO = 'Precio calculado por costo: este producto tiene costo cargado y su precio sale de la fórmula.'
+// docs/70 (D7): con la carga cerrada, la cantidad no se corrige acá (fijaba el stock pisando las
+// ventas del medio y sin motivo).
+const AVISO_AJUSTAR = 'La carga inicial está cerrada: el stock se corrige con "Ajustar stock", con el motivo.'
+
+// El modal/sheet "Ajustar stock" de cada app (misma firma en Local, Gestión e Inventario).
+export type AjustarStockComponente = ComponentType<{
+  productoId: string
+  productoNombre: string
+  ubicacion: UbicacionStock
+  onClose: () => void
+  onSaved: () => void
+}>
 
 const inputEscritorio =
   'h-9 w-full min-w-0 rounded border border-line bg-surface px-2 font-sans text-body-md text-ink outline-none focus:border-accent disabled:bg-bg disabled:text-ink-soft aria-[invalid=true]:border-error'
@@ -51,13 +64,15 @@ type Props = {
   supabase: SupabaseClient
   celular: boolean
   activo: boolean // pestaña visible: solo así se consulta y se refresca
+  cargaAbierta: boolean // cerrada (solo Gestión la sigue mostrando): la cantidad no se edita (D7)
+  AjustarStock?: AjustarStockComponente
   onCerrada: () => void
 }
 
 // Productos activos con stock en Local, editables por cualquier usuario mientras la carga está
 // abierta (carga_inicial_editar_producto). La edición en curso vive en el estado de la fila, así
 // el refresco cada 15 s no pisa lo que se está tipeando.
-export function InventarioTotal({ supabase, celular, activo, onCerrada }: Props) {
+export function InventarioTotal({ supabase, celular, activo, cargaAbierta, AjustarStock, onCerrada }: Props) {
   const [busqueda, setBusqueda] = useState('')
   // Lo que se consulta: tipeando, 300 ms después de la última tecla; con el lector (Enter al final
   // del código) o la cámara, al instante.
@@ -79,6 +94,21 @@ export function InventarioTotal({ supabase, celular, activo, onCerrada }: Props)
   }
   const editar = useEditarProductoCarga(supabase)
   const [editandoSheet, setEditandoSheet] = useState<ProductoInventarioTotal | null>(null)
+  const [ajustando, setAjustando] = useState<ProductoInventarioTotal | null>(null)
+  const onAjustar = !cargaAbierta && AjustarStock ? setAjustando : undefined
+  const modalAjustar =
+    ajustando && AjustarStock ? (
+      <AjustarStock
+        productoId={ajustando.id}
+        productoNombre={ajustando.nombre}
+        ubicacion="local"
+        onClose={() => setAjustando(null)}
+        onSaved={() => {
+          setAjustando(null)
+          void consulta.refetch()
+        }}
+      />
+    ) : null
 
   const productos = consulta.data?.pages.flatMap((p) => p.productos) ?? []
   const total = consulta.data?.pages[0]?.total ?? 0
@@ -92,7 +122,7 @@ export function InventarioTotal({ supabase, celular, activo, onCerrada }: Props)
         marca: e.marca.trim(),
         descripcion: e.descripcion.trim(),
         precio: p.costo !== null ? null : Number(e.precio),
-        cantidadLocal: Number(e.cantidad),
+        cantidadLocal: cargaAbierta ? Number(e.cantidad) : null,
       })
       return null
     } catch (err) {
@@ -194,6 +224,7 @@ export function InventarioTotal({ supabase, celular, activo, onCerrada }: Props)
           <EditorProductoSheet
             producto={editandoSheet}
             guardando={editar.isPending}
+            cargaAbierta={cargaAbierta}
             onCancelar={() => setEditandoSheet(null)}
             onGuardar={async (e) => {
               const error = await guardar(editandoSheet, e)
@@ -202,6 +233,7 @@ export function InventarioTotal({ supabase, celular, activo, onCerrada }: Props)
             }}
           />
         )}
+        {modalAjustar}
       </div>
     )
   }
@@ -238,7 +270,13 @@ export function InventarioTotal({ supabase, celular, activo, onCerrada }: Props)
           </thead>
           <tbody>
             {productos.map((p) => (
-              <FilaProducto key={p.id} producto={p} onGuardar={(e) => guardar(p, e)} />
+              <FilaProducto
+                key={p.id}
+                producto={p}
+                cargaAbierta={cargaAbierta}
+                onGuardar={(e) => guardar(p, e)}
+                onAjustar={onAjustar ? () => onAjustar(p) : undefined}
+              />
             ))}
             {!consulta.isLoading && productos.length === 0 && (
               <tr>
@@ -254,17 +292,42 @@ export function InventarioTotal({ supabase, celular, activo, onCerrada }: Props)
       <p className="font-sans text-label-md text-ink-soft">
         Doble clic o ✎ para editar · Enter guarda · Esc cancela · <Lock className="inline h-3.5 w-3.5" aria-hidden /> precio
         calculado por costo (no se edita acá)
+        {!cargaAbierta && (
+          <>
+            {' '}
+            · <SlidersHorizontal className="inline h-3.5 w-3.5" aria-hidden /> {AVISO_AJUSTAR}
+          </>
+        )}
       </p>
+      {modalAjustar}
     </div>
+  )
+}
+
+function BotonAjustar({ producto, onAjustar }: { producto: ProductoInventarioTotal; onAjustar: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onAjustar}
+      aria-label={`Ajustar stock de ${producto.nombre}`}
+      title="Ajustar stock"
+      className="rounded p-1.5 text-accent-dark hover:bg-accent-light"
+    >
+      <SlidersHorizontal className="h-4 w-4" aria-hidden />
+    </button>
   )
 }
 
 function FilaProducto({
   producto,
+  cargaAbierta,
   onGuardar,
+  onAjustar,
 }: {
   producto: ProductoInventarioTotal
+  cargaAbierta: boolean
   onGuardar: (e: Edicion) => Promise<string | null>
+  onAjustar?: () => void
 }) {
   const [edicion, setEdicion] = useState<Edicion | null>(null)
   const [errores, setErrores] = useState<ErroresFila>({})
@@ -331,7 +394,16 @@ function FilaProducto({
           </div>
           {conCosto && <span className="mt-0.5 block text-ink-soft">Precio por costo</span>}
         </td>
-        <td className={celda}>{input('cantidad', 'Stock local', { type: 'number', min: '0', step: '1' })}</td>
+        <td className={celda}>
+          {cargaAbierta ? (
+            input('cantidad', 'Stock local', { type: 'number', min: '0', step: '1' })
+          ) : (
+            <div className="flex items-center justify-end gap-1" title={AVISO_AJUSTAR}>
+              <span className="tabular-nums text-ink">{formatCantidad(producto.stock_local)}</span>
+              {onAjustar && <BotonAjustar producto={producto} onAjustar={onAjustar} />}
+            </div>
+          )}
+        </td>
         <td className={celda}>
           <div className="flex justify-end gap-1">
             <button
@@ -371,15 +443,18 @@ function FilaProducto({
       </td>
       <td className={`${celda} text-right`}>{formatCantidad(producto.stock_local)}</td>
       <td className={`${celda} text-right`}>
-        <button
-          type="button"
-          onClick={empezar}
-          aria-label={`Editar ${producto.nombre}`}
-          title="Editar"
-          className="rounded p-1.5 text-accent-dark hover:bg-accent-light"
-        >
-          <Pencil className="h-4 w-4" aria-hidden />
-        </button>
+        <div className="flex justify-end gap-0.5">
+          {onAjustar && <BotonAjustar producto={producto} onAjustar={onAjustar} />}
+          <button
+            type="button"
+            onClick={empezar}
+            aria-label={`Editar ${producto.nombre}`}
+            title="Editar"
+            className="rounded p-1.5 text-accent-dark hover:bg-accent-light"
+          >
+            <Pencil className="h-4 w-4" aria-hidden />
+          </button>
+        </div>
       </td>
     </tr>
   )
@@ -388,11 +463,13 @@ function FilaProducto({
 function EditorProductoSheet({
   producto,
   guardando,
+  cargaAbierta,
   onCancelar,
   onGuardar,
 }: {
   producto: ProductoInventarioTotal
   guardando: boolean
+  cargaAbierta: boolean
   onCancelar: () => void
   onGuardar: (e: Edicion) => Promise<string | null>
 }) {
@@ -455,8 +532,9 @@ function EditorProductoSheet({
         {campo('descripcion', 'Descripción')}
         <div className="grid grid-cols-2 gap-2">
           {campo('precio', 'Precio', { type: 'number', inputMode: 'decimal', min: '0', step: '0.01', disabled: conCosto })}
-          {campo('cantidad', 'Stock local', { type: 'number', inputMode: 'decimal', min: '0', step: '1' })}
+          {campo('cantidad', 'Stock local', { type: 'number', inputMode: 'decimal', min: '0', step: '1', disabled: !cargaAbierta })}
         </div>
+        {!cargaAbierta && <p className="font-sans text-label-md text-ink-soft">{AVISO_AJUSTAR}</p>}
         {conCosto && (
           <p className="flex items-center gap-1 font-sans text-label-md text-ink-soft">
             <Lock className="h-4 w-4" aria-hidden /> {TOOLTIP_COSTO}

@@ -58,9 +58,13 @@ function errorCarga(error: PostgrestError, status: number): ErrorCargaInicial {
   return new ErrorCargaInicial(
     sinConexion ? 'Sin conexión — no se pudo guardar. Reintentá cuando vuelva internet.' : friendlyError(error),
     sinConexion,
-    !sinConexion && (error.message ?? '').startsWith(MENSAJE_CERRADA),
+    // VKH02 (docs/70 D7): "la carga está cerrada, usá Ajustar stock". No bloquea la pantalla.
+    !sinConexion && error.code !== CODIGO_USAR_AJUSTAR && (error.message ?? '').startsWith(MENSAJE_CERRADA),
   )
 }
+
+// docs/70 (D7): con la carga cerrada, carga_inicial_editar_producto rechaza corregir la cantidad.
+const CODIGO_USAR_AJUSTAR = 'VKH02'
 
 export function esCargaCerrada(error: unknown): boolean {
   return error instanceof ErrorCargaInicial && error.cerrada
@@ -264,7 +268,7 @@ export type DatosEdicionProducto = {
   marca: string
   descripcion: string
   precio: number | null // null = no tocar (producto con costo)
-  cantidadLocal: number
+  cantidadLocal: number | null // null = no tocar (carga cerrada: se corrige con Ajustar stock, docs/70 D7)
 }
 
 export function useEditarProductoCarga(supabase: SupabaseClient) {

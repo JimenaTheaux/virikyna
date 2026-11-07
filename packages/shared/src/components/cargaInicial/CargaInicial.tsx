@@ -16,7 +16,7 @@ import { formatCurrency } from '../../../lib/format'
 import { ControlSegmentado } from '../ControlSegmentado'
 import { BotonesDialogo, Dialogo, type Variante } from './comunes'
 import { MiCarga } from './MiCarga'
-import { InventarioTotal } from './InventarioTotal'
+import { InventarioTotal, type AjustarStockComponente } from './InventarioTotal'
 
 type Tab = 'mia' | 'total'
 
@@ -29,11 +29,13 @@ type Props = {
   bloquearSiCerrada: boolean
   // Gestión: botones Abrir / Cerrar en el encabezado (solo admin).
   controlesAdmin?: boolean
+  // docs/70 (D7): con la carga cerrada el stock se corrige con "Ajustar stock" (el de la app).
+  AjustarStock?: AjustarStockComponente
 }
 
 // Pantalla de carga inicial de inventario (docs/04 módulo 5.2), compartida por las tres apps. Cada
 // app la monta en /carga-inicial con su cliente de Supabase y su perfil.
-export function CargaInicial({ supabase, perfil, variante, bloquearSiCerrada, controlesAdmin = false }: Props) {
+export function CargaInicial({ supabase, perfil, variante, bloquearSiCerrada, controlesAdmin = false, AjustarStock }: Props) {
   const celular = variante === 'celular'
   const esAdmin = perfil.rol === 'admin'
   const queryClient = useQueryClient()
@@ -131,7 +133,7 @@ export function CargaInicial({ supabase, perfil, variante, bloquearSiCerrada, co
           <>
             {!abierta && (
               <p className="rounded bg-badge-amber-bg px-4 py-2 font-sans text-body-md text-badge-amber-text">
-                La carga inicial está cerrada para los cajeros. Como administrador podés seguir cargando y corrigiendo.
+                La carga inicial está cerrada para los cajeros. Como administrador podés seguir cargando; el stock de un producto ya cargado se corrige con "Ajustar stock".
               </p>
             )}
             <ControlSegmentado
@@ -156,7 +158,14 @@ export function CargaInicial({ supabase, perfil, variante, bloquearSiCerrada, co
               />
             </div>
             <div hidden={tab !== 'total'}>
-              <InventarioTotal supabase={supabase} celular={celular} activo={tab === 'total'} onCerrada={onCerrada} />
+              <InventarioTotal
+                supabase={supabase}
+                celular={celular}
+                activo={tab === 'total'}
+                cargaAbierta={abierta}
+                AjustarStock={AjustarStock}
+                onCerrada={onCerrada}
+              />
             </div>
           </>
         )
