@@ -1,5 +1,5 @@
 import { useId } from 'react'
-import { formatCurrency, formatFechaCorta } from '../../lib/format'
+import { formatAjuste, formatCurrency, formatFechaCorta } from '../../lib/format'
 import { ConfirmDialog } from './ConfirmDialog'
 
 // Confirmación antes de registrar un pago a proveedor o un cobro a cliente: el último control antes
@@ -48,6 +48,7 @@ type Props = {
   medios: MedioConfirmacion[]
   reparto: FilaRepartoConfirmacion[]
   nota?: string
+  ajuste?: number // docs/71: ajuste por redondeo (no es plata); se muestra si ≠ 0
   confirmando: boolean
   onVolver: () => void
   onConfirmar: () => void
@@ -64,6 +65,7 @@ export function ConfirmarPagoDialog({
   medios,
   reparto,
   nota,
+  ajuste = 0,
   confirmando,
   onVolver,
   onConfirmar,
@@ -87,6 +89,15 @@ export function ConfirmarPagoDialog({
           <dd className="text-ink [overflow-wrap:anywhere]">{titular}</dd>
           <dt className="text-ink-soft">Total</dt>
           <dd className="font-display text-headline-md tabular-nums text-accent-darker">{formatCurrency(total)}</dd>
+          {ajuste !== 0 && (
+            <>
+              <dt className="text-ink-soft">Ajuste por redondeo</dt>
+              <dd className="text-ink">
+                <span className="tabular-nums">{formatAjuste(ajuste)}</span>
+                <span className="text-ink-soft"> · no es plata: cancela {formatCurrency(Math.round((total + ajuste) * 100) / 100)}</span>
+              </dd>
+            </>
+          )}
           <dt className="text-ink-soft">Fecha</dt>
           <dd className="text-ink">{fecha ? formatFechaCorta(fecha) : '—'}</dd>
           {origen && (

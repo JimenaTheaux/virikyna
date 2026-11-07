@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { FacturaCompraSaldo, FormaPagoCompra, TipoComprobanteCompra } from '../../types/database'
 import {
   aAlicuotaIvaCompra,
+  ajusteRedondeoNumero,
   alicuotaDefault,
   editarFacturaCompra,
   etiquetaAlicuotaIva,
@@ -18,6 +19,7 @@ import { Modal } from './Modal'
 import { ConfirmDialog } from './ConfirmDialog'
 import { Field, ErrorText, inputClass, selectClass } from './FormField'
 import { SelectorAlicuotaIva } from './SelectorAlicuotaIva'
+import { MONTO_INVALIDO, MontoInput } from './MontoInput'
 import { useEnterComoTab } from '../../lib/useEnterComoTab'
 
 type Props = {
@@ -34,14 +36,18 @@ type Props = {
 // Tipo e IVA (docs/45): cambiar el tipo vuelve la alícuota al default del tipo nuevo, y el RPC
 // recalcula IVA y total sobre el total sin IVA guardado. Con pagos o NC aplicados los dos quedan
 // bloqueados (el RPC también lo rechaza): cambiarían lo que ya se imputó.
+// Ajuste por redondeo (docs/71, D3): mismo bloqueo que el IVA; se suma al final, fuera del IVA.
 export function EditarFacturaCompraModal({ supabase, factura, onClose, onSaved }: Props) {
   const enterComoTab = useEnterComoTab()
   const [tipoComprobante, setTipoComprobante] = useState<TipoComprobanteCompra>(factura.tipo_comprobante)
   const [ivaAlicuota, setIvaAlicuota] = useState<AlicuotaIvaCompra>(aAlicuotaIvaCompra(factura.iva_alicuota))
+  const ajusteGuardado = ajusteRedondeoNumero(factura.ajuste_redondeo)
+  const [ajuste, setAjuste] = useState(ajusteGuardado === 0 ? '' : String(ajusteGuardado))
   const bloqueado = tieneAplicacionesVigentes(factura)
   const totalSinIva = Number(factura.total_sin_iva)
   const ivaNuevo = ivaDeCompra(totalSinIva, ivaAlicuota)
-  const cambiaTotal = Math.round((totalSinIva + ivaNuevo) * 100) !== Math.round(Number(factura.total) * 100)
+  const totalNuevo = Math.round((totalSinIva + ivaNuevo + ajusteRedondeoNumero(ajuste)) * 100) / 100
+  const cambiaTotal = Math.round(totalNuevo * 100) !== Math.round(Number(factura.total) * 100)
   const [numeroComprobante, setNumeroComprobante] = useState(factura.numero_comprobante ?? '')
   const [fechaComprobante, setFechaComprobante] = useState(factura.fecha_comprobante)
   const [formaPago, setFormaPago] = useState<FormaPagoCompra>(factura.forma_pago)
@@ -66,6 +72,14 @@ export function EditarFacturaCompraModal({ supabase, factura, onClose, onSaved }
       setError('La fecha del comprobante es obligatoria.')
       return
     }
+    if (ajuste === MONTO_INVALIDO) {
+      setError('Revisá el ajuste por redondeo: no es un monto válido.')
+      return
+    }
+    if (totalNuevo < 0) {
+      setError('El total no puede quedar negativo: el ajuste por redondeo es mayor que el total.')
+      return
+    }
 
     setSaving(true)
     const { error: rpcError } = await editarFacturaCompra(supabase, {
@@ -75,6 +89,7 @@ export function EditarFacturaCompraModal({ supabase, factura, onClose, onSaved }
       fechaComprobante,
       formaPago,
       ivaAlicuota,
+      ajusteRedondeo: ajusteRedondeoNumero(ajuste),
     })
     setSaving(false)
 
@@ -147,15 +162,28 @@ export function EditarFacturaCompraModal({ supabase, factura, onClose, onSaved }
 
         <div className="flex flex-col gap-2">
           <SelectorAlicuotaIva value={ivaAlicuota} onChange={setIvaAlicuota} disabled={bloqueado} />
+          <Field label="Ajuste por redondeo" hint="Suma o resta al total final, fuera del IVA. Ej.: -0,02">
+            <MontoInput
+              value={ajuste}
+              onChange={(v) => {
+                setDirty(true)
+                setAjuste(v)
+              }}
+              negativo
+              disabled={bloqueado}
+              aria-label="Ajuste por redondeo"
+              className={`${inputClass} disabled:cursor-not-allowed disabled:opacity-60`}
+            />
+          </Field>
           {bloqueado ? (
             <p className="font-sans text-label-md text-ink-soft">
-              Este comprobante ya tiene pagos o notas de crédito aplicados: el tipo y el IVA no se pueden
-              cambiar. Para corregirlos, revertí primero esos pagos desde el Historial.
+              Este comprobante ya tiene pagos o notas de crédito aplicados: el tipo, el IVA y el ajuste por
+              redondeo no se pueden cambiar. Para corregirlos, revertí primero esos pagos desde el Historial.
             </p>
           ) : (
             <p className="font-sans text-label-md text-ink-soft" aria-live="polite">
               {etiquetaAlicuotaIva(ivaAlicuota)}: {formatCurrency(ivaNuevo)} · Total:{' '}
-              <span className={cambiaTotal ? 'font-semibold text-ink' : ''}>{formatCurrency(totalSinIva + ivaNuevo)}</span>
+              <span className={cambiaTotal ? 'font-semibold text-ink' : ''}>{formatCurrency(totalNuevo)}</span>
               {cambiaTotal && <> (antes {formatCurrency(Number(factura.total))})</>}
             </p>
           )}

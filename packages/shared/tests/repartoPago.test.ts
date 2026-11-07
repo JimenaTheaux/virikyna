@@ -177,6 +177,57 @@ test('cobro: parcial deja saldo en la venta', () => {
   assert.equal(r.saldoFinal.get('a'), 849.5)
 })
 
+// ── docs/71: ajuste por redondeo (mismos casos que la PARTE C de docs/71, T8–T11 y T14) ──
+import { diferenciaParaAjuste } from '../lib/repartoPagoProveedor.ts'
+
+test('ajuste +0,02: 121 de plata cancelan una factura de 121,02, nada a cuenta (T8)', () => {
+  const r = simularRepartoPago({
+    comprobantes: [doc('f', '2026-11-07', 121.02)],
+    facturaIds: ['f'],
+    notaCreditoIds: [],
+    monto: 121,
+    ajuste: 0.02,
+  })
+  assert.equal(r.error, null)
+  assert.equal(r.saldoFinal.get('f'), 0)
+  assert.equal(r.aplicadoPago, 121.02)
+  assert.equal(r.aCuenta, 0)
+})
+
+test('ajuste −0,03: 2,05 de plata cancelan 2,02 y no queda nada a cuenta (T9)', () => {
+  const r = simularRepartoPago({ comprobantes: [doc('f', '2026-11-07', 2.02)], facturaIds: ['f'], notaCreditoIds: [], monto: 2.05, ajuste: -0.03 })
+  assert.equal(r.error, null)
+  assert.equal(r.saldoFinal.get('f'), 0)
+  assert.equal(r.aCuenta, 0)
+})
+
+test('ajuste: negativo que se come la plata, o positivo que sobra → error (T10)', () => {
+  const base = { comprobantes: [doc('f', '2026-11-07', 10)], facturaIds: ['f'], notaCreditoIds: [] }
+  assert.match(simularRepartoPago({ ...base, monto: 1, ajuste: -1 }).error ?? '', /no puede ser mayor que lo que se paga/)
+  assert.match(simularRepartoPago({ ...base, monto: 10, ajuste: 0.05 }).error ?? '', /tiene que quedar aplicado/)
+})
+
+test('ajuste solo (sin plata) cierra los centavos que quedaron (T11)', () => {
+  const r = simularRepartoPago({ comprobantes: [doc('f', '2026-11-07', 0.02)], facturaIds: ['f'], notaCreditoIds: [], monto: 0, ajuste: 0.02 })
+  assert.equal(r.error, null)
+  assert.equal(r.saldoFinal.get('f'), 0)
+})
+
+test('diferenciaParaAjuste: saldo − plata, con signo y en centavos exactos', () => {
+  assert.equal(diferenciaParaAjuste(1000.02, 1000), 0.02)
+  assert.equal(diferenciaParaAjuste(10000, 10000.05), -0.05)
+  assert.equal(diferenciaParaAjuste(0.3, 0.1), 0.2)
+  assert.equal(diferenciaParaAjuste(50, NaN), 50)
+})
+
+test('cobro con ajuste: 4500 + 0,02 cancelan 4500,02; si sobra, el error dice "ventas" (T14)', () => {
+  const ok = simularRepartoCobro({ ventas: [venta('a', '2026-11-01T10:00:00Z', 4500.02)], ventaIds: ['a'], monto: 4500, ajuste: 0.02 })
+  assert.equal(ok.error, null)
+  assert.equal(ok.saldoFinal.get('a'), 0)
+  const sobra = simularRepartoCobro({ ventas: [venta('a', '2026-11-01T10:00:00Z', 10)], ventaIds: ['a'], monto: 10, ajuste: 1 })
+  assert.match(sobra.error ?? '', /aplicado a ventas/)
+})
+
 test('cobro: internas y anuladas nunca se cobran', () => {
   const r = simularRepartoCobro({
     ventas: [

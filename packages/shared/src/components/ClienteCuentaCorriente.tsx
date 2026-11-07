@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ClipboardCheck, Eye, Wallet } from 'lucide-react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { EstadoCuentaVenta, OrigenEgreso, VentaCuentaCorrienteSaldo } from '../../types/database'
-import { CAJA_ORIGEN_LABEL } from '../../lib/facturasCompra'
+import { AJUSTE_REDONDEO_LABEL, CAJA_ORIGEN_LABEL } from '../../lib/facturasCompra'
 import {
   CONDICION_IVA_LABEL,
   datosComprobanteVenta,
@@ -22,7 +22,7 @@ import { nombresPorId } from '../../lib/perfiles'
 import { EditarVentaInternaModal } from './EditarVentaInternaModal'
 import { esCobrable, simularRepartoCobro } from '../../lib/repartoPagoProveedor'
 import { FORMA_PAGO_LABEL, type DatosComprobante } from '../../lib/comprobante'
-import { fechaLocalDeISO, formatCurrency, formatFechaCorta, formatFechaCortaLocal, hoyAR } from '../../lib/format'
+import { fechaLocalDeISO, formatAjuste, formatCurrency, formatFechaCorta, formatFechaCortaLocal, hoyAR } from '../../lib/format'
 import { friendlyError } from '../../lib/supabaseErrors'
 import { Field, inputClass } from './FormField'
 import { EstadoBadge } from './EstadoBadge'
@@ -391,7 +391,8 @@ export function ClienteCuentaCorriente({ supabase, clienteId, origen, onVolver, 
               <>
                 {formatCurrency(Number(ultimoCobro.monto))}
                 <span className="block font-sans text-label-md text-ink-soft">
-                  {formatFechaCorta(ultimoCobro.fecha)} · {FORMA_PAGO_LABEL[ultimoCobro.forma_pago]}
+                  {formatFechaCorta(ultimoCobro.fecha)} ·{' '}
+                  {ultimoCobro.forma_pago ? FORMA_PAGO_LABEL[ultimoCobro.forma_pago] : AJUSTE_REDONDEO_LABEL}
                 </span>
               </>
             ) : (
@@ -529,7 +530,9 @@ export function ClienteCuentaCorriente({ supabase, clienteId, origen, onVolver, 
             setCobro(null)
             setSeleccion(new Set())
             setAviso(
-              `Cobro registrado: ${formatCurrency(Number(r.monto))}.` +
+              `Cobro registrado: ${formatCurrency(Number(r.monto))}` +
+                (Number(r.ajuste_redondeo ?? 0) !== 0 ? ` (ajuste ${formatAjuste(Number(r.ajuste_redondeo))})` : '') +
+                '.' +
                 (Number(r.a_cuenta) > 0 ? ` Quedan ${formatCurrency(Number(r.a_cuenta))} a cuenta.` : ''),
             )
           }}
@@ -699,9 +702,17 @@ function TablaCobros({
               <td className="px-3 py-3 text-ink-soft tabular-nums">{formatFechaCorta(p.fecha)}</td>
               <td className={`px-3 py-3 text-right font-semibold tabular-nums ${monto < 0 ? 'text-error' : 'text-ink'}`}>
                 {monto < 0 ? `−${formatCurrency(Math.abs(monto))}` : formatCurrency(monto)}
+                {/* docs/71: el ajuste cancela además de la plata (no es plata). */}
+                {Number(p.ajuste_redondeo) !== 0 && (
+                  <span className="block font-normal text-label-md text-ink-soft">
+                    ajuste {formatAjuste(Number(p.ajuste_redondeo))}
+                  </span>
+                )}
               </td>
               <td className="px-3 py-3 text-ink [overflow-wrap:anywhere]">
-                {p.medios.length > 1 ? (
+                {p.forma_pago === null ? (
+                  AJUSTE_REDONDEO_LABEL
+                ) : p.medios.length > 1 ? (
                   <ul className="flex flex-col gap-0.5">
                     {p.medios.map((m) => (
                       <li key={m.id}>

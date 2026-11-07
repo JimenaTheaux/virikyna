@@ -1,8 +1,12 @@
 import { useId, useState, type FormEvent } from 'react'
 import {
+  ajusteRedondeoNumero,
   CAJA_ORIGEN_LABEL,
+  CampoAjusteRedondeo,
   ConfirmarPagoDialog,
   diferenciaMedios,
+  diferenciaParaAjuste,
+  MONTO_INVALIDO,
   ErrorRegistrarPago,
   fechaHoyISO,
   FORMA_PAGO_EGRESO_LABEL,
@@ -65,6 +69,11 @@ export function RegistrarPagoProveedorModal({
 
   const montoNum = monto.trim() === '' ? NaN : Number(monto)
   const noCierra = Number.isFinite(montoNum) && diferenciaMedios(montoNum, medios).estado !== 'cierra'
+  // docs/71: ajuste por redondeo (no es plata). Lo que cancela el pago = plata + ajuste.
+  const [ajuste, setAjuste] = useState('')
+  const ajusteNum = ajusteRedondeoNumero(ajuste)
+  const diferencia =
+    facturaCompraId && saldoPendiente !== undefined ? diferenciaParaAjuste(saldoPendiente, montoNum) : 0
 
   function pedirCierre() {
     if (dirty) {
@@ -92,6 +101,18 @@ export function RegistrarPagoProveedorModal({
       setError(invalido)
       return
     }
+    if (ajuste === MONTO_INVALIDO) {
+      setError('Revisá el ajuste por redondeo: no es un monto válido.')
+      return
+    }
+    if (ajusteNum < 0 && montoNum + ajusteNum <= 0) {
+      setError('El ajuste por redondeo no puede ser mayor que lo que se paga.')
+      return
+    }
+    if (ajusteNum > 0 && facturaCompraId && saldoPendiente !== undefined && montoNum + ajusteNum > saldoPendiente + 0.001) {
+      setError('El ajuste por redondeo tiene que quedar aplicado a la factura: con este pago sobra. Bajá el ajuste o el monto.')
+      return
+    }
     // Un monto mayor al saldo ya no se rechaza (docs/52): el RPC paga la factura y el sobrante
     // queda a cuenta del proveedor.
     setConfirmar(true)
@@ -108,6 +129,7 @@ export function RegistrarPagoProveedorModal({
         origen: 'general',
         fecha,
         nota,
+        ajusteRedondeo: ajusteNum,
       })
       onSaved()
     } catch (err) {
@@ -183,6 +205,16 @@ export function RegistrarPagoProveedorModal({
 
         <MediosPagoEditor medios={medios} onChange={cambiarMedios} total={montoNum} fechaPago={fecha} conResumen={false} />
 
+        <CampoAjusteRedondeo
+          value={ajuste}
+          onChange={(v) => {
+            setDirty(true)
+            setAjuste(v)
+          }}
+          diferencia={diferencia}
+          plata={montoNum}
+        />
+
         <Field label="Nota (opcional)">
           <input value={nota} onChange={(e) => setNota(e.target.value)} maxLength={200} className={inputClass} />
         </Field>
@@ -207,10 +239,11 @@ export function RegistrarPagoProveedorModal({
           titularLabel="Proveedor"
           titular={proveedorNombre}
           total={montoNum}
+          ajuste={ajusteNum}
           fecha={fecha}
           origen={CAJA_ORIGEN_LABEL.general}
           medios={mediosParaConfirmar(medios, (m) => FORMA_PAGO_EGRESO_LABEL[m])}
-          reparto={repartoPagoAFactura(montoNum, facturaCompraId ? (comprobanteEtiqueta ?? 'Esta factura') : null, saldoPendiente)}
+          reparto={repartoPagoAFactura(montoNum + ajusteNum, facturaCompraId ? (comprobanteEtiqueta ?? 'Esta factura') : null, saldoPendiente)}
           nota={nota.trim() || undefined}
           confirmando={mutation.isPending}
           onVolver={() => setConfirmar(false)}

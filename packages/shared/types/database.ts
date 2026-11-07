@@ -278,6 +278,8 @@ export type FacturaCompra = {
   iva_alicuota: number // docs/45: 21 o 0 (exento), para el comprobante completo
   tipo_compra: TipoCompra // docs/53: fijo desde la carga; servicios no mueve stock ni costo
   devuelve_mercaderia: boolean // docs/55: NC de artículos que restó stock (sin marcar, una NC no lo toca)
+  // docs/71: ajuste por redondeo con signo, fuera del IVA. total = total_sin_iva + iva + ajuste_redondeo
+  ajuste_redondeo: number
 }
 
 export type FacturaCompraItem = {
@@ -299,8 +301,12 @@ export type PagoProveedor = {
   // DEPRECATED (docs/31): la imputación vive en pagos_proveedor_aplicaciones. Solo se completa
   // cuando todo el pago cancela una única factura — no usar para calcular saldos.
   factura_compra_id: string | null
-  monto: number // 0 = operación que solo aplicó notas de crédito (sin egreso)
-  forma_pago: FormaPagoCabecera // 'mixto' = varios medios, el detalle está en pagos_proveedor_medios (docs/65)
+  monto: number // plata (suma de los medios). 0 = solo aplicó notas de crédito, o un ajuste solo (docs/71)
+  // 'mixto' = varios medios, el detalle está en pagos_proveedor_medios (docs/65).
+  // null solo en un ajuste por redondeo sin plata (docs/71).
+  forma_pago: FormaPagoCabecera | null
+  // docs/71: con signo. Lo que el pago cancela = monto + ajuste_redondeo. No mueve caja.
+  ajuste_redondeo: number
   usuario_id: string
   revierte_pago_proveedor_id: string | null // Fase 8: si esta fila revierte a otra, apunta a la original
   // Solo se completan cuando el pago tiene un único medio y es 'cheque' o 'echeq' (docs/15, docs/65).
@@ -380,8 +386,10 @@ export type PagoCliente = {
   id: string
   cliente_id: string
   venta_id: string | null // a qué venta se aplica; null = a cuenta general
-  monto: number
-  forma_pago: FormaPagoVenta
+  monto: number // plata (suma de los medios); 0 = ajuste por redondeo solo (docs/71)
+  forma_pago: FormaPagoVenta | null // null solo en un ajuste por redondeo sin plata (docs/71)
+  // docs/71: con signo. Lo que el cobro cancela = monto + ajuste_redondeo. No entra a la caja.
+  ajuste_redondeo: number
   usuario_id: string
   revierte_pago_cliente_id: string | null // Fase 8: si esta fila revierte a otra, apunta a la original
   created_at: string

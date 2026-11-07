@@ -49,6 +49,8 @@ export type ResultadoReparto = {
 // Todo en centavos enteros: sumar/restar montos con decimales en float acumula error.
 const aCentavos = (v: number | string) => Math.round(Number(v) * 100)
 const aPesos = (c: number) => c / 100
+// "$ 0,02" para los mensajes (copia de formatCurrency: este archivo no importa valores).
+const pesos = (c: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(aPesos(c))
 
 function porAntiguedad(a: ComprobanteReparto, b: ComprobanteReparto): number {
   if (a.fecha_comprobante !== b.fecha_comprobante) return a.fecha_comprobante < b.fecha_comprobante ? -1 : 1
@@ -70,7 +72,10 @@ export function simularRepartoPago(input: {
   comprobantes: ComprobanteReparto[]
   facturaIds: string[] // vacío = todos los pendientes
   notaCreditoIds: string[]
-  monto: number
+  monto: number // plata (suma de los medios)
+  // docs/71: ajuste por redondeo con signo. Lo que cancela el pago = monto + ajuste. Mismas reglas
+  // que el RPC: positivo tiene que quedar aplicado entero; negativo no puede comerse toda la plata.
+  ajuste?: number
 }): ResultadoReparto {
   const seleccion = new Set(input.facturaIds)
   const conSeleccion = seleccion.size > 0
@@ -102,14 +107,17 @@ export function simularRepartoPago(input: {
 
   const restante = saldos.reduce((acc, s) => acc + s, 0)
   const monto = aCentavos(input.monto)
+  const ajuste = Number.isFinite(input.ajuste) ? aCentavos(input.ajuste ?? 0) : 0
+  const cancela = Math.max(0, monto) + ajuste
 
   let error: string | null = null
   if (!(monto >= 0)) error = 'El monto no puede ser negativo.'
-  else if (monto === 0 && ncs.length === 0) error = 'Ingresá un monto mayor a cero o elegí una nota de crédito.'
-  else if (monto === 0 && totalNc === 0) error = 'No hay saldo pendiente al que aplicar la nota de crédito.'
+  else if (ajuste < 0 && cancela <= 0) error = 'El ajuste por redondeo no puede ser mayor que lo que se paga.'
+  else if (monto === 0 && ajuste <= 0 && ncs.length === 0) error = 'Ingresá un monto mayor a cero o elegí una nota de crédito.'
+  else if (monto === 0 && ajuste === 0 && totalNc === 0) error = 'No hay saldo pendiente al que aplicar la nota de crédito.'
 
-  // Paso 2: repartir el pago.
-  let rest = Math.max(0, monto)
+  // Paso 2: repartir lo que cancela el pago (plata + ajuste).
+  let rest = Math.max(0, cancela)
   for (let i = 0; i < docs.length && rest > 0; i++) {
     const aplicar = Math.min(saldos[i], rest)
     if (aplicar <= 0) continue
@@ -117,11 +125,15 @@ export function simularRepartoPago(input: {
     saldos[i] -= aplicar
     rest -= aplicar
   }
+  // docs/71: un ajuste positivo da por pagados centavos que faltaron; si sobra, crearía saldo a favor.
+  if (!error && ajuste > 0 && rest > 0) {
+    error = `El ajuste por redondeo tiene que quedar aplicado a comprobantes: sobran ${pesos(rest)}. Bajá el ajuste o el monto.`
+  }
 
   return {
     aplicaciones,
     aplicadoNotaCredito: aPesos(totalNc),
-    aplicadoPago: aPesos(Math.max(0, monto) - rest),
+    aplicadoPago: aPesos(Math.max(0, cancela) - rest),
     aCuenta: aPesos(rest),
     restanteTrasNotas: aPesos(restante),
     saldoFinal: new Map(docs.map((d, i) => [d.id, aPesos(saldos[i])])),
@@ -158,11 +170,28 @@ export function aComprobanteReparto(v: VentaReparto): ComprobanteReparto {
   }
 }
 
-export function simularRepartoCobro(input: { ventas: VentaReparto[]; ventaIds: string[]; monto: number }): ResultadoReparto {
-  return simularRepartoPago({
+export function simularRepartoCobro(input: {
+  ventas: VentaReparto[]
+  ventaIds: string[]
+  monto: number
+  ajuste?: number // docs/71: mismas reglas que en un pago a proveedor
+}): ResultadoReparto {
+  const r = simularRepartoPago({
     comprobantes: input.ventas.map(aComprobanteReparto),
     facturaIds: input.ventaIds,
     notaCreditoIds: [],
     monto: input.monto,
+    ajuste: input.ajuste,
   })
+  // Mismo texto que el RPC, con "ventas" en vez de "comprobantes".
+  return r.error?.startsWith('El ajuste por redondeo tiene que quedar aplicado a comprobantes')
+    ? { ...r, error: r.error.replace('a comprobantes', 'a ventas') }
+    : r
+}
+
+// docs/71: el ajuste que deja el pago (o cobro) cerrado justo: saldo a cancelar − plata. Positivo
+// si faltan centavos, negativo si sobran. 0 = no hace falta ajuste.
+export function diferenciaParaAjuste(restanteTrasNotas: number, monto: number): number {
+  const m = Number.isFinite(monto) ? monto : 0
+  return aPesos(aCentavos(restanteTrasNotas) - aCentavos(Math.max(0, m)))
 }

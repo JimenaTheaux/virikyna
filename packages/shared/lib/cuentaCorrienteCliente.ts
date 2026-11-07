@@ -170,11 +170,13 @@ export type RegistrarCobroClienteInput = {
   origen: OrigenEgreso // Local → turno (entra al Cierre); Gestión → general (cuenta mapeada)
   fecha?: string | null // solo general; turno es siempre hoy
   nota?: string | null
+  ajusteRedondeo?: number // docs/71: con signo; sin medios y > 0 = ajuste solo (no entra a la caja)
 }
 
 export type RegistrarCobroClienteResultado = {
   pago_id: string
   monto: number
+  ajuste_redondeo?: number // docs/71
   aplicado: number
   a_cuenta: number
   aplicaciones: { id: string; venta_id: string; monto: number }[]
@@ -190,6 +192,7 @@ export function registrarCobroCliente(supabase: SupabaseClient, input: Registrar
     p_fecha: input.origen === 'general' ? input.fecha || null : null,
     p_nota: input.nota?.trim() || null,
     p_monto: input.monto,
+    ...(input.ajusteRedondeo ? { p_ajuste_redondeo: input.ajusteRedondeo } : {}),
   })
 }
 

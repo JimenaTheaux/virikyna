@@ -37,6 +37,7 @@ import {
   TIPO_COMPROBANTE_COMPRA_LABEL,
   TIPOS_COMPROBANTE_COMPRA,
   valoresFacturaCompraVacios,
+  AJUSTE_REDONDEO_LABEL,
   type AlicuotaIvaCompra,
   type CargarFacturaCompraContadoResultado,
   type ItemFacturaCompraUI,
@@ -60,6 +61,7 @@ import { mensajeErrorGuardado } from '../../lib/supabaseErrors'
 import { BotonCerrarModal, Modal } from './Modal'
 import { ConfirmDialog } from './ConfirmDialog'
 import { Field, ErrorText, inputClass, selectClass } from './FormField'
+import { MONTO_INVALIDO, MontoInput } from './MontoInput'
 import { EstadoBadge } from './EstadoBadge'
 import { ItemFacturaRow, type CrearProductoRender } from './ItemFacturaRow'
 import { AvisoComprobanteDuplicado } from './AvisosCopiaFactura'
@@ -167,6 +169,8 @@ export function CargarFacturaCompraModal({
   const [tipoCompra, setTipoCompra] = useState<TipoCompra>(inicial.tipoCompra)
   // docs/55: solo en NC de artículos; sin marcar, la NC no toca el stock.
   const [devuelveMercaderia, setDevuelveMercaderia] = useState(inicial.devuelveMercaderia)
+  // docs/71: ajuste por redondeo con signo, fuera del IVA ('' = sin ajuste).
+  const [ajusteRedondeo, setAjusteRedondeo] = useState(inicial.ajusteRedondeo)
   const [items, setItems] = useState<ItemFacturaCompraUI[]>(inicial.items)
   const [copiaDe, setCopiaDe] = useState<OrigenCopiaFactura | null>(inicial.copiaDe)
   const [error, setError] = useState<string | null>(null)
@@ -209,6 +213,7 @@ export function CargarFacturaCompraModal({
     setIvaAlicuota(v.ivaAlicuota)
     setTipoCompra(v.tipoCompra)
     setDevuelveMercaderia(v.devuelveMercaderia)
+    setAjusteRedondeo(v.ajusteRedondeo ?? '')
     setItems(v.items)
     setCopiaDe(v.copiaDe)
     setItemsConError(new Set())
@@ -252,6 +257,7 @@ export function CargarFacturaCompraModal({
     ivaAlicuota,
     tipoCompra,
     devuelveMercaderia,
+    ajusteRedondeo,
     items,
     copiaDe,
   }
@@ -265,7 +271,7 @@ export function CargarFacturaCompraModal({
     resumen: resumenBorradorFactura(
       valoresActuales,
       proveedores.find((p) => p.id === proveedorId)?.razon_social ?? '',
-      calcularTotalesFacturaCompra(items, ivaAlicuota).total,
+      calcularTotalesFacturaCompra(items, ivaAlicuota, ajusteRedondeo).total,
     ),
     // Autoguardado desde que el usuario carga algo real (una copia recién aplicada no cuenta), o
     // siempre en un borrador retomado (no se vuelve a subir si no cambia nada).
@@ -349,9 +355,10 @@ export function CargarFacturaCompraModal({
     subtotalSinIva: subtotalPreview,
     descuento: descuentoPreview,
     iva: ivaPreview,
+    ajuste: ajustePreview,
     total: totalPreview,
     saldoPendiente: saldoPendientePreview,
-  } = calcularTotalesFacturaCompra(items, ivaAlicuota)
+  } = calcularTotalesFacturaCompra(items, ivaAlicuota, ajusteRedondeo)
   const cambiosPrecio = cambiosPrecioFactura(items, tipoComprobante, proveedorId, proveedores)
   // docs/55: 'suma' (factura, remito…), 'resta' (NC con devolución) o null (servicios, NC sin devolución).
   const accionStock = accionStockFacturaCompra({ tipoComprobante, tipoCompra, devuelveMercaderia })
@@ -409,6 +416,15 @@ export function CargarFacturaCompraModal({
     }
     if (itemsValidosFacturaCompra(items).length === 0) {
       setError(mensajeSinItemsFacturaCompra(tipoCompra))
+      return
+    }
+    // docs/71: el ajuste no tiene tope, pero tiene que ser un monto y no dejar el total negativo.
+    if (ajusteRedondeo === MONTO_INVALIDO) {
+      setError('Revisá el ajuste por redondeo: no es un monto válido.')
+      return
+    }
+    if (totalPreview < 0) {
+      setError('El total no puede quedar negativo: el ajuste por redondeo es mayor que el total.')
       return
     }
     // Ítems sin producto del inventario: no suman stock. Se confirman antes de guardar (docs/50).
@@ -483,6 +499,7 @@ export function CargarFacturaCompraModal({
       fechaFiscal: fechaFiscal || null,
       ivaAlicuota,
       tipoCompra,
+      ajusteRedondeo: ajustePreview, // docs/71
       items: integrarMarcaEnItemsLibres(items),
       copiadaDeId: copiaDe?.id ?? null,
     }
@@ -626,6 +643,25 @@ export function CargarFacturaCompraModal({
               <div>
                 <p className="font-sans text-label-md text-ink-soft">{etiquetaAlicuotaIva(ivaAlicuota)}</p>
                 <p className="font-sans text-body-md text-ink">{formatCurrency(ivaPreview)}</p>
+              </div>
+              {/* docs/71: fuera del <form> como el IVA (marca dirty a mano). Suma o resta al total final. */}
+              <div className="w-36">
+                <label htmlFor="ajuste-redondeo-factura" className="font-sans text-label-md text-ink-soft">
+                  {AJUSTE_REDONDEO_LABEL}
+                </label>
+                <MontoInput
+                  id="ajuste-redondeo-factura"
+                  value={ajusteRedondeo}
+                  onChange={(v) => {
+                    setDirty(true)
+                    setAjusteRedondeo(v)
+                  }}
+                  negativo
+                  sinMensaje
+                  placeholder="Ej.: -0,02"
+                  title="Suma o resta al total final, fuera del IVA. Para restar, poné un - adelante."
+                  className="w-full rounded border border-line bg-surface px-2 py-1 text-right font-sans text-body-md text-ink outline-none focus:border-accent"
+                />
               </div>
               <div>
                 <p className="font-sans text-label-md text-ink-soft">Saldo pendiente</p>

@@ -14,6 +14,9 @@ import type {
   ValoresFacturaCompra,
 } from '@virikyna/shared'
 import {
+  AJUSTE_REDONDEO_LABEL,
+  MONTO_INVALIDO,
+  MontoInput,
   alicuotaDefault,
   AvisoComprobanteDuplicado,
   AvisosBorrador,
@@ -109,6 +112,8 @@ export function CargarFacturaPage() {
   const [tipoCompra, setTipoCompra] = useState<TipoCompra>(vacios.tipoCompra)
   // docs/55: solo en NC de artículos; sin marcar, la NC no toca el stock.
   const [devuelveMercaderia, setDevuelveMercaderia] = useState(vacios.devuelveMercaderia)
+  // docs/71: ajuste por redondeo con signo, fuera del IVA ('' = sin ajuste).
+  const [ajusteRedondeo, setAjusteRedondeo] = useState(vacios.ajusteRedondeo)
   // Cambio de artículos ↔ servicios pedido con ítems cargados: se confirma porque los limpia.
   const [tipoCompraPendiente, setTipoCompraPendiente] = useState<TipoCompra | null>(null)
   const [items, setItems] = useState<ItemFacturaCompraUI[]>(vacios.items)
@@ -184,6 +189,7 @@ export function CargarFacturaPage() {
     setIvaAlicuota(v.ivaAlicuota)
     setTipoCompra(v.tipoCompra)
     setDevuelveMercaderia(v.devuelveMercaderia)
+    setAjusteRedondeo(v.ajusteRedondeo ?? '')
     setItems(v.items)
     setCopiaDe(v.copiaDe)
     setErroresItems({})
@@ -232,9 +238,10 @@ export function CargarFacturaPage() {
     subtotalSinIva: subtotalPreview,
     descuento: descuentoPreview,
     iva: ivaPreview,
+    ajuste: ajustePreview,
     total: totalPreview,
     saldoPendiente: saldoPendientePreview,
-  } = calcularTotalesFacturaCompra(items, ivaAlicuota)
+  } = calcularTotalesFacturaCompra(items, ivaAlicuota, ajusteRedondeo)
   const cambiosPrecio = cambiosPrecioFactura(items, tipoComprobante, proveedorId, proveedores)
   // docs/55: 'suma' (factura, remito…), 'resta' (NC con devolución) o null (servicios, NC sin devolución).
   const accionStock = accionStockFacturaCompra({ tipoComprobante, tipoCompra, devuelveMercaderia })
@@ -252,6 +259,7 @@ export function CargarFacturaPage() {
     ivaAlicuota,
     tipoCompra,
     devuelveMercaderia,
+    ajusteRedondeo,
     items,
     copiaDe,
   }
@@ -372,6 +380,15 @@ export function CargarFacturaPage() {
       setAviso({ tipo: 'error', texto: mensajeSinItemsFacturaCompra(tipoCompra) })
       return
     }
+    // docs/71: el ajuste no tiene tope, pero tiene que ser un monto y no dejar el total negativo.
+    if (ajusteRedondeo === MONTO_INVALIDO) {
+      setAviso({ tipo: 'error', texto: 'Revisá el ajuste por redondeo: no es un monto válido.' })
+      return
+    }
+    if (totalPreview < 0) {
+      setAviso({ tipo: 'error', texto: 'El total no puede quedar negativo: el ajuste por redondeo es mayor que el total.' })
+      return
+    }
     // Ítems sin producto del inventario: no suman stock. Se confirman antes de guardar (docs/50).
     // En servicios no hay producto por definición: no se pregunta (docs/53).
     // NC sin devolución no toca el stock: tampoco se pregunta; con devolución, "no van a restar" (docs/55).
@@ -446,6 +463,7 @@ export function CargarFacturaPage() {
       fechaFiscal: fechaFiscal || null,
       ivaAlicuota,
       tipoCompra,
+      ajusteRedondeo: ajustePreview, // docs/71
       items: integrarMarcaEnItemsLibres(items),
       copiadaDeId: copiaDe?.id ?? null,
     }
@@ -772,6 +790,21 @@ export function CargarFacturaPage() {
           <div className="mt-1 flex justify-between font-sans text-body-md text-ink-soft">
             <span>{etiquetaAlicuotaIva(ivaAlicuota)}</span>
             <span>{formatCurrency(ivaPreview)}</span>
+          </div>
+          {/* docs/71: suma o resta al total final, fuera del IVA. Dentro del <form> (onChangeCapture). */}
+          <div className="mt-1 flex items-center justify-between gap-3 font-sans text-body-md text-ink-soft">
+            <label htmlFor="ajuste-redondeo-factura">{AJUSTE_REDONDEO_LABEL}</label>
+            <div className="w-32">
+              <MontoInput
+                id="ajuste-redondeo-factura"
+                value={ajusteRedondeo}
+                onChange={setAjusteRedondeo}
+                negativo
+                sinMensaje
+                placeholder="Ej.: -0,02"
+                className="min-h-11 w-full rounded border border-line bg-surface px-2 text-right font-sans text-body-md text-ink outline-none focus:border-accent"
+              />
+            </div>
           </div>
           <div className="mt-1 flex justify-between font-sans text-body-md text-ink-soft">
             <span>Saldo pendiente</span>

@@ -1,13 +1,18 @@
 import { useState, type FormEvent } from 'react'
 import type { FormaPagoEgreso } from '@virikyna/shared'
 import {
+  ajusteRedondeoNumero,
   CAJA_ORIGEN_LABEL,
+  CampoAjusteRedondeo,
   ConfirmarPagoDialog,
+  diferenciaParaAjuste,
   fechaHoyISO,
   formatCurrency,
   formatFechaCorta,
   mensajeErrorGuardado,
+  MONTO_INVALIDO,
   registrarPagoProveedor,
+  registrarPagoProveedorV2,
   repartoPagoAFactura,
   useEnterComoTab,
   usePagosACuenta,
@@ -70,6 +75,11 @@ export function RegistrarPagoProveedorModal({
   }
 
   const montoNum = Number(monto)
+  // docs/71: ajuste por redondeo (no es plata). Lo que cancela el pago = plata + ajuste.
+  const [ajuste, setAjuste] = useState('')
+  const ajusteNum = ajusteRedondeoNumero(ajuste)
+  const diferencia =
+    facturaCompraId && saldoPendiente !== undefined ? diferenciaParaAjuste(saldoPendiente, montoNum) : 0
 
   // Valida y abre la confirmación; recién "Confirmar pago" guarda (guardar()).
   function handleSubmit(e: FormEvent) {
@@ -78,6 +88,18 @@ export function RegistrarPagoProveedorModal({
 
     if (!montoNum || montoNum <= 0) {
       setError('Ingresá un monto mayor a cero.')
+      return
+    }
+    if (ajuste === MONTO_INVALIDO) {
+      setError('Revisá el ajuste por redondeo: no es un monto válido.')
+      return
+    }
+    if (ajusteNum < 0 && montoNum + ajusteNum <= 0) {
+      setError('El ajuste por redondeo no puede ser mayor que lo que se paga.')
+      return
+    }
+    if (ajusteNum > 0 && facturaCompraId && saldoPendiente !== undefined && montoNum + ajusteNum > saldoPendiente + 0.001) {
+      setError('El ajuste por redondeo tiene que quedar aplicado a la factura: con este pago sobra. Bajá el ajuste o el monto.')
       return
     }
 
@@ -101,15 +123,23 @@ export function RegistrarPagoProveedorModal({
   async function guardar() {
     setError(null)
     setSaving(true)
-    const { error: dbError, status } = await registrarPagoProveedor(supabase, {
-      proveedorId,
-      facturaCompraId,
-      monto: montoNum,
-      formaPago,
+    const cheque = {
       chequeNumero: ES_CHEQUE(formaPago) ? chequeNumero.trim() : null,
       chequeFechaSalida: ES_CHEQUE(formaPago) ? chequeFechaSalida : null,
       chequeFechaVencimiento: ES_CHEQUE(formaPago) ? chequeFechaVencimiento : null,
-    })
+    }
+    // docs/71: con ajuste va por registrarPagoProveedorV2 (que lo manda a v3), caja de Local igual.
+    const { error: dbError, status } = ajusteNum
+      ? await registrarPagoProveedorV2(supabase, {
+          proveedorId,
+          facturaIds: facturaCompraId ? [facturaCompraId] : [],
+          monto: montoNum,
+          formaPago,
+          origen: 'turno',
+          ajusteRedondeo: ajusteNum,
+          ...cheque,
+        })
+      : await registrarPagoProveedor(supabase, { proveedorId, facturaCompraId, monto: montoNum, formaPago, ...cheque })
     setSaving(false)
 
     if (dbError) {
@@ -191,6 +221,16 @@ export function RegistrarPagoProveedorModal({
           </div>
         )}
 
+        <CampoAjusteRedondeo
+          value={ajuste}
+          onChange={(v) => {
+            setDirty(true)
+            setAjuste(v)
+          }}
+          diferencia={diferencia}
+          plata={montoNum}
+        />
+
         {error && <ErrorText>{error}</ErrorText>}
 
         <div className="flex justify-end gap-3">
@@ -228,6 +268,7 @@ export function RegistrarPagoProveedorModal({
           titularLabel="Proveedor"
           titular={proveedorNombre}
           total={montoNum}
+          ajuste={ajusteNum}
           fecha={fechaHoyISO()}
           origen={CAJA_ORIGEN_LABEL.turno}
           medios={[
@@ -241,7 +282,7 @@ export function RegistrarPagoProveedorModal({
                 : undefined,
             },
           ]}
-          reparto={repartoPagoAFactura(montoNum, facturaCompraId ? (comprobanteEtiqueta ?? 'Esta factura') : null, saldoPendiente)}
+          reparto={repartoPagoAFactura(montoNum + ajusteNum, facturaCompraId ? (comprobanteEtiqueta ?? 'Esta factura') : null, saldoPendiente)}
           confirmando={saving}
           onVolver={() => setConfirmar(false)}
           onConfirmar={() => void guardar()}

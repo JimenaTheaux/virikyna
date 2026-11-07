@@ -1,7 +1,7 @@
 import { useId, useMemo, useState, type FormEvent } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ClienteSaldo, FormaPagoCobro, OrigenEgreso, VentaCuentaCorrienteSaldo } from '../../types/database'
-import { CAJA_ORIGEN_LABEL, ErrorRegistrarPago } from '../../lib/facturasCompra'
+import { ajusteRedondeoNumero, CAJA_ORIGEN_LABEL, ErrorRegistrarPago } from '../../lib/facturasCompra'
 import {
   etiquetaVenta,
   nombreCliente,
@@ -10,7 +10,8 @@ import {
   type RegistrarCobroClienteResultado,
 } from '../../lib/cuentaCorrienteCliente'
 import { diferenciaMedios, validarMedios } from '../../lib/mediosPago'
-import { simularRepartoCobro } from '../../lib/repartoPagoProveedor'
+import { diferenciaParaAjuste, simularRepartoCobro } from '../../lib/repartoPagoProveedor'
+import { CampoAjusteRedondeo } from './CampoAjusteRedondeo'
 import { MediosPagoEditor, ResumenMedios, useMediosPago } from './MediosPagoEditor'
 import { fechaHoyISO, formatCurrency, formatFechaCorta, formatFechaCortaLocal } from '../../lib/format'
 import { friendlyError, mensajeErrorGuardado } from '../../lib/supabaseErrors'
@@ -19,7 +20,7 @@ import { useEnterComoTab } from '../../lib/useEnterComoTab'
 import { Modal } from './Modal'
 import { ConfirmDialog } from './ConfirmDialog'
 import { ConfirmarPagoDialog, mediosParaConfirmar, type FilaRepartoConfirmacion } from './ConfirmarPagoDialog'
-import { MontoInput } from './MontoInput'
+import { MONTO_INVALIDO, MontoInput } from './MontoInput'
 import { Field, ErrorText, inputClass } from './FormField'
 import { EstadoBadge } from './EstadoBadge'
 
@@ -77,13 +78,21 @@ export function CobrarClienteModal({
   const mutation = useRegistrarCobroCliente(supabase)
   const { medios, cambiar: cambiarMedios } = useMediosPago<FormaPagoCobro>(monto, 'efectivo')
   const montoNum = monto.trim() === '' ? NaN : Number(monto)
-  const mediosNoCierran = Number.isFinite(montoNum) && diferenciaMedios(montoNum, medios).estado !== 'cierra'
-  const superaMaximo = Number.isFinite(montoNum) && Math.round(montoNum * 100) > Math.round(maximo * 100)
+  // docs/71: ajuste por redondeo (no es plata, no entra a la caja). Lo que cancela = plata + ajuste.
+  const [ajuste, setAjuste] = useState('')
+  const ajusteNum = ajusteRedondeoNumero(ajuste)
+  const sinPlata = montoNum === 0 && ajusteNum > 0
+  const mediosNoCierran = !sinPlata && Number.isFinite(montoNum) && diferenciaMedios(montoNum, medios).estado !== 'cierra'
+  const superaMaximo =
+    Number.isFinite(montoNum) && Math.round(montoNum * 100) + Math.round(ajusteNum * 100) > Math.round(maximo * 100)
 
   const reparto = useMemo(
-    () => simularRepartoCobro({ ventas: comprobantes, ventaIds, monto: Number.isFinite(montoNum) ? montoNum : 0 }),
-    [comprobantes, ventaIds, montoNum],
+    () =>
+      simularRepartoCobro({ ventas: comprobantes, ventaIds, monto: Number.isFinite(montoNum) ? montoNum : 0, ajuste: ajusteNum }),
+    [comprobantes, ventaIds, montoNum, ajusteNum],
   )
+  const errorAjuste = ajusteNum !== 0 ? reparto.error : null
+  const diferencia = diferenciaParaAjuste(Math.min(aCobrar, maximo), montoNum)
   const filasPreview = useMemo(
     () =>
       reparto.aplicaciones.map((a) => ({
@@ -104,11 +113,17 @@ export function CobrarClienteModal({
     e.preventDefault()
     setError(null)
     const invalido =
-      !Number.isFinite(montoNum) || montoNum <= 0
-        ? 'Ingresá un monto mayor a cero.'
-        : superaMaximo
-          ? `El cobro supera lo que debe el cliente (${formatCurrency(maximo)}).`
-          : validarMedios(medios, montoNum)
+      ajuste === MONTO_INVALIDO
+        ? 'Revisá el ajuste por redondeo: no es un monto válido.'
+        : !Number.isFinite(montoNum) || montoNum < 0 || (montoNum === 0 && !sinPlata)
+          ? 'Ingresá un monto mayor a cero.'
+          : superaMaximo
+            ? `El cobro supera lo que debe el cliente (${formatCurrency(maximo)}).`
+            : errorAjuste
+              ? errorAjuste
+              : sinPlata
+                ? null
+                : validarMedios(medios, montoNum)
     if (invalido) {
       setError(invalido)
       return
@@ -126,11 +141,12 @@ export function CobrarClienteModal({
       const resultado = await mutation.mutateAsync({
         clienteId: cliente.id,
         monto: montoNum,
-        medios,
+        medios: sinPlata ? [] : medios,
         ventaIds,
         origen,
         fecha,
         nota,
+        ajusteRedondeo: ajusteNum,
       })
       onCobrado(resultado)
     } catch (err) {
@@ -151,17 +167,17 @@ export function CobrarClienteModal({
       cambiosSinGuardar={dirty}
       footer={
         <div className="flex items-center justify-end gap-3">
-          <ResumenMedios medios={medios} total={montoNum} className="mr-auto" />
+          {!sinPlata && <ResumenMedios medios={medios} total={montoNum} className="mr-auto" />}
           <button type="button" onClick={pedirCierre} className="rounded px-4 py-3 font-sans text-label-bold text-ink-soft hover:bg-bg">
             Cancelar
           </button>
           <button
             type="submit"
             form={formId}
-            disabled={mutation.isPending || mediosNoCierran || superaMaximo}
+            disabled={mutation.isPending || mediosNoCierran || superaMaximo || Boolean(errorAjuste)}
             className="rounded bg-accent px-4 py-3 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-60"
           >
-            {mutation.isPending ? 'Guardando...' : 'Registrar cobro'}
+            {mutation.isPending ? 'Guardando...' : sinPlata ? 'Registrar ajuste' : 'Registrar cobro'}
           </button>
         </div>
       }
@@ -238,16 +254,32 @@ export function CobrarClienteModal({
           )}
         </div>
 
-        <MediosPagoEditor<FormaPagoCobro>
-          medios={medios}
-          onChange={cambiarMedios}
-          total={montoNum}
-          fechaPago={fecha}
-          conResumen={false}
-          opciones={OPCIONES_MEDIO_COBRO}
-          conCheques={false}
-          titulo="Medios de cobro"
+        <CampoAjusteRedondeo
+          value={ajuste}
+          onChange={(v) => {
+            setDirty(true)
+            setAjuste(v)
+          }}
+          diferencia={diferencia}
+          plata={montoNum}
         />
+
+        {sinPlata ? (
+          <p className="rounded bg-badge-green-bg px-4 py-3 font-sans text-body-md text-badge-green-text">
+            Ajuste por redondeo sin plata — no entra plata ni se suma al cierre de caja.
+          </p>
+        ) : (
+          <MediosPagoEditor<FormaPagoCobro>
+            medios={medios}
+            onChange={cambiarMedios}
+            total={montoNum}
+            fechaPago={fecha}
+            conResumen={false}
+            opciones={OPCIONES_MEDIO_COBRO}
+            conCheques={false}
+            titulo="Medios de cobro"
+          />
+        )}
 
         <Field label="Nota (opcional)">
           <input value={nota} onChange={(e) => setNota(e.target.value)} maxLength={200} className={inputClass} />
@@ -308,6 +340,7 @@ export function CobrarClienteModal({
         </section>
 
         {superaMaximo && !error && <ErrorText>{`El cobro supera lo que debe el cliente (${formatCurrency(maximo)}).`}</ErrorText>}
+        {errorAjuste && !superaMaximo && !error && <ErrorText>{errorAjuste}</ErrorText>}
         {error && <ErrorText>{error}</ErrorText>}
       </form>
 
@@ -323,14 +356,15 @@ export function CobrarClienteModal({
 
       {confirmar && (
         <ConfirmarPagoDialog
-          titulo="Confirmar cobro"
-          confirmLabel="Confirmar cobro"
+          titulo={sinPlata ? 'Confirmar ajuste' : 'Confirmar cobro'}
+          confirmLabel={sinPlata ? 'Confirmar' : 'Confirmar cobro'}
           titularLabel="Cliente"
           titular={nombreCliente(cliente)}
           total={montoNum}
+          ajuste={ajusteNum}
           fecha={origen === 'general' ? fecha : fechaHoyISO()}
           origen={CAJA_ORIGEN_LABEL[origen]}
-          medios={mediosParaConfirmar(medios, (m) => FORMA_PAGO_LABEL[m])}
+          medios={sinPlata ? [] : mediosParaConfirmar(medios, (m) => FORMA_PAGO_LABEL[m])}
           reparto={[
             ...filasPreview.map<FilaRepartoConfirmacion>(({ venta, aplica, saldoFinal }) => ({
               etiqueta: etiquetaVenta(venta),

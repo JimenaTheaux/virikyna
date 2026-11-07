@@ -5,11 +5,12 @@ import { formatCurrency, formatFechaCorta } from '../../lib/format'
 // Forma de pago de un pago a proveedor en un listado (cuenta corriente, detalle de factura,
 // Historial). Un medio: como siempre ("Cheque N° 123"). Varios (docs/65): "Mixto (N medios)" que se
 // despliega con cada medio, su monto y, en los cheques, el banco y cuándo se cobran.
+// Sin forma de pago: ajuste por redondeo sin plata (docs/71).
 export function FormaPagoConDetalle({
   pago,
   className = '',
 }: {
-  pago: { forma_pago: FormaPagoCabecera; cheque_numero: string | null; medios?: MedioDePago[] | null }
+  pago: { forma_pago: FormaPagoCabecera | null; cheque_numero: string | null; medios?: MedioDePago[] | null }
   className?: string
 }) {
   const medios = ordenarMedios(pago.medios)

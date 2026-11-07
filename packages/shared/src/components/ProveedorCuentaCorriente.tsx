@@ -4,9 +4,11 @@ import { Ban, Copy, Eye, Pencil, Wallet } from 'lucide-react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { EstadoFacturaCompra, FacturaCompraSaldo, OrigenEgreso, TipoComprobanteCompra, TipoCompra } from '../../types/database'
 import {
+  AJUSTE_REDONDEO_LABEL,
   CAJA_ORIGEN_LABEL,
   etiquetaComprobanteCompra,
   etiquetaCortaAlicuotaIva,
+  etiquetaFormaPago,
   FORMA_PAGO_CABECERA_LABEL,
   invalidarCuentaProveedor,
   TIPO_COMPRA_LABEL,
@@ -21,7 +23,7 @@ import {
 } from '../../lib/facturasCompra'
 import { esNotaCredito, esSeleccionableParaPago, simularRepartoPago } from '../../lib/repartoPagoProveedor'
 import { usePagosACuenta } from '../../lib/pagosACuenta'
-import { formatCurrency, formatFechaCorta } from '../../lib/format'
+import { formatAjuste, formatCurrency, formatFechaCorta } from '../../lib/format'
 import { friendlyError } from '../../lib/supabaseErrors'
 import { Field, inputClass, selectClass } from './FormField'
 import { ChipTipoCompra, EstadoBadge } from './EstadoBadge'
@@ -417,7 +419,7 @@ export function ProveedorCuentaCorriente({
               <>
                 {formatCurrency(Number(ultimoPago.monto))}
                 <span className="block font-sans text-label-md text-ink-soft">
-                  {formatFechaCorta(ultimoPago.fecha)} · {FORMA_PAGO_CABECERA_LABEL[ultimoPago.forma_pago]}
+                  {formatFechaCorta(ultimoPago.fecha)} · {etiquetaFormaPago(ultimoPago)}
                 </span>
               </>
             ) : (
@@ -693,9 +695,17 @@ function TablaPagos({
               <td className="px-3 py-3 text-ink-soft tabular-nums">{formatFechaCorta(p.fecha)}</td>
               <td className={`px-3 py-3 text-right font-semibold tabular-nums ${monto < 0 ? 'text-error' : 'text-ink'}`}>
                 {monto < 0 ? negativo(monto) : formatCurrency(monto)}
+                {/* docs/71: el ajuste cancela además de la plata (no es plata). */}
+                {Number(p.ajuste_redondeo) !== 0 && (
+                  <span className="block font-normal text-label-md text-ink-soft">
+                    ajuste {formatAjuste(Number(p.ajuste_redondeo))}
+                  </span>
+                )}
               </td>
               <td className="px-3 py-3 text-ink [overflow-wrap:anywhere]">
-                {monto === 0 ? (
+                {p.forma_pago === null ? (
+                  AJUSTE_REDONDEO_LABEL
+                ) : monto === 0 ? (
                   'Solo crédito NC'
                 ) : p.forma_pago === 'mixto' ? (
                   <FormaPagoConDetalle pago={p} />

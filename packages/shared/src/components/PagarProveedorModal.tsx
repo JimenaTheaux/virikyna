@@ -2,6 +2,7 @@ import { useId, useMemo, useState, type FormEvent } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { FacturaCompraSaldo, FormaPagoEgreso, OrigenEgreso } from '../../types/database'
 import {
+  ajusteRedondeoNumero,
   CAJA_ORIGEN_LABEL,
   ErrorRegistrarPago,
   esCheque,
@@ -13,7 +14,8 @@ import {
   validarPagoProveedor,
 } from '../../lib/facturasCompra'
 import { diferenciaMedios, validarMedios } from '../../lib/mediosPago'
-import { simularRepartoPago } from '../../lib/repartoPagoProveedor'
+import { diferenciaParaAjuste, simularRepartoPago } from '../../lib/repartoPagoProveedor'
+import { CampoAjusteRedondeo } from './CampoAjusteRedondeo'
 import { MediosPagoEditor, ResumenMedios, useMediosPago } from './MediosPagoEditor'
 import { fechaHoyISO, formatCurrency, formatFechaCorta } from '../../lib/format'
 import { friendlyError, mensajeErrorGuardado } from '../../lib/supabaseErrors'
@@ -21,7 +23,7 @@ import { useEnterComoTab } from '../../lib/useEnterComoTab'
 import { Modal } from './Modal'
 import { ConfirmDialog } from './ConfirmDialog'
 import { ConfirmarPagoDialog, mediosParaConfirmar, type FilaRepartoConfirmacion } from './ConfirmarPagoDialog'
-import { MontoInput } from './MontoInput'
+import { MONTO_INVALIDO, MontoInput } from './MontoInput'
 import { Field, ErrorText, inputClass, selectClass } from './FormField'
 import { EstadoBadge } from './EstadoBadge'
 
@@ -93,10 +95,15 @@ export function PagarProveedorModal({
   const guardando = mutationV2.isPending || mutationV3.isPending
   const { medios, cambiar: cambiarMedios } = useMediosPago(monto)
   const montoNum = monto.trim() === '' ? NaN : Number(monto)
+  // docs/71: ajuste por redondeo con signo. Lo que cancela el pago = plata + ajuste (no es plata).
+  const [ajuste, setAjuste] = useState('')
+  const ajusteNum = ajusteRedondeoNumero(ajuste)
   const soloCredito = hayNotas && montoNum === 0
+  // Sin plata: solo NC, o un ajuste solo (centavos que quedaron). No hay medios ni egreso.
+  const sinPlata = montoNum === 0 && (hayNotas || ajusteNum > 0)
   // Con varios medios no se guarda hasta que sumen el total del pago.
   const mediosNoCierran =
-    variosMedios && !soloCredito && Number.isFinite(montoNum) && diferenciaMedios(montoNum, medios).estado !== 'cierra'
+    variosMedios && !sinPlata && Number.isFinite(montoNum) && diferenciaMedios(montoNum, medios).estado !== 'cierra'
 
   const reparto = useMemo(
     () =>
@@ -105,9 +112,11 @@ export function PagarProveedorModal({
         facturaIds,
         notaCreditoIds,
         monto: Number.isFinite(montoNum) ? montoNum : 0,
+        ajuste: ajusteNum,
       }),
-    [comprobantes, facturaIds, notaCreditoIds, montoNum],
+    [comprobantes, facturaIds, notaCreditoIds, montoNum, ajusteNum],
   )
+  const diferencia = diferenciaParaAjuste(aPagar, montoNum)
   // docs/69: el sobrante (a cuenta) cancela primero el saldo inicial, como la vista de la base.
   const cancelaSaldoInicial = Math.min(Math.round(reparto.aCuenta * 100), Math.round(Math.max(saldoInicialPendiente, 0) * 100)) / 100
   const quedaACuenta = (Math.round(reparto.aCuenta * 100) - Math.round(cancelaSaldoInicial * 100)) / 100
@@ -142,18 +151,20 @@ export function PagarProveedorModal({
     e.preventDefault()
     setError(null)
 
-    const invalido = variosMedios
+    const invalido = ajuste === MONTO_INVALIDO
+      ? 'Revisá el ajuste por redondeo: no es un monto válido.'
+      : variosMedios
       ? !Number.isFinite(montoNum) || montoNum < 0
         ? 'Ingresá un monto válido.'
-        : montoNum === 0 && !hayNotas
+        : montoNum === 0 && !hayNotas && ajusteNum <= 0
           ? 'Ingresá un monto mayor a cero.'
-          : soloCredito
+          : sinPlata
             ? null
             : validarMedios(medios, montoNum, { fechaPagoProveedor: fecha })
       : validarPagoProveedor({
           monto: montoNum,
           formaPago,
-          permiteMontoCero: hayNotas,
+          permiteMontoCero: hayNotas || ajusteNum > 0,
           chequeNumero,
           chequeFechaSalida,
           chequeFechaVencimiento,
@@ -180,12 +191,13 @@ export function PagarProveedorModal({
         await mutationV3.mutateAsync({
           proveedorId,
           monto: montoNum,
-          medios: soloCredito ? [] : medios,
+          medios: sinPlata ? [] : medios,
           facturaIds,
           notaCreditoIds,
           origen,
           fecha,
           nota,
+          ajusteRedondeo: ajusteNum,
         })
       } else {
         await mutationV2.mutateAsync({
@@ -200,6 +212,7 @@ export function PagarProveedorModal({
           chequeNumero,
           chequeFechaSalida,
           chequeFechaVencimiento,
+          ajusteRedondeo: ajusteNum,
         })
       }
       onPagado()
@@ -221,7 +234,7 @@ export function PagarProveedorModal({
       cambiosSinGuardar={dirty}
       footer={
         <div className="flex items-center justify-end gap-3">
-          {variosMedios && !soloCredito && <ResumenMedios medios={medios} total={montoNum} className="mr-auto" />}
+          {variosMedios && !sinPlata && <ResumenMedios medios={medios} total={montoNum} className="mr-auto" />}
           <button
             type="button"
             onClick={pedirCierre}
@@ -235,7 +248,7 @@ export function PagarProveedorModal({
             disabled={guardando || Boolean(reparto.error) || mediosNoCierran}
             className="rounded bg-accent px-4 py-3 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-60"
           >
-            {guardando ? 'Guardando...' : soloCredito ? 'Aplicar crédito' : 'Registrar pago'}
+            {guardando ? 'Guardando...' : soloCredito ? 'Aplicar crédito' : sinPlata ? 'Registrar ajuste' : 'Registrar pago'}
           </button>
         </div>
       }
@@ -298,9 +311,21 @@ export function PagarProveedorModal({
           </Field>
         </div>
 
-        {soloCredito ? (
+        <CampoAjusteRedondeo
+          value={ajuste}
+          onChange={(v) => {
+            setDirty(true)
+            setAjuste(v)
+          }}
+          diferencia={diferencia}
+          plata={montoNum}
+        />
+
+        {sinPlata ? (
           <p className="rounded bg-badge-green-bg px-4 py-3 font-sans text-body-md text-badge-green-text">
-            Se aplica solo crédito de notas de crédito — no sale plata ni se registra un egreso.
+            {soloCredito
+              ? 'Se aplica solo crédito de notas de crédito — no sale plata ni se registra un egreso.'
+              : 'Ajuste por redondeo sin plata — no sale plata ni se registra un egreso.'}
           </p>
         ) : variosMedios ? (
           <MediosPagoEditor medios={medios} onChange={cambiarMedios} total={montoNum} fechaPago={fecha} conResumen={false} />
@@ -466,15 +491,16 @@ export function PagarProveedorModal({
 
       {confirmar && (
         <ConfirmarPagoDialog
-          titulo={soloCredito ? 'Confirmar aplicación de crédito' : 'Confirmar pago'}
-          confirmLabel={soloCredito ? 'Confirmar' : 'Confirmar pago'}
+          titulo={soloCredito ? 'Confirmar aplicación de crédito' : sinPlata ? 'Confirmar ajuste' : 'Confirmar pago'}
+          confirmLabel={sinPlata ? 'Confirmar' : 'Confirmar pago'}
           titularLabel="Proveedor"
           titular={proveedorNombre}
           total={montoNum}
+          ajuste={ajusteNum}
           fecha={fecha}
           origen={CAJA_ORIGEN_LABEL[origen]}
           medios={
-            soloCredito
+            sinPlata
               ? []
               : variosMedios
                 ? mediosParaConfirmar(medios, (m) => FORMA_PAGO_EGRESO_LABEL[m])

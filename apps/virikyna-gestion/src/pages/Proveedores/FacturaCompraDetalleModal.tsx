@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FacturaCompra, FacturaCompraItem, FacturaCompraSaldo, OrigenEgreso, PagoProveedor } from '@virikyna/shared'
 import {
+  AJUSTE_REDONDEO_LABEL,
   AnularFacturaCompraModal,
   CAJA_ORIGEN_LABEL,
   ChipTipoCompra,
@@ -12,6 +13,7 @@ import {
   etiquetaComprobanteCompra,
   etiquetaFormaPago,
   FormaPagoConDetalle,
+  formatAjuste,
   formatCurrency,
   formatFechaCorta,
   friendlyError,
@@ -241,6 +243,13 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
               </>
             )}
           </p>
+          {/* docs/71: fuera del IVA, se suma al final. */}
+          {Number(facturaActual.ajuste_redondeo) !== 0 && (
+            <p className="text-ink-soft">
+              {AJUSTE_REDONDEO_LABEL}:{' '}
+              <span className="tabular-nums text-ink">{formatAjuste(Number(facturaActual.ajuste_redondeo))}</span>
+            </p>
+          )}
           <p className="text-ink-soft">
             Total:{' '}
             <span className={`tabular-nums ${nc ? 'text-success' : 'text-ink'}`}>

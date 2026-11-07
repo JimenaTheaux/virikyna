@@ -99,12 +99,17 @@ export function ordenarMedios<T extends { orden: number }>(medios: T[] | null | 
   return [...(medios ?? [])].sort((a, b) => a.orden - b.orden)
 }
 
-// "Cheque N° 123", "Transferencia", "Mixto (3 medios)".
+// Rótulo del ajuste por redondeo (docs/71, D1): el mismo en comprobantes, pagos, cobros e Historial.
+// Con signo se muestra con formatAjuste (lib/format.ts): "−$ 0,02" / "+$ 0,05".
+export const AJUSTE_REDONDEO_LABEL = 'Ajuste por redondeo'
+
+// "Cheque N° 123", "Transferencia", "Mixto (3 medios)". Sin forma de pago = ajuste solo (docs/71).
 export function etiquetaFormaPago(pago: {
-  forma_pago: FormaPagoCabecera
+  forma_pago: FormaPagoCabecera | null
   cheque_numero: string | null
   medios?: { medio: FormaPagoEgreso }[] | null
 }): string {
+  if (pago.forma_pago === null) return AJUSTE_REDONDEO_LABEL
   if (pago.forma_pago === 'mixto') {
     const n = pago.medios?.length ?? 0
     return n > 0 ? `Mixto (${n} medios)` : 'Mixto'
@@ -304,6 +309,7 @@ export type CargarFacturaCompraInput = {
   copiadaDeId?: string | null // docs/33: factura de la que se copió esta
   borradorId?: string | null // docs/54: el RPC lo borra en la misma transacción
   devuelveMercaderia?: boolean // docs/55: solo NC de artículos; resta stock
+  ajusteRedondeo?: number // docs/71: con signo, fuera del IVA; 0 o sin dato = sin ajuste
 }
 
 // Mensaje del RPC cuando el borrador que se confirma ya no existe (docs/54): otro lo confirmó o lo
@@ -323,6 +329,8 @@ function parametrosFacturaCompra(input: CargarFacturaCompraInput) {
     ...(input.copiadaDeId ? { p_copiada_de_id: input.copiadaDeId } : {}),
     ...(servicios ? { p_tipo_compra: 'servicios' } : {}),
     ...(input.borradorId ? { p_borrador_id: input.borradorId } : {}),
+    // docs/71: solo viaja si hay ajuste (el RPC tiene default 0).
+    ...(input.ajusteRedondeo ? { p_ajuste_redondeo: input.ajusteRedondeo } : {}),
     p_iva_alicuota: input.ivaAlicuota,
     p_proveedor_id: input.proveedorId,
     p_tipo_comprobante: input.tipoComprobante,
@@ -433,6 +441,7 @@ export type ValoresFacturaCompra = {
   ivaAlicuota: AlicuotaIvaCompra // docs/45
   tipoCompra: TipoCompra // docs/53
   devuelveMercaderia: boolean // docs/55: NC de artículos; default desmarcado
+  ajusteRedondeo: string // docs/71: string normalizado del MontoInput ('' = sin ajuste)
   items: ItemFacturaCompraUI[]
   copiaDe: OrigenCopiaFactura | null
 }
@@ -451,6 +460,7 @@ export function valoresFacturaCompraVacios(): ValoresFacturaCompra {
     ivaAlicuota: alicuotaDefault('factura'),
     tipoCompra: 'articulos',
     devuelveMercaderia: false,
+    ajusteRedondeo: '',
     items: [nuevoItemFacturaCompraUI()],
     copiaDe: null,
   }
@@ -541,6 +551,7 @@ export function facturaACopia(factura: FacturaParaCopiar): ValoresFacturaCompra 
     ivaAlicuota: aAlicuotaIvaCompra(factura.iva_alicuota),
     tipoCompra: tipoCompraDe(factura), // docs/53: la copia es del mismo tipo que el original
     devuelveMercaderia: Boolean(factura.devuelve_mercaderia), // docs/55
+    ajusteRedondeo: '', // docs/71 (D2): el ajuste es propio de cada comprobante, la copia arranca sin
     items: items.length > 0 ? items : [nuevoItemFacturaCompraUI()],
     copiaDe: { id: factura.id, etiqueta: etiquetaComprobanteCompra(factura), anulada: factura.anulada },
   }
@@ -684,6 +695,7 @@ export type EditarFacturaCompraInput = {
   fechaComprobante: string
   formaPago: FormaPagoCompra
   ivaAlicuota: AlicuotaIvaCompra // docs/45
+  ajusteRedondeo: number // docs/71: con signo; mismo bloqueo que la alícuota
 }
 
 // Único punto de llamada al RPC `editar_factura_compra` (docs/06_estructura_de_datos.md, RPC 10)
@@ -699,6 +711,7 @@ export function editarFacturaCompra(supabase: SupabaseClient, input: EditarFactu
     p_fecha_comprobante: input.fechaComprobante,
     p_forma_pago: input.formaPago,
     p_iva_alicuota: input.ivaAlicuota,
+    p_ajuste_redondeo: input.ajusteRedondeo,
   })
 }
 
@@ -796,11 +809,44 @@ export type RegistrarPagoProveedorV2Input = {
   chequeNumero?: string | null
   chequeFechaSalida?: string | null
   chequeFechaVencimiento?: string | null
+  ajusteRedondeo?: number // docs/71: con signo; lo que cancela el pago = monto + ajuste
 }
 
 // Único punto de llamada a `registrar_pago_proveedor_v2`.
+// docs/71: v2 no tiene ajuste. Con ajuste, el mismo pago de un medio va por v3 (lo mismo que v2
+// hace del lado del servidor: un medio con el monto, o ninguno si es 0).
 export function registrarPagoProveedorV2(supabase: SupabaseClient, input: RegistrarPagoProveedorV2Input) {
   const cheque = input.monto > 0 && esCheque(input.formaPago)
+  if (input.ajusteRedondeo) {
+    return supabase.rpc('registrar_pago_proveedor_v3', {
+      p_proveedor_id: input.proveedorId,
+      p_medios:
+        input.monto > 0
+          ? [
+              {
+                medio: input.formaPago,
+                monto: Math.round(input.monto * 100) / 100,
+                ...(cheque
+                  ? {
+                      numero: input.chequeNumero?.trim() || null,
+                      fecha_salida: input.chequeFechaSalida || null,
+                      fecha_pago: input.chequeFechaVencimiento || null,
+                      propio: true,
+                    }
+                  : {}),
+              },
+            ]
+          : [],
+      p_factura_ids: input.facturaIds?.length ? input.facturaIds : null,
+      p_nota_credito_ids: input.notaCreditoIds?.length ? input.notaCreditoIds : null,
+      p_origen: input.origen,
+      p_cierre_caja_id: input.cierreCajaId ?? null,
+      p_fecha: input.fecha || null,
+      p_nota: input.nota?.trim() || null,
+      p_monto: input.monto,
+      p_ajuste_redondeo: input.ajusteRedondeo,
+    })
+  }
   return supabase.rpc('registrar_pago_proveedor_v2', {
     p_proveedor_id: input.proveedorId,
     p_monto: input.monto,
@@ -995,6 +1041,7 @@ export type RegistrarPagoProveedorV3Input = {
   origen: OrigenEgreso
   fecha?: string | null
   nota?: string | null
+  ajusteRedondeo?: number // docs/71: con signo; sin medios y > 0 = ajuste solo
 }
 
 // Único punto de llamada a `registrar_pago_proveedor_v3`.
@@ -1009,6 +1056,7 @@ export function registrarPagoProveedorV3(supabase: SupabaseClient, input: Regist
     p_fecha: input.fecha || null,
     p_nota: input.nota?.trim() || null,
     p_monto: input.monto,
+    ...(input.ajusteRedondeo ? { p_ajuste_redondeo: input.ajusteRedondeo } : {}),
   })
 }
 

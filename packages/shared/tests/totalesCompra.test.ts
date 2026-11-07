@@ -33,6 +33,7 @@ test('totales con 21 %: mismos números que el RPC (docs/45, casos 1 y 7)', () =
     subtotalSinIva: 1000,
     descuento: 0,
     iva: 210,
+    ajuste: 0,
     total: 1210,
     saldoPendiente: 1210,
   })
@@ -58,6 +59,24 @@ test('el cupón de la auditoría (G): 196.368 con 21 % daba 237.605,28', () => {
 test('ítems en blanco no suman', () => {
   const r = calcularTotalesFacturaCompra([item('2', '500'), item('1', '999', '0', '  ')], 21)
   assert.equal(r.subtotalSinIva, 1000)
+})
+
+test('ajuste por redondeo (docs/71): fuera del IVA, se suma al final, con signo', () => {
+  // Mismos números que el T1 de docs/71: 100,01 + IVA 21,00 − 0,02 = 120,99.
+  const r = calcularTotalesFacturaCompra([item('1', '100.01')], 21, '-0.02')
+  assert.equal(r.iva, 21)
+  assert.equal(r.ajuste, -0.02)
+  assert.equal(r.total, 120.99)
+  assert.equal(r.saldoPendiente, 120.99)
+  assert.equal(calcularTotalesFacturaCompra([item('1', '100')], 0, 0.05).total, 100.05)
+  // Vacío o inválido (MONTO_INVALIDO) no suma.
+  assert.equal(calcularTotalesFacturaCompra([item('1', '100')], 0, '').total, 100)
+  assert.equal(calcularTotalesFacturaCompra([item('1', '100')], 0, 'monto-invalido').total, 100)
+})
+
+test('subtotal = suma de líneas redondeadas (igual que el RPC desde docs/71, D5)', () => {
+  // Dos líneas de 1,005: cada una 1,01 → 2,02 (sin redondear por línea daba 2,01).
+  assert.equal(calcularTotalesFacturaCompra([item('1', '1.005'), item('1', '1.005')], 0).total, 2.02)
 })
 
 test('ivaDeCompra redondea a centavos', () => {
