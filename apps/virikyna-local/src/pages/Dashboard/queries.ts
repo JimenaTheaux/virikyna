@@ -3,7 +3,8 @@ import { fechaISO, fechaLocalDeISO, rangoTimestampsAR } from '@virikyna/shared'
 import type { VentaDelDia } from './types'
 
 // Una sola consulta cubre "hoy" y "ayer" (variación) y los últimos 7 días (gráfico semanal),
-// agrupando por día argentino en el cliente.
+// agrupando por día argentino en el cliente. Solo ventas comerciales: el consumo interno (dueñas y
+// empleados, docs/68 D8) va aparte, en su card.
 export async function fetchVentasUltimosDias(dias: number) {
   const { desde, hasta } = rangoTimestampsAR(fechaISO(-(dias - 1)), fechaISO(0))
 
@@ -11,6 +12,7 @@ export async function fetchVentasUltimosDias(dias: number) {
     .from('ventas')
     .select('precio_cobrado, created_at')
     .neq('estado', 'anulada')
+    .is('estado_interno', null)
     .gte('created_at', desde)
     .lte('created_at', hasta)
 
@@ -29,17 +31,19 @@ export async function fetchVentasUltimosDias(dias: number) {
 
 // Neto de devoluciones/cambios por día (docs/24): suma de diferencia_monto de las devoluciones
 // activas — negativo = se devolvió plata al cliente. Venta neta del día = venta bruta + este valor.
+// Las devoluciones de ventas internas no cuentan (docs/68 D8).
 export async function fetchDevolucionesUltimosDias(dias: number) {
   const { data, error } = await supabase
     .from('devoluciones')
-    .select('fecha, diferencia_monto')
+    .select('fecha, diferencia_monto, ventas!inner(estado_interno)')
     .eq('estado', 'activa')
+    .is('ventas.estado_interno', null)
     .gte('fecha', fechaISO(-(dias - 1)))
     .lte('fecha', fechaISO(0))
 
   const netoPorDia = new Map<string, number>()
   if (error || !data) return { netoPorDia, error }
-  for (const d of data as { fecha: string; diferencia_monto: number }[]) {
+  for (const d of data as unknown as { fecha: string; diferencia_monto: number }[]) {
     netoPorDia.set(d.fecha, (netoPorDia.get(d.fecha) ?? 0) + d.diferencia_monto)
   }
   return { netoPorDia, error: null }

@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   AlertaPreciosCard,
+  ConsumoInternoCard,
   DefectuososCard,
   fechaISO,
   formatCurrency,
@@ -31,6 +33,7 @@ function Kpi({ label, children, detalle }: { label: string; children: ReactNode;
 // (caja, alerta de precios), las cifras del día al medio y los listados abajo, que se acomodan al
 // alto que queda (scroll interno). Sin accesos rápidos: repetían el menú lateral.
 export function AdminDashboard() {
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [porDia, setPorDia] = useState<Map<string, VentaDelDia>>(new Map())
@@ -114,6 +117,10 @@ export function AdminDashboard() {
               verTodosArriba
             />
           )}
+          {/* docs/68 (D8): las ventas de arriba no incluyen el consumo de dueñas y empleados. */}
+          <div className="shrink-0">
+            <ConsumoInternoCard supabase={supabase} desde={hoy} hasta={hoy} onAbrirCliente={(id) => navigate(`/clientes/${id}`)} />
+          </div>
         </div>
         <div className="flex min-h-0 flex-col gap-3">
           <div className="rounded-lg bg-surface p-3.5 shadow-sm">

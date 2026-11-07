@@ -41,17 +41,14 @@ export function ConsumoInternoCard({ supabase, desde, hasta, onAbrirCliente }: P
 
       {q.error && <p className="mt-2 rounded bg-error/10 px-3 py-2 font-sans text-body-md text-error">{friendlyError(q.error as Error)}</p>}
 
-      <table className="mt-3 w-full table-fixed text-left font-sans text-body-md leading-5">
-        <colgroup>
-          <col />
-          <col className="w-[7.5rem]" />
-          <col className="w-[7.5rem]" />
-        </colgroup>
+      {/* Montos al ancho de su contenido; el nombre usa lo que queda y corta por palabra (en la
+          columna angosta del dashboard de Gestión, a 1366 px, no se parte letra por letra). */}
+      <table className="mt-3 w-full text-left font-sans text-body-md leading-5">
         <thead>
           <tr className="border-b border-line text-table-head uppercase text-ink-soft">
-            <th scope="col" className="py-2 pr-2">Cliente</th>
-            <th scope="col" className="px-2 py-2 text-right">A revisar</th>
-            <th scope="col" className="py-2 pl-2 text-right">Finalizado</th>
+            <th scope="col" className="w-full py-2 pr-2">Cliente</th>
+            <th scope="col" className="whitespace-nowrap px-2 py-2 text-right">A revisar</th>
+            <th scope="col" className="whitespace-nowrap py-2 pl-2 text-right">Finalizado</th>
           </tr>
         </thead>
         <tbody>
@@ -67,7 +64,7 @@ export function ConsumoInternoCard({ supabase, desde, hasta, onAbrirCliente }: P
           )}
           {filas.map((f) => (
             <tr key={f.clienteId} className="border-b border-table-divider last:border-0">
-              <td className="py-1.5 pr-2 text-ink [overflow-wrap:anywhere]">
+              <td className="py-1.5 pr-2 text-ink [overflow-wrap:break-word]">
                 {onAbrirCliente ? (
                   <button
                     type="button"
@@ -80,8 +77,10 @@ export function ConsumoInternoCard({ supabase, desde, hasta, onAbrirCliente }: P
                   f.nombre
                 )}
               </td>
-              <td className={`px-2 py-1.5 text-right tabular-nums ${f.pendiente > 0 ? 'text-ink' : 'text-ink-soft'}`}>{formatCurrency(f.pendiente)}</td>
-              <td className="py-1.5 pl-2 text-right tabular-nums text-ink">{formatCurrency(f.finalizado)}</td>
+              <td className={`whitespace-nowrap px-2 py-1.5 text-right tabular-nums ${f.pendiente > 0 ? 'text-ink' : 'text-ink-soft'}`}>
+                {formatCurrency(f.pendiente)}
+              </td>
+              <td className="whitespace-nowrap py-1.5 pl-2 text-right tabular-nums text-ink">{formatCurrency(f.finalizado)}</td>
             </tr>
           ))}
         </tbody>
@@ -89,8 +88,8 @@ export function ConsumoInternoCard({ supabase, desde, hasta, onAbrirCliente }: P
           <tfoot>
             <tr className="border-t border-line font-semibold">
               <th scope="row" className="py-2 pr-2 text-left text-ink">Total</th>
-              <td className="px-2 py-2 text-right tabular-nums text-ink">{formatCurrency(total.pendiente)}</td>
-              <td className="py-2 pl-2 text-right tabular-nums text-ink">{formatCurrency(total.finalizado)}</td>
+              <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums text-ink">{formatCurrency(total.pendiente)}</td>
+              <td className="whitespace-nowrap py-2 pl-2 text-right tabular-nums text-ink">{formatCurrency(total.finalizado)}</td>
             </tr>
           </tfoot>
         )}

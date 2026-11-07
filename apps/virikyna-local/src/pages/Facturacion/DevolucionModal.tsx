@@ -184,6 +184,10 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
   const totalDevuelto = totalLineas(lineasDevueltas.map((l) => ({ cantidad: l.cantidad, precioUnitario: l.item.precioUnitario })))
   const totalNuevo = totalLineas(nuevos.map((n) => ({ cantidad: Number(n.cantidad) || 0, precioUnitario: n.precioUnitario })))
   const diferencia = redondear2(totalNuevo - totalDevuelto)
+  // docs/68 (D12): en una venta a cta. cte. lo que queda a favor del cliente se descuenta de su
+  // cuenta (no se devuelve plata); si lleva más de lo que devuelve, paga o lo carga a la cuenta.
+  const esCuentaCorriente = venta.forma_pago === 'cuenta_corriente'
+  const diferenciaACuenta = esCuentaCorriente && diferencia < 0
 
   function agregarNuevo(p: ProductoVenta) {
     setNuevos((prev) => {
@@ -219,7 +223,7 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
     }
 
     let pagos: PagoParcial[] | null = null
-    if (diferencia !== 0) {
+    if (diferencia !== 0 && !diferenciaACuenta) {
       if (!formaPago) return setError('Elegí la forma de pago para saldar la diferencia.')
       if (formaPago === 'combinado') {
         const suma = redondear2((pagosCombinados ?? []).reduce((acc, p) => acc + p.monto, 0))
@@ -238,7 +242,7 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
       observaciones: observaciones.trim() || null,
       itemsDevueltos: lineasDevueltas.map((l) => ({ productoId: l.item.productoId, cantidad: l.cantidad })),
       itemsNuevos: nuevos.map((n) => ({ productoId: n.productoId, cantidad: Number(n.cantidad) })),
-      formaPago: diferencia !== 0 && formaPago !== 'combinado' ? formaPago : null,
+      formaPago: diferencia !== 0 && !diferenciaACuenta && formaPago !== 'combinado' ? formaPago : null,
       pagos,
     })
     setGuardando(false)
@@ -257,7 +261,9 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
   const quedaAFavorDe =
     diferencia > 0
       ? { texto: `El cliente paga ${formatCurrency(diferencia)}`, className: 'text-accent-darker' }
-      : diferencia < 0
+      : diferenciaACuenta
+        ? { texto: `Se descuenta de la cuenta: ${formatCurrency(Math.abs(diferencia))}`, className: 'text-accent-darker' }
+        : diferencia < 0
         ? { texto: `A favor del cliente: ${formatCurrency(Math.abs(diferencia))}`, className: 'text-error' }
         : { texto: 'Sin diferencia', className: 'text-success' }
 
@@ -446,15 +452,29 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
           )}
         </section>
 
-        {diferencia !== 0 && (
+        {diferenciaACuenta && (
+          <section className="rounded-lg border border-accent bg-accent-light px-4 py-3">
+            <p className="font-sans text-label-bold text-accent-darker">
+              Se descuenta de la cuenta corriente: {formatCurrency(Math.abs(diferencia))}
+            </p>
+            <p className="mt-0.5 font-sans text-body-md text-accent-darker">
+              La venta es a cuenta corriente de {clienteNombre}: no se devuelve plata y no entra al cierre de caja.
+            </p>
+          </section>
+        )}
+
+        {diferencia !== 0 && !diferenciaACuenta && (
           <section>
             <p className={`font-sans text-label-bold ${quedaAFavorDe.className}`}>
               {diferencia > 0 ? 'Cobrar la diferencia' : 'Devolver la diferencia'}: {formatCurrency(Math.abs(diferencia))}
             </p>
+            {esCuentaCorriente && (
+              <p className="mt-0.5 font-sans text-label-md text-ink-soft">Podés cobrarla ahora o cargarla a la cuenta corriente del cliente.</p>
+            )}
             <div className="mt-2 max-w-[420px]">
               <FormaPagoSelector
                 value={formaPago}
-                disponibleCuentaCorriente={false}
+                disponibleCuentaCorriente={esCuentaCorriente}
                 mostrarAtajos={false}
                 onChange={(v) => {
                   setFormaPago(v)
@@ -471,7 +491,15 @@ export function DevolucionModal({ venta, onClose, onDone }: Props) {
           </section>
         )}
 
-        <Field label="Observaciones (opcional)" compact hint="Saldos a favor, vouchers internos, cualquier aclaración. No hay cuenta corriente: queda solo como nota.">
+        <Field
+          label="Observaciones (opcional)"
+          compact
+          hint={
+            esCuentaCorriente
+              ? 'Cualquier aclaración. Queda solo como nota.'
+              : 'Saldos a favor, vouchers internos, cualquier aclaración. Queda solo como nota.'
+          }
+        >
           <textarea
             value={observaciones}
             onChange={(e) => setObservaciones(e.target.value)}
