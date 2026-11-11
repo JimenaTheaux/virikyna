@@ -293,6 +293,7 @@ export type FacturaCompraItem = {
   descuento_porcentaje: number
   precio_total_sin_iva: number
   ubicacion: UbicacionStock
+  orden: number // docs/72: posición en el comprobante (1, 2, 3…), en el orden de carga
 }
 
 export type PagoProveedor = {

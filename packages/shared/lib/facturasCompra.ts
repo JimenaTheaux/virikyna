@@ -488,8 +488,8 @@ export type FacturaParaCopiar = FacturaCompraSaldo & {
 
 // Cabecera (vista con saldo, así se sabe si está anulada) + ítems con el producto ACTUAL de cada
 // uno: nombre, marca, código, estado y lo necesario para anticipar el precio de venta.
-// Sin ORDER BY en los ítems a propósito: no tienen columna de orden y su id es un UUID al azar —
-// ordenar por id los mezclaría; el orden físico es, en la práctica, el de carga.
+// Ítems en el orden en que se cargaron (columna orden, docs/72). Antes no había columna de orden y el
+// id es un UUID al azar: ordenar por id los mezclaba.
 export async function obtenerFacturaParaCopiar(supabase: SupabaseClient, id: string): Promise<FacturaParaCopiar> {
   const [facturaRes, itemsRes] = await Promise.all([
     supabase.from('facturas_compra_saldo').select('*').eq('id', id).maybeSingle(),
@@ -498,7 +498,8 @@ export async function obtenerFacturaParaCopiar(supabase: SupabaseClient, id: str
       .select(
         '*, producto:productos(id, nombre, marca, codigo_barras, estado, costo, margen_1, margen_2, iva_porcentaje, proveedor_id, precio_venta, precio_manual)',
       )
-      .eq('factura_compra_id', id),
+      .eq('factura_compra_id', id)
+      .order('orden'),
   ])
   if (facturaRes.error) throw facturaRes.error
   if (itemsRes.error) throw itemsRes.error

@@ -95,7 +95,7 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
 
     const [facturaRes, itemsRes, aplicacionesRes] = await Promise.all([
       supabase.from('facturas_compra_saldo').select('*').eq('id', factura.id).single(),
-      supabase.from('facturas_compra_items').select('*').eq('factura_compra_id', factura.id).order('id'),
+      supabase.from('facturas_compra_items').select('*').eq('factura_compra_id', factura.id).order('orden'), // docs/72: orden de carga
       supabase
         .from('pagos_proveedor_aplicaciones')
         .select(
