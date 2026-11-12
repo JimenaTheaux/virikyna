@@ -1,5 +1,10 @@
 # Novedades de Virikyna Local
 
+## 0.14.0 — noviembre 2026
+
+- Podés minimizar facturas, detalles de venta y artículos, y seguir trabajando en otra pantalla.
+- Devoluciones: hasta 3 tickets juntos. Si queda a favor, se registra con una nota.
+
 ## 0.13.0 — noviembre 2026
 
 ### Ajuste por redondeo
