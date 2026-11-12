@@ -113,32 +113,88 @@ FROM ventas v
 LEFT JOIN facturas_c f ON f.venta_id = v.id
 WHERE (v.estado = 'facturado') <> (f.id IS NOT NULL);
 
--- V5. Devolución activa sobre una venta anulada.
-SELECT d.id, d.numero, d.venta_id
-FROM devoluciones d JOIN ventas v ON v.id = d.venta_id
+-- docs/74: una devolución tiene de 1 a 3 tickets (devolucion_tickets). devoluciones.venta_id solo está
+-- con UN ticket: estos chequeos van por la tabla puente y por el ticket de cada línea
+-- (devolucion_items.venta_id), nunca por la cabecera.
+
+-- V5. Devolución activa sobre una venta (ticket) anulada. Desde docs/74 anular_venta lo impide.
+SELECT d.id, d.numero, v.numero AS ticket
+FROM devoluciones d
+JOIN devolucion_tickets dt ON dt.devolucion_id = d.id
+JOIN ventas v ON v.id = dt.venta_id
 WHERE d.estado = 'activa' AND v.estado = 'anulada';
 
--- V6. Más unidades devueltas que vendidas (devoluciones activas).
-SELECT d.venta_id, di.producto_id, sum(di.cantidad) AS devuelto,
-       (SELECT sum(cantidad) FROM venta_items vi WHERE vi.venta_id = d.venta_id AND vi.producto_id = di.producto_id) AS vendido
-FROM devoluciones d JOIN devolucion_items di ON di.devolucion_id = d.id
+-- V6. Más unidades devueltas que vendidas (devoluciones activas), por ticket y producto, y por línea.
+SELECT di.venta_id, v.numero AS ticket, di.producto_id, sum(di.cantidad) AS devuelto,
+       (SELECT sum(cantidad) FROM venta_items vi WHERE vi.venta_id = di.venta_id AND vi.producto_id = di.producto_id) AS vendido
+FROM devoluciones d
+JOIN devolucion_items di ON di.devolucion_id = d.id
+JOIN ventas v ON v.id = di.venta_id
 WHERE d.estado = 'activa' AND di.tipo = 'devuelto'
-GROUP BY d.venta_id, di.producto_id
+GROUP BY di.venta_id, v.numero, di.producto_id
 HAVING sum(di.cantidad) > COALESCE((SELECT sum(cantidad) FROM venta_items vi
-                                    WHERE vi.venta_id = d.venta_id AND vi.producto_id = di.producto_id), 0);
+                                    WHERE vi.venta_id = di.venta_id AND vi.producto_id = di.producto_id), 0);
 
--- V7. Devolución con diferencia ≠ 0 cuyos pagos no suman |diferencia|.
-SELECT d.id, d.numero, d.diferencia_monto, COALESCE(sum(p.monto), 0) AS suma_pagos
+SELECT di.venta_item_id, vi.cantidad AS vendido, sum(di.cantidad) AS devuelto
+FROM devoluciones d
+JOIN devolucion_items di ON di.devolucion_id = d.id
+JOIN venta_items vi ON vi.id = di.venta_item_id
+WHERE d.estado = 'activa'
+GROUP BY di.venta_item_id, vi.cantidad
+HAVING sum(di.cantidad) > vi.cantidad;
+
+-- V7. Devolución que movió plata (cobro / reintegro) cuyos pagos no suman |diferencia|; o que no
+--     movió plata (sin diferencia, a favor, cuenta corriente) y tiene pagos.
+SELECT d.id, d.numero, d.resolucion, d.diferencia_monto, COALESCE(sum(p.monto), 0) AS suma_pagos
 FROM devoluciones d LEFT JOIN devolucion_pagos p ON p.devolucion_id = d.id
-GROUP BY d.id, d.numero, d.diferencia_monto
-HAVING abs(d.diferencia_monto) <> COALESCE(sum(p.monto), 0);
+GROUP BY d.id, d.numero, d.resolucion, d.diferencia_monto
+HAVING (d.resolucion IN ('cobro', 'reintegro') AND abs(d.diferencia_monto) <> COALESCE(sum(p.monto), 0))
+    OR (d.resolucion NOT IN ('cobro', 'reintegro') AND count(p.id) > 0);
 
--- V8. (informativo) Devolución con reintegro de dinero sobre una venta en cuenta corriente:
---     el cliente nunca pagó esa venta, pero crear_devolucion le devuelve plata por caja y su
---     saldo de cuenta corriente no baja.
-SELECT d.id, d.numero, v.numero AS venta_numero, d.diferencia_monto, d.diferencia_forma_pago
-FROM devoluciones d JOIN ventas v ON v.id = d.venta_id
-WHERE d.estado = 'activa' AND v.forma_pago = 'cuenta_corriente' AND d.diferencia_monto < 0;
+-- V8. (informativo) Reintegro de dinero sobre un ticket en cuenta corriente: el cliente nunca pagó
+--     esa venta. Desde docs/68 (D12) la diferencia a favor va a la cuenta; esto lista lo anterior.
+SELECT d.id, d.numero, v.numero AS ticket, d.diferencia_monto, d.diferencia_forma_pago
+FROM devoluciones d
+JOIN devolucion_tickets dt ON dt.devolucion_id = d.id
+JOIN ventas v ON v.id = dt.venta_id
+WHERE d.estado = 'activa' AND v.forma_pago = 'cuenta_corriente' AND d.resolucion = 'reintegro';
+
+-- V9. (docs/74) cantidad_tickets distinta de las filas de devolucion_tickets, o venta_id de cabecera
+--     incoherente (con 1 ticket = ese ticket; con 2–3 = NULL).
+SELECT d.id, d.numero, d.cantidad_tickets, count(dt.venta_id) AS filas_puente, d.venta_id
+FROM devoluciones d LEFT JOIN devolucion_tickets dt ON dt.devolucion_id = d.id
+GROUP BY d.id, d.numero, d.cantidad_tickets, d.venta_id
+HAVING d.cantidad_tickets <> count(dt.venta_id)
+    OR (count(dt.venta_id) = 1 AND d.venta_id IS DISTINCT FROM min(dt.venta_id::text)::uuid)
+    OR (count(dt.venta_id) > 1 AND d.venta_id IS NOT NULL);
+
+-- V10. (docs/74) Ticket de una devolución sin ninguna línea devuelta.
+SELECT dt.devolucion_id, d.numero, v.numero AS ticket
+FROM devolucion_tickets dt
+JOIN devoluciones d ON d.id = dt.devolucion_id
+JOIN ventas v ON v.id = dt.venta_id
+WHERE NOT EXISTS (SELECT 1 FROM devolucion_items di
+                  WHERE di.devolucion_id = dt.devolucion_id AND di.venta_id = dt.venta_id AND di.tipo = 'devuelto');
+
+-- V11. (docs/74) Totales: suma de total_devuelto por ticket ≠ total_devuelto de la devolución; total
+--      de cada ticket ≠ suma de sus líneas; diferencia ≠ nuevo − devuelto.
+SELECT d.id, d.numero, d.total_devuelto, d.total_nuevo, d.diferencia_monto,
+       (SELECT COALESCE(sum(total_devuelto), 0) FROM devolucion_tickets dt WHERE dt.devolucion_id = d.id) AS suma_tickets
+FROM devoluciones d
+WHERE d.total_devuelto <> (SELECT COALESCE(sum(total_devuelto), 0) FROM devolucion_tickets dt WHERE dt.devolucion_id = d.id)
+   OR d.diferencia_monto <> d.total_nuevo - d.total_devuelto
+   OR EXISTS (SELECT 1 FROM devolucion_tickets dt
+              WHERE dt.devolucion_id = d.id
+                AND dt.total_devuelto <> (SELECT COALESCE(sum(round(di.cantidad * di.precio_unitario, 2)), 0)
+                                          FROM devolucion_items di
+                                          WHERE di.devolucion_id = d.id AND di.venta_id = dt.venta_id AND di.tipo = 'devuelto'));
+
+-- V12. (docs/74) Defectuoso incoherente: una línea defectuosa reingresó stock (o una sana no).
+SELECT di.id, di.devolucion_id, di.tipo, di.defectuoso, di.reingresa_stock,
+       (SELECT count(*) FROM movimientos_stock m
+        WHERE m.referencia_id = di.devolucion_id AND m.producto_id = di.producto_id AND m.origen = 'devolucion_cliente') AS movs
+FROM devolucion_items di
+WHERE di.tipo = 'devuelto' AND di.reingresa_stock = di.defectuoso;
 
 
 -- ════════════════════════════════════════════════════════════════════════════════════════════

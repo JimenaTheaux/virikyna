@@ -38,6 +38,8 @@ export function AdminDashboard() {
   const [error, setError] = useState<string | null>(null)
   const [porDia, setPorDia] = useState<Map<string, VentaDelDia>>(new Map())
   const [devolucionesNetoHoy, setDevolucionesNetoHoy] = useState(0)
+  // docs/74: saldos a favor de hoy (vale manual): se muestran aparte, no descuentan de la venta neta.
+  const [aFavorHoy, setAFavorHoy] = useState<{ cantidad: number; total: number } | null>(null)
 
   // Productos vendidos hoy (docs/61, día argentino como la RPC).
   const hoy = hoyAR(0)
@@ -51,6 +53,7 @@ export function AdminDashboard() {
       if (ventasRes.error) setError(friendlyError(ventasRes.error as never))
       setPorDia(ventasRes.porDia)
       setDevolucionesNetoHoy(devolucionesRes.netoPorDia.get(fechaISO(0)) ?? 0)
+      setAFavorHoy(devolucionesRes.aFavorPorDia.get(fechaISO(0)) ?? null)
       setLoading(false)
     }
     cargar()
@@ -87,9 +90,16 @@ export function AdminDashboard() {
         <Kpi
           label="Ventas de hoy (brutas)"
           detalle={
-            !loading && devolucionesNetoHoy !== 0
-              ? `Devoluciones ${devolucionesNetoHoy < 0 ? '−' : '+'} ${formatCurrency(Math.abs(devolucionesNetoHoy))} · Neta ${formatCurrency(ventasHoy.total + devolucionesNetoHoy)}`
-              : undefined
+            loading
+              ? undefined
+              : [
+                  devolucionesNetoHoy !== 0
+                    ? `Devoluciones ${devolucionesNetoHoy < 0 ? '−' : '+'} ${formatCurrency(Math.abs(devolucionesNetoHoy))} · Neta ${formatCurrency(ventasHoy.total + devolucionesNetoHoy)}`
+                    : null,
+                  aFavorHoy ? `A favor (vale manual) ${formatCurrency(aFavorHoy.total)}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || undefined
           }
         >
           <span>{loading ? '—' : formatCurrency(ventasHoy.total)}</span>

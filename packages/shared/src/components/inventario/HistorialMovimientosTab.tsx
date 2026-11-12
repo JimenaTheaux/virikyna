@@ -290,7 +290,12 @@ export function HistorialMovimientosTab({ supabase, productoId, ComprobanteModal
       {abierto?.tipo === 'venta' && <ComprobanteModal datos={abierto.datos} onClose={() => setAbierto(null)} />}
       {abierto?.tipo === 'factura' && <FacturaCompraDetalle facturaId={abierto.id} onClose={() => setAbierto(null)} />}
       {abierto?.tipo === 'devolucion' && (
-        <DevolucionDetalleModal supabase={supabase} devolucion={abierto.devolucion} onClose={() => setAbierto(null)} />
+        <DevolucionDetalleModal
+          supabase={supabase}
+          devolucion={abierto.devolucion}
+          onClose={() => setAbierto(null)}
+          ComprobanteModal={ComprobanteModal}
+        />
       )}
     </div>
   )

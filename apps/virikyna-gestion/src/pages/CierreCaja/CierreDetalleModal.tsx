@@ -1,5 +1,6 @@
 import { Modal } from '../../components/Modal'
 import { formatCurrency, formatFechaHora } from '@virikyna/shared'
+import { SeccionDevolucionesCierre } from '@virikyna/shared/src/components/SeccionDevolucionesCierre'
 import { diferenciaLabel } from '../../lib/caja'
 import type { CierreCajaConUsuario } from './types'
 
@@ -40,6 +41,9 @@ export function CierreDetalleModal({ cierre, onClose }: { cierre: CierreCajaConU
         <Fila label="Tarjeta (débito/crédito)" valor={formatCurrency(cierre.total_tarjeta)} />
         <Fila label="Cuenta corriente" valor={formatCurrency(cierre.total_cuenta_corriente)} />
         <Fila label="Total vendido" valor={formatCurrency(totalVentas)} destacado />
+
+        {/* docs/74: misma sección que Local (antes Gestión no la mostraba). */}
+        <SeccionDevolucionesCierre cierre={cierre} />
 
         {cierre.apertura && (
           <>

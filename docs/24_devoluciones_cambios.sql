@@ -1,5 +1,11 @@
 -- 24 — Devoluciones y cambios de productos (Virikyna Local)
 --
+-- ⚠ docs/74 (2026-11-11): una devolución pasa a tener de 1 a 3 tickets (tabla devolucion_tickets),
+-- cada producto devuelto queda atado a su línea de venta, defectuoso es por línea y la diferencia a
+-- favor puede "quedar a favor" (sin caja). Las versiones VIGENTES de crear_devolucion, cerrar_caja y
+-- anular_venta están en docs/74 (crear_devolucion delega en crear_devolucion_tickets): partir de ahí.
+-- Lo de abajo queda como historia del diseño original.
+--
 -- Una devolución/cambio es un DOCUMENTO NUEVO vinculado a una venta ya emitida — nunca modifica la
 -- venta original (ni ventas, ni venta_items, ni venta_pagos). Mismo principio que la anulación:
 -- las correcciones son filas nuevas, no ediciones.

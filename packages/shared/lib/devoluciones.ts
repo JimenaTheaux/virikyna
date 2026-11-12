@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { FormaPagoVenta, MotivoDevolucion } from '../types/database'
+import type { FormaPagoVenta, MotivoDevolucion, ResolucionDevolucion } from '../types/database'
 import { fechaISO, fechaLocalDeISO } from './format'
 
 // Devoluciones / cambios (docs/24_devoluciones_cambios.sql). Los precios y las validaciones reales
@@ -73,6 +73,81 @@ export function crearDevolucion(supabase: SupabaseClient, input: CrearDevolucion
     p_pagos: input.pagos && input.pagos.length > 0
       ? input.pagos.map((p) => ({ forma_pago: p.formaPago, monto: p.monto }))
       : null,
+  })
+}
+
+// ── docs/74: devolución con 1 a 3 tickets ────────────────────────────────────────────────────────
+
+export const MAX_TICKETS_DEVOLUCION = 3
+
+// Cómo se resolvió la diferencia: etiqueta corta para listados y detalle.
+export const RESOLUCION_DEVOLUCION_LABEL: Record<ResolucionDevolucion, string> = {
+  sin_diferencia: 'Saldado justo',
+  cobro: 'Cobro',
+  reintegro: 'Reintegro',
+  a_favor: 'Queda a favor',
+  cuenta_corriente: 'Cuenta corriente',
+}
+
+// Precio que el cliente pagó por unidad de UNA línea de venta: importe ÷ cantidad, reescalado por
+// total/subtotal de su venta. Espeja crear_devolucion_tickets (solo para la vista previa).
+export function precioPagadoLinea(
+  linea: { cantidad: number; importe: number },
+  venta: { subtotal: number; total: number },
+): number {
+  return precioEfectivoUnitario([linea], venta)
+}
+
+// Venta neta: solo descuenta la plata que se movió (cobro / reintegro). Un saldo a favor o una
+// devolución imputada a la cuenta corriente no cambia la venta neta (docs/74, decisión 10).
+export function diferenciaQueMueveDinero(d: { resolucion: ResolucionDevolucion; diferencia_monto: number }): number {
+  return d.resolucion === 'cobro' || d.resolucion === 'reintegro' ? d.diferencia_monto : 0
+}
+
+export type CrearDevolucionTicketsInput = {
+  tickets: string[] // ids de venta, en el orden en que se agregaron (1 a 3)
+  motivo: MotivoDevolucion
+  motivoDetalle: string | null
+  observaciones: string | null
+  itemsDevueltos: { ventaItemId: string; cantidad: number; defectuoso: boolean }[]
+  itemsNuevos: { productoId: string; cantidad: number }[]
+  // Lo que mostró la pantalla. Si la base calcula otra cosa, rechaza (no guarda algo distinto).
+  resolucion: ResolucionDevolucion | null
+  // Solo con cobro / reintegro. `pagos` (1 o 2) es el combinado; si va vacío se usa formaPago.
+  // Ticket único a cta. cte. con diferencia a pagar: formaPago = 'cuenta_corriente' la carga a la cuenta.
+  formaPago: FormaPagoVenta | null
+  pagos: { formaPago: FormaPagoVenta; monto: number }[] | null
+  notaAFavor: string | null
+}
+
+export type ResultadoDevolucionTickets = {
+  devolucion_id: string
+  numero: number
+  total_devuelto: number
+  total_nuevo: number
+  diferencia: number
+  resolucion: ResolucionDevolucion
+  tickets: { venta_id: string; numero: number; orden: number; total_devuelto: number }[]
+}
+
+// Único punto de llamada al RPC `crear_devolucion_tickets` (docs/74) — cajero y admin por igual.
+export function crearDevolucionTickets(supabase: SupabaseClient, input: CrearDevolucionTicketsInput) {
+  const conPagos = input.pagos && input.pagos.length > 0
+  return supabase.rpc('crear_devolucion_tickets', {
+    p_tickets: input.tickets,
+    p_motivo: input.motivo,
+    p_motivo_detalle: input.motivoDetalle,
+    p_observaciones: input.observaciones,
+    p_items_devueltos: input.itemsDevueltos.map((i) => ({
+      venta_item_id: i.ventaItemId,
+      cantidad: i.cantidad,
+      defectuoso: i.defectuoso,
+    })),
+    p_items_nuevos: input.itemsNuevos.map((i) => ({ producto_id: i.productoId, cantidad: i.cantidad })),
+    p_resolucion: input.resolucion,
+    p_forma_pago: conPagos ? null : input.formaPago,
+    p_pagos: conPagos ? input.pagos!.map((p) => ({ forma_pago: p.formaPago, monto: p.monto })) : null,
+    p_nota_a_favor: input.notaAFavor,
   })
 }
 

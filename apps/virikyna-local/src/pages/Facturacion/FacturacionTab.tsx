@@ -72,7 +72,8 @@ export function FacturacionTab() {
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [textoBusqueda])
-  const [aDevolver, setADevolver] = useState<VentaConFactura | null>(null)
+  // Devolución / cambio (docs/74): "Nueva devolución" (sin ticket) o desde el ⋮ (con ese ticket cargado).
+  const [devolucion, setDevolucion] = useState<{ ventaId: string | null } | null>(null)
 
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
   const [emitiendo, setEmitiendo] = useState(false)
@@ -255,6 +256,14 @@ export function FacturacionTab() {
 
         <button
           type="button"
+          onClick={() => setDevolucion({ ventaId: null })}
+          className="flex min-h-[42px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded border border-accent px-4 py-2 font-sans text-label-bold text-accent-dark transition hover:bg-accent-light"
+        >
+          <ArrowLeftRight size={16} aria-hidden />
+          Nueva devolución
+        </button>
+        <button
+          type="button"
           onClick={() => seleccionadasEmitir.length > 0 && setAConfirmar(seleccionadasEmitir)}
           disabled={seleccionadasEmitir.length === 0 || emitiendo}
           className="min-h-[42px] shrink-0 whitespace-nowrap rounded bg-accent px-4 py-2 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-50"
@@ -398,7 +407,7 @@ export function FacturacionTab() {
                           {
                             label: 'Devolución / Cambio',
                             icon: ArrowLeftRight,
-                            onClick: () => setADevolver(venta),
+                            onClick: () => setDevolucion({ ventaId: venta.id }),
                           },
                         ]}
                       />
@@ -421,12 +430,12 @@ export function FacturacionTab() {
         </table>
       </div>
 
-      {aDevolver && (
+      {devolucion && (
         <DevolucionModal
-          venta={aDevolver}
-          onClose={() => setADevolver(null)}
+          ventaInicialId={devolucion.ventaId}
+          onClose={() => setDevolucion(null)}
           onDone={() => {
-            setADevolver(null)
+            setDevolucion(null)
             cargar()
           }}
         />

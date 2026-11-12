@@ -104,6 +104,36 @@ Roles del sistema: **Admin** (Alicia, Ana Julia) y **Cajero** (Jose, Ale, Belu).
 - **Nota de la venta:** la nota que el cajero cargó al vender se muestra en el detalle del comprobante (Local y Gestión). Es interna: solo se ve en pantalla, no va al PDF, a la imagen ni al mensaje de envío.
 - **En Gestión**, el listado tiene un chip "Con notas (N)" que deja solo las ventas con nota, y un buscador por N° de venta, nota o cliente. Ambos filtros quedan en la URL.
 
+### 4.1 Devolución / Cambio con 1 a 3 tickets (docs/24, docs/74)
+
+**Caso:** el cliente trae hasta 3 tickets (típico: regalos), devuelve productos de todos, junta el monto y se lleva otra cosa. Resultado: paga la diferencia, queda saldado justo o queda a favor.
+
+**Dónde (Local):** Facturación → pestaña Facturación → botón **"Nueva devolución"**, o el ⋮ de un ticket → "Devolución / Cambio" (entra con ese ticket cargado). El listado y el detalle están en la pestaña **Devoluciones** (Local y Gestión).
+
+| Acción | Admin | Cajero |
+|---|---|---|
+| Registrar una devolución / cambio | ✅ | ✅ |
+| Ver listado y detalle (con acceso a cada ticket original) | ✅ | ✅ |
+| Anular una devolución (revierte stock y caja si el día no cerró) | ✅ | ❌ |
+
+**Flujo:** N° de ticket + "Agregar" (Enter también agrega) → hasta 3 tarjetas de ticket (N°, fecha, total, etiqueta Factura C, Quitar) → productos a devolver **agrupados por ticket y por línea de venta**, con subtotal por ticket (vendida, ya devuelta, disponible, a devolver, defectuoso) → lo que se lleva (buscador de Ventas) → motivo → diferencia → confirmación con resumen → una sola operación (todo o nada).
+
+**Reglas (validadas con la dueña, 2026-11-11):**
+- **Al agregar un ticket se rechaza, con el motivo:** repetido ("ya está agregado"), anulado, consumo interno, de más de 15 días (sin excepción), sin unidades disponibles ("ya devuelto completo"), o a cuenta corriente junto con otros (un ticket a cuenta corriente se devuelve solo).
+- **Precios:** lo devuelto vale lo que se pagó en ESA línea (prorrateado con el descuento, recargo y redondeo de su ticket); lo que se lleva, el precio de lista actual.
+- **No se puede devolver más de lo vendido**, por línea y por ticket, contando devoluciones anteriores.
+- **Defectuoso es por producto (línea):** lo defectuoso no vuelve al stock (queda contado en "defectuosos pendientes"); lo sano sí.
+- **Diferencia:**
+  - El cliente paga → se cobra con los medios de pago normales (hasta 2, combinado).
+  - Saldado justo → nada.
+  - A favor del cliente → dos opciones: **"Devolver la plata"** (sale de la caja con el medio elegido) o **"Queda a favor"**: sin pagos ni caja, nota obligatoria (ej. "vale manual a nombre de…"). El vale se hace a mano en papel: sin número, sin vencimiento, no se usa después en el sistema, sin cuenta corriente.
+  - Ticket único a cuenta corriente: la diferencia va a la cuenta del cliente (docs/68, D12).
+- **No se imprime nada.** Con tickets con Factura C la devolución es registro interno: no genera nota de crédito (se avisa en pantalla).
+- **Borrador en el equipo:** lo cargado se guarda en Local mientras se trabaja; ✕ o un error de red no lo pierden (al volver a abrir, "Se recuperó una devolución…"). Se borra al confirmar o con "Cancelar" → "Descartar".
+- **Cierre de caja (Local y Gestión):** sección "Devoluciones y cambios" con el neto por medio + línea informativa **"Saldos a favor (vale manual)"** (cantidad y monto), que no suma ni resta a la caja.
+- **Dashboard de Local:** la venta neta descuenta solo la plata que se movió (cobro / reintegro); los saldos a favor se muestran aparte.
+- **Anular una venta** que está en una devolución activa no se permite: primero se anula la devolución.
+
 ---
 
 ## 5. INVENTARIO Y STOCK

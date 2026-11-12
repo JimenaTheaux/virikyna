@@ -1,5 +1,6 @@
 import { Modal } from '../../components/Modal'
 import { formatCurrency, formatFechaHora } from '@virikyna/shared'
+import { SeccionDevolucionesCierre } from '@virikyna/shared/src/components/SeccionDevolucionesCierre'
 import { diferenciaLabel } from '../../lib/caja'
 import type { CierreCajaConUsuario } from './types'
 
@@ -12,11 +13,6 @@ function Fila({ label, valor, destacado }: { label: string; valor: string; desta
   )
 }
 
-// Neto con signo: "+" el comercio cobró una diferencia, "−" devolvió plata al cliente.
-function formatNeto(valor: number): string {
-  return valor > 0 ? `+ ${formatCurrency(valor)}` : valor < 0 ? `− ${formatCurrency(Math.abs(valor))}` : formatCurrency(0)
-}
-
 export function CierreDetalleModal({ cierre, onClose }: { cierre: CierreCajaConUsuario; onClose: () => void }) {
   const diferencia = diferenciaLabel(cierre.diferencia)
   const totalVentas =
@@ -25,11 +21,6 @@ export function CierreDetalleModal({ cierre, onClose }: { cierre: CierreCajaConU
     cierre.total_qr +
     cierre.total_tarjeta +
     cierre.total_cuenta_corriente
-  const totalDevoluciones =
-    cierre.total_devoluciones_efectivo +
-    cierre.total_devoluciones_transferencia +
-    cierre.total_devoluciones_qr +
-    cierre.total_devoluciones_tarjeta
   // docs/68: los cierres anteriores no tienen estas columnas en la respuesta vieja; 0 por las dudas.
   const totalCobros =
     Number(cierre.total_cobros_efectivo ?? 0) +
@@ -57,21 +48,7 @@ export function CierreDetalleModal({ cierre, onClose }: { cierre: CierreCajaConU
         <Fila label="Cuenta corriente" valor={formatCurrency(cierre.total_cuenta_corriente)} />
         <Fila label="Total vendido" valor={formatCurrency(totalVentas)} destacado />
 
-        {cierre.cantidad_devoluciones > 0 && (
-          <>
-            <p className="mt-stack-md font-sans text-label-bold text-ink-soft">
-              Devoluciones y cambios ({cierre.cantidad_devoluciones}) — neto por medio, aparte de las ventas
-            </p>
-            <Fila label="Efectivo" valor={formatNeto(cierre.total_devoluciones_efectivo)} />
-            <Fila label="Transferencia (Mercado Pago)" valor={formatNeto(cierre.total_devoluciones_transferencia)} />
-            <Fila label="QR" valor={formatNeto(cierre.total_devoluciones_qr)} />
-            <Fila label="Tarjeta (débito/crédito)" valor={formatNeto(cierre.total_devoluciones_tarjeta)} />
-            <Fila label="Neto de devoluciones" valor={formatNeto(totalDevoluciones)} destacado />
-            <p className="pt-1 font-sans text-label-md text-ink-soft">
-              Negativo = se devolvió plata al cliente. El neto en efectivo ya está incluido en el efectivo esperado.
-            </p>
-          </>
-        )}
+        <SeccionDevolucionesCierre cierre={cierre} />
 
         {(cierre.cantidad_cobros ?? 0) > 0 && (
           <>

@@ -1,5 +1,5 @@
 import { supabase } from '../../lib/supabaseClient'
-import { fechaISO, fechaLocalDeISO, rangoTimestampsAR } from '@virikyna/shared'
+import { diferenciaQueMueveDinero, fechaISO, fechaLocalDeISO, rangoTimestampsAR, type ResolucionDevolucion } from '@virikyna/shared'
 import type { VentaDelDia } from './types'
 
 // Una sola consulta cubre "hoy" y "ayer" (variación) y los últimos 7 días (gráfico semanal),
@@ -29,22 +29,36 @@ export async function fetchVentasUltimosDias(dias: number) {
   return { porDia, error: null }
 }
 
-// Neto de devoluciones/cambios por día (docs/24): suma de diferencia_monto de las devoluciones
-// activas — negativo = se devolvió plata al cliente. Venta neta del día = venta bruta + este valor.
-// Las devoluciones de ventas internas no cuentan (docs/68 D8).
+type DevolucionDia = {
+  fecha: string
+  diferencia_monto: number
+  resolucion: ResolucionDevolucion
+  tickets: { venta: { estado_interno: string | null } | null }[]
+}
+
+// Devoluciones/cambios activas por día (docs/24, docs/74). Venta neta del día = venta bruta + neto,
+// y el neto es SOLO la plata que se movió (cobro / reintegro): un saldo a favor (vale manual) o una
+// devolución imputada a la cuenta corriente no la cambian; los saldos a favor se cuentan aparte.
+// Las devoluciones de ventas internas no cuentan (docs/68 D8): ahora por los tickets de la devolución
+// (con 2–3 tickets devoluciones.venta_id es null).
 export async function fetchDevolucionesUltimosDias(dias: number) {
   const { data, error } = await supabase
     .from('devoluciones')
-    .select('fecha, diferencia_monto, ventas!inner(estado_interno)')
+    .select('fecha, diferencia_monto, resolucion, tickets:devolucion_tickets(venta:ventas!devolucion_tickets_venta_id_fkey(estado_interno))')
     .eq('estado', 'activa')
-    .is('ventas.estado_interno', null)
     .gte('fecha', fechaISO(-(dias - 1)))
     .lte('fecha', fechaISO(0))
 
   const netoPorDia = new Map<string, number>()
-  if (error || !data) return { netoPorDia, error }
-  for (const d of data as unknown as { fecha: string; diferencia_monto: number }[]) {
-    netoPorDia.set(d.fecha, (netoPorDia.get(d.fecha) ?? 0) + d.diferencia_monto)
+  const aFavorPorDia = new Map<string, { cantidad: number; total: number }>()
+  if (error || !data) return { netoPorDia, aFavorPorDia, error }
+  for (const d of data as unknown as DevolucionDia[]) {
+    if ((d.tickets ?? []).some((t) => t.venta?.estado_interno)) continue
+    netoPorDia.set(d.fecha, (netoPorDia.get(d.fecha) ?? 0) + diferenciaQueMueveDinero(d))
+    if (d.resolucion === 'a_favor') {
+      const prev = aFavorPorDia.get(d.fecha) ?? { cantidad: 0, total: 0 }
+      aFavorPorDia.set(d.fecha, { cantidad: prev.cantidad + 1, total: prev.total - d.diferencia_monto })
+    }
   }
-  return { netoPorDia, error: null }
+  return { netoPorDia, aFavorPorDia, error: null }
 }

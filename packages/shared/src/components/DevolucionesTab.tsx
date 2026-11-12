@@ -1,7 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ComponentType } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { Ban, Eye } from 'lucide-react'
-import { MOTIVO_DEVOLUCION_LABEL, anularDevolucion } from '../../lib/devoluciones'
+import {
+  MOTIVO_DEVOLUCION_LABEL,
+  RESOLUCION_DEVOLUCION_LABEL,
+  anularDevolucion,
+  diferenciaQueMueveDinero,
+} from '../../lib/devoluciones'
+import type { DatosComprobante } from '../../lib/comprobante'
 import { fechaHoyISO, fechaISO, formatCurrency, formatFechaCortaLocal, formatHora } from '../../lib/format'
 import { friendlyError } from '../../lib/supabaseErrors'
 import { nombresPorId } from '../../lib/perfiles'
@@ -10,7 +16,14 @@ import { RowActionsMenu } from './RowActionsMenu'
 import { Modal } from './Modal'
 import { ConfirmDialog } from './ConfirmDialog'
 import { ErrorText, Field, inputClass } from './FormField'
-import { DevolucionDetalleModal, sentidoDiferencia, type DevolucionConDetalle } from './DevolucionDetalleModal'
+import {
+  DevolucionDetalleModal,
+  SELECT_DEVOLUCION_DETALLE,
+  numerosDeTickets,
+  ordenarTickets,
+  sentidoDiferencia,
+  type DevolucionConDetalle,
+} from './DevolucionDetalleModal'
 
 type DevolucionFila = DevolucionConDetalle
 
@@ -21,12 +34,14 @@ export interface DevolucionesTabProps {
   // Aviso de "anulada" — Local lo manda a su toast. Sin callback (Gestión no tiene toast) se
   // muestra como banner arriba de la tabla.
   onAviso?: (mensaje: string) => void
+  // "Ver ticket" en el detalle (docs/74): cada app enchufa su ComprobanteModal.
+  ComprobanteModal?: ComponentType<{ datos: DatosComprobante; onClose: () => void }>
 }
 
 // Listado de devoluciones/cambios del período — fila compacta con lo esencial; el detalle completo
 // (ítems, observaciones, forma de pago de la diferencia) va en "Ver detalle". Anulación solo admin.
 // Compartido por Local y Gestión; registrar una devolución (DevolucionModal) es solo de Local.
-export function DevolucionesTab({ supabase, esAdmin, onAviso }: DevolucionesTabProps) {
+export function DevolucionesTab({ supabase, esAdmin, onAviso, ComprobanteModal }: DevolucionesTabProps) {
   const [desde, setDesde] = useState(fechaISO(-6))
   const [hasta, setHasta] = useState(fechaHoyISO())
   const [filas, setFilas] = useState<DevolucionFila[]>([])
@@ -54,7 +69,7 @@ export function DevolucionesTab({ supabase, esAdmin, onAviso }: DevolucionesTabP
     setError(null)
     const { data, error: dbError } = await supabase
       .from('devoluciones')
-      .select('*, venta:ventas(numero), items:devolucion_items(*, producto:productos(nombre, marca))')
+      .select(SELECT_DEVOLUCION_DETALLE)
       .gte('fecha', desde)
       .lte('fecha', hasta)
       .order('created_at', { ascending: false })
@@ -64,7 +79,7 @@ export function DevolucionesTab({ supabase, esAdmin, onAviso }: DevolucionesTabP
       setLoading(false)
       return
     }
-    const base = (data ?? []) as unknown as Omit<DevolucionFila, 'usuarioNombre'>[]
+    const base = ((data ?? []) as unknown as Omit<DevolucionFila, 'usuarioNombre'>[]).map(ordenarTickets)
     const nombres = await nombresPorId(supabase, base.map((d) => d.usuario_id))
     setFilas(base.map((d) => ({ ...d, usuarioNombre: nombres.get(d.usuario_id) ?? null })))
     setLoading(false)
@@ -92,7 +107,11 @@ export function DevolucionesTab({ supabase, esAdmin, onAviso }: DevolucionesTabP
   }
 
   const activas = filas.filter((f) => f.estado === 'activa')
-  const totalDiferencia = activas.reduce((acc, f) => acc + f.diferencia_monto, 0)
+  // docs/74: el neto es solo la plata que se movió (cobro / reintegro); lo que quedó a favor (vale
+  // manual) va aparte y no suma a la caja.
+  const totalDiferencia = activas.reduce((acc, f) => acc + diferenciaQueMueveDinero(f), 0)
+  const aFavor = activas.filter((f) => f.resolucion === 'a_favor')
+  const totalAFavor = aFavor.reduce((acc, f) => acc - f.diferencia_monto, 0)
 
   return (
     <div className="flex h-full flex-col">
@@ -106,8 +125,14 @@ export function DevolucionesTab({ supabase, esAdmin, onAviso }: DevolucionesTabP
           <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className={inputClass} />
         </label>
         <p className="ml-auto min-w-0 text-right font-sans text-body-md text-ink-soft">
-          {activas.length} activa{activas.length === 1 ? '' : 's'} · Neto de diferencias{' '}
+          {activas.length} activa{activas.length === 1 ? '' : 's'} · Neto en caja{' '}
           <span className="font-sans text-label-bold text-ink">{formatCurrency(totalDiferencia)}</span>
+          {aFavor.length > 0 && (
+            <>
+              {' '}
+              · A favor (vale manual) <span className="font-sans text-label-bold text-ink">{formatCurrency(totalAFavor)}</span>
+            </>
+          )}
         </p>
       </div>
 
@@ -123,9 +148,9 @@ export function DevolucionesTab({ supabase, esAdmin, onAviso }: DevolucionesTabP
           <colgroup>
             <col className="w-16" />
             <col className="w-[7.5rem] xl:w-[9rem]" />
-            <col className="w-[5.5rem]" />
-            <col />
             <col className="w-[8.5rem]" />
+            <col />
+            <col className="w-[9rem]" />
             <col className="w-24" />
             <col className="w-14" />
           </colgroup>
@@ -133,7 +158,7 @@ export function DevolucionesTab({ supabase, esAdmin, onAviso }: DevolucionesTabP
             <tr className="bg-accent-light text-table-head uppercase text-accent-dark">
               <th className="px-3 py-2.5">N°</th>
               <th className="px-3 py-2.5">Fecha</th>
-              <th className="px-3 py-2.5">Venta orig.</th>
+              <th className="px-3 py-2.5">Tickets</th>
               <th className="px-3 py-2.5">Motivo</th>
               <th className="px-3 py-2.5 text-right">Diferencia</th>
               <th className="px-3 py-2.5">Estado</th>
@@ -165,7 +190,7 @@ export function DevolucionesTab({ supabase, esAdmin, onAviso }: DevolucionesTabP
                   <span className="whitespace-nowrap">{formatFechaCortaLocal(f.created_at)}</span>{' '}
                   <span className="whitespace-nowrap">{formatHora(f.created_at)}</span>
                 </td>
-                <td className="px-3 py-3 text-ink-soft">{f.venta?.numero ?? '—'}</td>
+                <td className="px-3 py-3 text-ink-soft [overflow-wrap:anywhere]">{numerosDeTickets(f) || '—'}</td>
                 <td className="px-3 py-3 text-ink-soft">
                   <span className="block truncate">{MOTIVO_DEVOLUCION_LABEL[f.motivo]}</span>
                   {f.motivo_detalle && (
@@ -178,7 +203,12 @@ export function DevolucionesTab({ supabase, esAdmin, onAviso }: DevolucionesTabP
                   <span className="block whitespace-nowrap font-sans font-semibold text-ink">
                     {formatCurrency(Math.abs(f.diferencia_monto))}
                   </span>
-                  <span className="block truncate text-label-md text-ink-soft">{sentidoDiferencia(f.diferencia_monto)}</span>
+                  <span
+                    className={`block truncate text-label-md ${f.resolucion === 'a_favor' ? 'text-accent-darker' : 'text-ink-soft'}`}
+                    title={sentidoDiferencia(f.diferencia_monto)}
+                  >
+                    {RESOLUCION_DEVOLUCION_LABEL[f.resolucion] ?? sentidoDiferencia(f.diferencia_monto)}
+                  </span>
                 </td>
                 <td className="px-3 py-3">
                   {f.estado === 'anulada' ? (
@@ -226,7 +256,12 @@ export function DevolucionesTab({ supabase, esAdmin, onAviso }: DevolucionesTabP
       </div>
 
       {verDetalle && (
-        <DevolucionDetalleModal supabase={supabase} devolucion={verDetalle} onClose={() => setVerDetalle(null)} />
+        <DevolucionDetalleModal
+          supabase={supabase}
+          devolucion={verDetalle}
+          onClose={() => setVerDetalle(null)}
+          ComprobanteModal={ComprobanteModal}
+        />
       )}
 
       {aAnular && (

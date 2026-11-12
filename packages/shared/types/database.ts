@@ -36,6 +36,8 @@ export type TipoMovimientoStock = 'venta' | 'compra' | 'ajuste' | 'inicial'
 export type MotivoDevolucion = 'regalo' | 'defectuoso' | 'arrepentimiento' | 'otro'
 export type EstadoDevolucion = 'activa' | 'anulada'
 export type TipoItemDevolucion = 'devuelto' | 'nuevo'
+// docs/74: cómo se resolvió la diferencia de una devolución/cambio.
+export type ResolucionDevolucion = 'sin_diferencia' | 'cobro' | 'reintegro' | 'a_favor' | 'cuenta_corriente'
 // sueldo/servicio son categorías de Virikyna-Gestión (origen='general'); agua/descartables/super
 // son las categorías de gasto de turno en Virikyna-Local (origen='turno') — ver docs/13.
 export type CategoriaEgreso = 'pago_proveedor' | 'sueldo' | 'servicio' | 'otro' | 'agua' | 'descartables' | 'super'
@@ -434,6 +436,10 @@ export type CierreCaja = {
   total_cobros_transferencia: number
   total_cobros_qr: number
   total_cobros_tarjeta: number
+  // docs/74: devoluciones del día que quedaron "a favor" del cliente (vale manual). Informativo:
+  // NO están en efectivo_esperado ni en los netos de devoluciones. total en positivo.
+  cantidad_saldos_a_favor: number
+  total_saldos_a_favor: number
   created_at: string
 }
 
@@ -618,12 +624,13 @@ export type NotaInternaConAutor = NotaInterna & {
   autor_nombre: string
 }
 
-// Devolución / cambio sobre una venta ya emitida (docs/24_devoluciones_cambios.sql). Documento nuevo
-// vinculado a la venta — nunca modifica la venta original.
+// Devolución / cambio sobre ventas ya emitidas (docs/24; docs/74: de 1 a 3 tickets). Documento nuevo
+// vinculado a los tickets — nunca modifica las ventas originales.
 export type Devolucion = {
   id: string
   numero: number
-  venta_id: string
+  // Solo con UN ticket (todas las anteriores a docs/74). Con 2–3 tickets es null: ver DevolucionTicket.
+  venta_id: string | null
   fecha: string // DATE — día de caja en el que impacta
   usuario_id: string
   motivo: MotivoDevolucion
@@ -636,6 +643,21 @@ export type Devolucion = {
   anulada_at: string | null
   motivo_anulacion: string | null
   created_at: string
+  a_cuenta_corriente: boolean // docs/68 (D12)
+  // docs/74
+  resolucion: ResolucionDevolucion
+  cantidad_tickets: number // 1 a 3
+  total_devuelto: number
+  total_nuevo: number
+  nota_a_favor: string | null // obligatoria con resolucion = 'a_favor' (vale manual)
+}
+
+// docs/74: tickets de una devolución (1 a 3), en el orden en que se agregaron.
+export type DevolucionTicket = {
+  devolucion_id: string
+  venta_id: string
+  orden: number
+  total_devuelto: number
 }
 
 export type DevolucionItem = {
@@ -649,6 +671,10 @@ export type DevolucionItem = {
   // docs/42: snapshot del producto al registrar la devolución/cambio (lo copia crear_devolucion).
   producto_nombre: string | null
   producto_marca: string | null
+  // docs/74 (solo tipo 'devuelto'): ticket y línea de venta original; defectuoso por línea.
+  venta_id: string | null
+  venta_item_id: string | null
+  defectuoso: boolean
 }
 
 export type DevolucionPago = {

@@ -44,6 +44,29 @@ Venta a cta. cte. ──▶ A revisar ──▶ Finalizado ──▶ (Reabierto)
 - Cada edición, finalización y reapertura sube la versión del comprobante: si dos personas lo editan a la vez, la segunda recibe el aviso y vuelve a ver la versión actual.
 - El stock y la fecha de la venta nunca cambian al editar.
 
+### 1.2 Devolución / Cambio (docs/24, docs/74)
+
+Documento nuevo sobre **1 a 3 tickets** ya cobrados. Nunca modifica las ventas originales.
+
+```
+Tickets (1–3) ──▶ Qué se devuelve (por línea) + qué se lleva ──▶ Diferencia ──▶ Devolución activa ──▶ (Anulada)
+   (Local)                 (Local)                                 │                                  (Admin, motivo)
+                                                                   ├─ paga el cliente → cobro (caja)
+                                                                   ├─ saldado justo  → sin movimiento
+                                                                   ├─ a favor → reintegro (caja) o queda a favor (nota, sin caja)
+                                                                   └─ ticket a cta. cte. (solo) → a la cuenta del cliente
+```
+
+| Estado (`devoluciones.estado`) | Qué pasa | Quién | Reversible |
+|---|---|---|---|
+| Activa | Reingresa al stock lo devuelto sano (lo defectuoso no), descuenta lo que se lleva, y si hubo cobro o reintegro impacta la caja del día | Cajero / Admin | Sí: Anular |
+| Anulada | Revierte el stock. Sale de los cierres que todavía no se emitieron (un cierre ya hecho no se reescribe) | Admin, motivo obligatorio | No |
+
+**Reglas clave:**
+- Todo o nada: si un ticket o una cantidad no pasa, no se guarda nada.
+- Un ticket con una devolución activa no se puede anular: primero se anula la devolución.
+- "Queda a favor" es solo un registro con nota: no mueve la caja ni la venta neta; el cierre lo muestra como dato informativo.
+
 ---
 
 ## 2. Ciclo de vida de un Producto

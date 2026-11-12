@@ -30,6 +30,7 @@ export const TABLA_LABEL: Record<string, string> = {
   cierres_caja: 'Cierres de caja',
   retiros_caja: 'Retiros de caja',
   facturas_compra: 'Facturas de compra',
+  devoluciones: 'Devoluciones', // alta y anulación de devoluciones/cambios (docs/24, docs/74)
   // docs/59: solo la re-emisión en producción de las que salieron en homologación
   facturas_c: 'Facturas C',
 }
