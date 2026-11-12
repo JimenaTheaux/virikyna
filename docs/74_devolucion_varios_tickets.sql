@@ -79,7 +79,12 @@
 -- ROLLBACK dieron lo mismo que la vista previa; docs/37 V5–V12: 0 filas.
 -- PENDIENTE AL APLICAR EN PROD: verificar que la API sigue aceptando el embed sin aclarar
 -- `devoluciones?select=*,venta:ventas(numero)` (lo usa la versión instalada de Local).
--- APLICADO: (se completa al aplicar)
+-- APLICADO: 2026-11-12 08:52 en producción (backup previo virikyna_2026-11-12_pre-docs74-aplicar; antes
+-- se verificó que las funciones reemplazadas seguían idénticas a las del 11/11). Solo PARTE A, con
+-- lock_timeout 5s; caja cerrada. PARTE B: todo en 0, anon sin EXECUTE, RLS activa. docs/37 V5–V12: 0
+-- filas. La API acepta `devoluciones?select=*,venta:ventas(numero)` y las consultas de Local v0.13.0.
+-- Junto al backup: aplicar-docs74.sql y revert-docs74.sql (revert probado en restauración: schema
+-- idéntico al original).
 
 -- ════════════════════════════════════════════════════════════════════════════════════════════════
 -- PARTE A — cambios
