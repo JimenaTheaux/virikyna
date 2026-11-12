@@ -34,7 +34,10 @@
 -- físico previo (0 diferencias). PARTE C: OK T1–T4. anon_sin_execute da f en la restauración porque no
 -- trae los GRANT (también para _contado, que no se toca); en producción las dos funciones tienen ACL sin
 -- anon y CREATE OR REPLACE la conserva.
--- APLICADO: (pendiente)
+-- APLICADO: 2026-11-11 en producción (backup previo virikyna_2026-11-11_pre-docs72-aplicar; antes se
+-- verificó que cargar_factura_compra seguía idéntica a la copiada). PARTE B: todo OK (45 facturas con
+-- orden 1..n, anon sin EXECUTE). PARTE C: OK T1–T4 (ROLLBACK, sin restos). FAYDI 0011-33182 y ANKAH
+-- 0007-18720 quedan con los ítems modificados al final (aceptado por la dueña).
 
 -- ════════════════════════════════════════════════════════════════════════════════════════════════
 -- PARTE A — cambios
