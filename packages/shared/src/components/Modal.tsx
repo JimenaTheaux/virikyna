@@ -1,7 +1,9 @@
-import { createContext, useContext, useId, useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { useFocoAtrapado } from '../../lib/useFocoAtrapado'
+import { Minus } from 'lucide-react'
+import { focoFueraDeDialogos, useFocoAtrapado } from '../../lib/useFocoAtrapado'
 import { useCambiosSinGuardar } from '../../lib/cambiosSinGuardar'
+import { useDocumento } from './documentos/contexto'
 
 // Cierre con borrador (docs/54): con esta prop, cerrar un formulario con cambios (✕, Atrás,
 // BotonCerrarModal) no lo pregunta el formulario sino Modal/BottomSheet, siempre con el mismo
@@ -134,6 +136,16 @@ type Props = {
   cambiosSinGuardar?: boolean
   // Borradores (docs/54): ver CierreBorrador arriba.
   cierreBorrador?: CierreBorrador
+  // Bandeja de documentos (docs/73): solo tiene efecto si el modal se abrió como documento de la
+  // bandeja (DocumentosAbiertos). Muestra "Minimizar" junto a la ✕ y reporta el chip.
+  minimizable?: boolean
+  // Texto del chip; sin esta prop, el título.
+  etiquetaBandeja?: string
+}
+
+// ¿El elemento se ve y se puede enfocar? (dentro de un documento minimizado, no)
+function enfocable(el: Element | null): el is HTMLElement {
+  return el instanceof HTMLElement && el.isConnected && el.offsetParent !== null && getComputedStyle(el).visibility !== 'hidden'
 }
 
 // Modal centrado de escritorio — lo usan virikyna-local y virikyna-gestion (que lo re-exportan desde
@@ -163,26 +175,108 @@ export function Modal({
   dialogo,
   cambiosSinGuardar,
   cierreBorrador,
+  minimizable,
+  etiquetaBandeja,
 }: Props) {
   const tituloId = useId()
   const panelRef = useRef<HTMLDivElement>(null)
   const esFormulario = cambiosSinGuardar !== undefined
-  useFocoAtrapado(panelRef, esFormulario ? null : dialogo?.onEscape)
+  // Bandeja (docs/73): adentro de un documento minimizado, este modal (y cualquier otro anidado)
+  // queda montado pero invisible — conserva todo su estado, no recibe foco ni clics.
+  const doc = useDocumento()
+  const oculto = doc?.minimizado ?? false
+  const esRaiz = Boolean(minimizable && doc)
+  // false hasta que se mostró una vez: al volver de minimizado el foco se restaura, no se reinicia.
+  const yaMostradoRef = useRef(false)
+  // Último elemento con foco DENTRO de este panel (listener nativo: un diálogo anidado es otro
+  // nodo del DOM y lleva su propia cuenta). Al restaurar vuelve ahí: "la misma fila seleccionada".
+  const ultimoFocoRef = useRef<HTMLElement | null>(null)
+  // Lo que tenía el foco en la página cuando se abrió: a dónde vuelve al minimizar.
+  const focoPaginaRef = useRef<Element | null>(typeof document !== 'undefined' ? document.activeElement : null)
+
+  useEffect(() => {
+    const panel = panelRef.current
+    if (!panel) return
+    // El botón Minimizar no cuenta: al restaurar, el foco vuelve a donde se estaba trabajando.
+    const alEnfocar = (e: FocusEvent) => {
+      if (e.target instanceof HTMLElement && !e.target.hasAttribute('data-minimizar')) ultimoFocoRef.current = e.target
+    }
+    panel.addEventListener('focusin', alEnfocar)
+    return () => panel.removeEventListener('focusin', alEnfocar)
+  }, [])
+
+  // Antes que useFocoAtrapado (los efectos corren en orden): al restaurar, el foco vuelve al campo
+  // donde estaba, si nadie más lo tomó (un diálogo anidado restaurado corre antes, es hijo).
+  useEffect(() => {
+    if (oculto || !yaMostradoRef.current) return
+    const guardado = ultimoFocoRef.current
+    if (focoFueraDeDialogos() && guardado && panelRef.current?.contains(guardado) && enfocable(guardado)) {
+      guardado.focus({ preventScroll: true })
+    }
+  }, [oculto])
+
+  useFocoAtrapado(panelRef, oculto ? undefined : esFormulario ? null : dialogo?.onEscape, yaMostradoRef.current)
+
+  useEffect(() => {
+    if (!oculto) yaMostradoRef.current = true
+  }, [oculto])
+
+  // Al minimizar (solo el raíz, una vez): el foco vuelve a la página — a donde estaba al abrir, o
+  // al chip del documento si eso ya no está (se navegó a otra pantalla).
+  useEffect(() => {
+    if (!oculto || !esRaiz) return
+    const previo = focoPaginaRef.current
+    if (enfocable(previo)) previo.focus({ preventScroll: true })
+    else doc?.enfocarChip()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [oculto, esRaiz])
+
   const cierre = useCierreConBorrador(onClose, cambiosSinGuardar, cierreBorrador)
   // Atrás con cambios: el modal se queda donde está (cancelar) y se pide cerrar (onClose del
-  // formulario = su "¿Cerrar sin guardar?", o el diálogo de borrador).
-  useCambiosSinGuardar(!!cambiosSinGuardar, ({ cancelar }) => {
+  // formulario = su "¿Cerrar sin guardar?", o el diálogo de borrador). Minimizado sale de la
+  // pila: no se pierde nada al navegar, así que no frena (docs/73).
+  useCambiosSinGuardar(!!cambiosSinGuardar && !oculto, ({ cancelar }) => {
     cancelar()
     cierre.pedirCierre()
   })
   const esDialogo = esFormulario || !!dialogo
 
+  // El raíz le cuenta a la bandeja qué mostrar en el chip y cómo cerrarlo / guardarlo.
+  const reportar = esRaiz ? doc?.reportar : undefined
+  const etiqueta = etiquetaBandeja ?? title
+  useEffect(() => {
+    reportar?.({ etiqueta, cambios: !!cambiosSinGuardar })
+  }, [reportar, etiqueta, cambiosSinGuardar])
+  const pedirCierreRef = useRef(cierre.pedirCierre)
+  pedirCierreRef.current = cierre.pedirCierre
+  const guardarRef = useRef(cierreBorrador?.onGuardar)
+  guardarRef.current = cierreBorrador?.onGuardar
+  const registrarCierre = esRaiz ? doc?.registrarCierre : undefined
+  const registrarGuardado = esRaiz ? doc?.registrarGuardado : undefined
+  useEffect(() => {
+    if (!registrarCierre) return
+    registrarCierre(() => pedirCierreRef.current())
+    return () => registrarCierre(null)
+  }, [registrarCierre])
+  const conBorrador = Boolean(cierreBorrador && cambiosSinGuardar)
+  useEffect(() => {
+    if (!registrarGuardado) return
+    registrarGuardado(conBorrador ? () => guardarRef.current?.() : null)
+    return () => registrarGuardado(null)
+  }, [registrarGuardado, conBorrador])
+
+  const botonCabecera =
+    'rounded p-1 font-sans text-body-lg text-ink-soft hover:bg-accent-light hover:text-accent-darker focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-dark'
+
   return createPortal(
     // Sin cierre por click afuera a propósito — un clic perdido durante la carga de una factura
     // (varios ítems, muchos campos) no debe tirar todo lo cargado. Un formulario solo se cierra con
     // el botón ✕ y los botones explícitos (Cancelar / Guardar); un detalle, también con Esc.
+    // Minimizado: invisible (visibility, no display — así no pierde el scroll), sin clics, fuera
+    // del árbol de accesibilidad.
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4 ${oculto ? 'pointer-events-none invisible' : ''}`}
+      aria-hidden={oculto || undefined}
       onSubmit={(e) => e.stopPropagation()}
     >
       <div
@@ -192,18 +286,27 @@ export function Modal({
           footer ? '' : 'overflow-y-auto p-card'
         }`}
       >
-        <div className={`flex shrink-0 items-center justify-between ${footer ? 'p-card pb-0' : ''}`}>
-          <h2 id={tituloId} className="font-display text-headline-md text-accent-darker">
+        <div className={`flex shrink-0 items-center justify-between gap-2 ${footer ? 'p-card pb-0' : ''}`}>
+          <h2 id={tituloId} className="min-w-0 font-display text-headline-md text-accent-darker">
             {title}
           </h2>
-          <button
-            type="button"
-            onClick={cierre.pedirCierre}
-            aria-label="Cerrar"
-            className="rounded p-1 font-sans text-body-lg text-ink-soft hover:bg-accent-light hover:text-accent-darker"
-          >
-            ✕
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            {esRaiz && (
+              <button
+                type="button"
+                onClick={() => doc?.minimizar()}
+                data-minimizar
+                aria-label="Minimizar"
+                title="Minimizar: queda arriba, en la barra, tal como está"
+                className={`flex items-center ${botonCabecera}`}
+              >
+                <Minus size={20} strokeWidth={2} aria-hidden="true" />
+              </button>
+            )}
+            <button type="button" onClick={cierre.pedirCierre} aria-label="Cerrar" className={botonCabecera}>
+              ✕
+            </button>
+          </div>
         </div>
         {/* Sin footer: mismo layout de siempre (todo scrollea junto). Con footer: esta zona es la
             única que scrollea y el footer queda fijo abajo — para formularios largos donde las

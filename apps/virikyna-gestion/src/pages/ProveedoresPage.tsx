@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Pencil, Trash2 } from 'lucide-react'
 import type { ProveedorSaldo } from '@virikyna/shared'
@@ -13,6 +13,7 @@ import {
   useProveedoresSaldo,
   type RowActionsMenuItem,
 } from '@virikyna/shared'
+import { useBusquedaPagina, useParamsPagina } from '@virikyna/shared/lib/estadoPagina'
 import { SearchInput } from '../components/SearchInput'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { ProveedorFormModal } from './Proveedores/ProveedorFormModal'
@@ -25,11 +26,14 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]['id']
 
+const TAB_DEFAULT = { tab: 'facturas' }
+
 // La pestaña vive en la URL (?tab=proveedores): volver desde la cuenta corriente de un proveedor
 // (/proveedores/:id) cae en la lista de proveedores y no en Facturas, que es la de por defecto.
+// También se recuerda en la sesión (docs/73): volver desde el menú cae en la misma pestaña.
 export function ProveedoresPage() {
-  const [params, setParams] = useSearchParams()
-  const tab: TabId = params.get('tab') === 'proveedores' ? 'proveedores' : 'facturas'
+  const { valores, set } = useParamsPagina('proveedores:tab', TAB_DEFAULT)
+  const tab: TabId = valores.tab === 'proveedores' ? 'proveedores' : 'facturas'
 
   return (
     <section className="flex h-full flex-col rounded-lg bg-surface p-card shadow-sm">
@@ -43,7 +47,7 @@ export function ProveedoresPage() {
             key={t.id}
             type="button"
             aria-pressed={tab === t.id}
-            onClick={() => setParams(t.id === 'facturas' ? {} : { tab: t.id }, { replace: true })}
+            onClick={() => set({ tab: t.id })}
             className={[
               'rounded-t px-4 py-2 font-sans text-label-bold',
               tab === t.id
@@ -72,7 +76,8 @@ function ProveedoresTab() {
   const [modal, setModal] = useState<'nuevo' | ProveedorSaldo | null>(null)
   const [aEliminar, setAEliminar] = useState<ProveedorSaldo | null>(null)
   const [eliminando, setEliminando] = useState(false)
-  const [busqueda, setBusqueda] = useState('')
+  // En la URL (?q=…) y recordada en la sesión (docs/73): sobrevive a ir y volver.
+  const [busqueda, setBusqueda] = useBusquedaPagina('proveedores:lista')
 
   const proveedoresFiltrados = useMemo(() => {
     const q = textoParaBuscar(busqueda)

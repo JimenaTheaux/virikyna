@@ -2,6 +2,12 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { usePerfil, useAuth } from '../auth/AuthContext'
 import { ConnectionStatus } from '../components/ConnectionStatus'
 import { Footer, useConfiguracion } from '@virikyna/shared'
+import {
+  BandejaDocumentos,
+  DocumentosAbiertosProvider,
+  useDocumentosAbiertos,
+} from '@virikyna/shared/src/components/documentos/DocumentosAbiertos'
+import { olvidarEstadoPaginas } from '@virikyna/shared/lib/estadoPagina'
 import virikynaWordmark from '@virikyna/shared/src/assets/virikyna-wordmark.png'
 import { supabase } from '../lib/supabaseClient'
 import {
@@ -88,9 +94,29 @@ function NavItemLink({ to, label, Icon }: NavItem) {
   )
 }
 
+// Bandeja de documentos minimizados (docs/73): el provider envuelve todo el layout y dibuja los
+// documentos fuera del <Outlet/>, así navegar no los desmonta. Con la clave del usuario: otro
+// usuario arranca siempre con la bandeja vacía. Ventas no entra (ya tiene sus tickets en espera).
 export function AppShell() {
   const { perfil } = usePerfil()
+  return (
+    <DocumentosAbiertosProvider key={perfil?.id ?? 'sin-usuario'} rol={perfil?.rol ?? null}>
+      <Layout />
+    </DocumentosAbiertosProvider>
+  )
+}
+
+function Layout() {
+  const { perfil } = usePerfil()
   const { signOut } = useAuth()
+  const documentos = useDocumentosAbiertos()
+
+  // Cambiar de usuario: la factura con cambios guarda su borrador y la bandeja se vacía antes.
+  async function cambiarUsuario() {
+    await documentos?.vaciar()
+    olvidarEstadoPaginas()
+    await signOut()
+  }
 
   const configuracion = useConfiguracion(supabase)
   const cargaAbierta = configuracion.data?.carga_inicial_abierta ?? false
@@ -133,19 +159,21 @@ export function AppShell() {
       </aside>
       <div className="flex flex-1 flex-col overflow-hidden">
         <header className="flex h-[64px] flex-shrink-0 items-center justify-end gap-3 border-b border-line bg-surface px-7 shadow-sm">
+          {/* Chips de los documentos minimizados: el espacio libre a la izquierda de las píldoras. */}
+          <BandejaDocumentos />
           <ConnectionStatus />
-          <div className="flex items-center gap-2 rounded-full bg-bg px-4 py-2 font-sans text-label-bold text-ink-soft">
+          <div className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-bg px-4 py-2 font-sans text-label-bold text-ink-soft">
             Terminal #001
           </div>
           {perfil && (
-            <div className="flex items-center gap-2 rounded-full bg-bg px-4 py-2 font-sans text-label-bold text-ink-soft">
+            <div className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-bg px-4 py-2 font-sans text-label-bold text-ink-soft">
               {perfil.nombre} · {perfil.rol === 'admin' ? 'Admin' : 'Cajero'}
             </div>
           )}
           <button
             type="button"
-            onClick={() => signOut()}
-            className="flex items-center gap-2 rounded px-3 py-2 font-sans text-label-bold text-ink-soft hover:bg-accent-light hover:text-accent-darker"
+            onClick={() => void cambiarUsuario()}
+            className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded px-3 py-2 font-sans text-label-bold text-ink-soft hover:bg-accent-light hover:text-accent-darker"
             title="Cambiar de usuario"
           >
             <IconCambiarUsuario className="h-5 w-5" />

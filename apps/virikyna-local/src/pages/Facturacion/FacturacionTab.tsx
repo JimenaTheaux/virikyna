@@ -6,7 +6,10 @@ import { friendlyError, emitirFacturaCReal, textoParaBuscar, ConfirmarFacturaC, 
 import { formatCurrency, formatFechaCortaLocal, formatHora, hoyAR, rangoTimestampsAR } from '@virikyna/shared'
 import { EstadoBadge, RowActionsMenu, AvisoEmisionesARevisar, useEmisionesARevisar } from '@virikyna/shared'
 import { usePerfil } from '../../auth/AuthContext'
-import { FORMA_PAGO_LABEL, itemsComprobanteDesdeVenta, type DatosComprobante } from '@virikyna/shared'
+import { useParamsPagina } from '@virikyna/shared/lib/estadoPagina'
+import { FORMA_PAGO_LABEL } from '@virikyna/shared'
+import { useBandeja } from '@virikyna/shared/src/components/documentos/DocumentosAbiertos'
+import { abrirComprobanteVenta } from '@virikyna/shared/src/components/documentos/ComprobanteVentaDocumento'
 import {
   clasesFilaConItems,
   FilaItemsVenta,
@@ -43,19 +46,32 @@ const ESTADO_LABEL: Record<'sin_facturar' | 'facturado', string> = {
 
 type EstadoFiltro = 'todas' | EstadoComprobante
 
+const FILTROS_DEFAULT = { desde: '', hasta: '', estado: 'todas', pago: 'todas', q: '' }
+
 export function FacturacionTab() {
   const [ventas, setVentas] = useState<VentaFila[]>([])
   const { expandidas, toggle: toggleExpandida } = useVentasExpandidas()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const [fechaDesde, setFechaDesde] = useState('')
-  const [fechaHasta, setFechaHasta] = useState('')
-  const [estadoFiltro, setEstadoFiltro] = useState<EstadoFiltro>('todas')
-  const [formaPagoFiltro, setFormaPagoFiltro] = useState<'todas' | FormaPagoVenta>('todas')
+  // Filtros y buscador en la URL (?desde=&hasta=&estado=&pago=&q=…) y recordados en la sesión
+  // (docs/73): sobreviven a ir a otra pantalla y volver desde el menú.
+  const { valores: filtros, set: setFiltros } = useParamsPagina('facturacion:filtros', FILTROS_DEFAULT)
+  const fechaDesde = filtros.desde
+  const fechaHasta = filtros.hasta
+  const estadoFiltro = filtros.estado as EstadoFiltro
+  const formaPagoFiltro = filtros.pago as 'todas' | FormaPagoVenta
   // Ticket por número (server-side) o por nombre de cliente (sobre lo ya cargado) — para ubicar
-  // rápido la venta original de una devolución/cambio.
-  const [busqueda, setBusqueda] = useState('')
+  // rápido la venta original de una devolución/cambio. Lo tipeado pasa a la URL con 200 ms de
+  // espera, y de ahí a la consulta.
+  const busqueda = filtros.q
+  const [textoBusqueda, setTextoBusqueda] = useState(busqueda)
+  useEffect(() => {
+    if (textoBusqueda === busqueda) return
+    const t = setTimeout(() => setFiltros({ q: textoBusqueda }), 200)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [textoBusqueda])
   const [aDevolver, setADevolver] = useState<VentaConFactura | null>(null)
 
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
@@ -66,7 +82,8 @@ export function FacturacionTab() {
   const [aConfirmar, setAConfirmar] = useState<VentaFila[] | null>(null)
   const [resultadoEmision, setResultadoEmision] = useState<string | null>(null)
 
-  const [verComprobante, setVerComprobante] = useState<DatosComprobante | null>(null)
+  // Detalle de la venta: documento de la bandeja (docs/73).
+  const bandeja = useBandeja()
 
   async function cargar() {
     setLoading(true)
@@ -168,42 +185,8 @@ export function FacturacionTab() {
     cargar()
   }
 
-  async function verDetalle(venta: VentaFila) {
-    const items = itemsComprobanteDesdeVenta(venta.items)
-
-    let pagos: { formaPago: FormaPagoVenta; monto: number }[] | undefined
-    if (venta.forma_pago === 'combinado') {
-      const { data: pagosData } = await supabase
-        .from('venta_pagos')
-        .select('forma_pago, monto')
-        .eq('venta_id', venta.id)
-      pagos = (pagosData ?? []).map((p) => ({ formaPago: p.forma_pago as FormaPagoVenta, monto: p.monto as number }))
-    }
-
-    const clienteNombre = venta.cliente
-      ? venta.cliente.razon_social ?? venta.cliente.nombre_fantasia ?? 'Cliente'
-      : 'Consumidor final'
-
-    setVerComprobante({
-      tipo: venta.factura_c ? 'factura_c' : 'comprobante_x',
-      numero: venta.factura_c
-        ? `${venta.factura_c.punto_venta}-${venta.factura_c.numero_factura}`
-        : String(venta.numero),
-      fecha: venta.factura_c?.fecha_emision ?? venta.created_at,
-      clienteNombre,
-      clienteMail: venta.cliente?.mail ?? null,
-      clienteCelular: venta.cliente?.celular ?? null,
-      formaPago: venta.forma_pago,
-      pagos,
-      items,
-      subtotal: venta.subtotal,
-      descuentoPorcentaje: venta.descuento_porcentaje,
-      recargoPorcentaje: venta.recargo_porcentaje,
-      precioOficial: venta.precio_oficial,
-      total: venta.total,
-      cae: venta.factura_c?.cae ?? null,
-      nota: venta.nota,
-    })
+  function verDetalle(venta: VentaFila) {
+    void abrirComprobanteVenta(bandeja, { supabase, venta, ComprobanteModal })
   }
 
   return (
@@ -218,7 +201,7 @@ export function FacturacionTab() {
             <input
               type="date"
               value={fechaDesde}
-              onChange={(e) => setFechaDesde(e.target.value)}
+              onChange={(e) => setFiltros({ desde: e.target.value })}
               className="w-full rounded border border-line bg-surface px-3 py-2 font-sans text-body-md text-ink outline-none focus:border-accent"
             />
           </label>
@@ -227,7 +210,7 @@ export function FacturacionTab() {
             <input
               type="date"
               value={fechaHasta}
-              onChange={(e) => setFechaHasta(e.target.value)}
+              onChange={(e) => setFiltros({ hasta: e.target.value })}
               className="w-full rounded border border-line bg-surface px-3 py-2 font-sans text-body-md text-ink outline-none focus:border-accent"
             />
           </label>
@@ -235,8 +218,8 @@ export function FacturacionTab() {
             <span className="whitespace-nowrap font-sans text-label-md text-ink-soft">N° de ticket o cliente</span>
             <input
               type="search"
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
+              value={textoBusqueda}
+              onChange={(e) => setTextoBusqueda(e.target.value)}
               placeholder="Ej. 1234 o Pérez"
               className="w-full rounded border border-line bg-surface px-3 py-2 font-sans text-body-md text-ink outline-none focus:border-accent"
             />
@@ -245,7 +228,7 @@ export function FacturacionTab() {
             <span className="font-sans text-label-md text-ink-soft">Estado</span>
             <select
               value={estadoFiltro}
-              onChange={(e) => setEstadoFiltro(e.target.value as EstadoFiltro)}
+              onChange={(e) => setFiltros({ estado: e.target.value })}
               className="w-full rounded border border-line bg-surface px-3 py-2 font-sans text-body-md text-ink outline-none focus:border-accent"
             >
               <option value="todas">Todas</option>
@@ -257,7 +240,7 @@ export function FacturacionTab() {
             <span className="font-sans text-label-md text-ink-soft">Medio de pago</span>
             <select
               value={formaPagoFiltro}
-              onChange={(e) => setFormaPagoFiltro(e.target.value as 'todas' | FormaPagoVenta)}
+              onChange={(e) => setFiltros({ pago: e.target.value })}
               className="w-full rounded border border-line bg-surface px-3 py-2 font-sans text-body-md text-ink outline-none focus:border-accent"
             >
               <option value="todas">Todos</option>
@@ -448,8 +431,6 @@ export function FacturacionTab() {
           }}
         />
       )}
-
-      {verComprobante && <ComprobanteModal datos={verComprobante} onClose={() => setVerComprobante(null)} />}
 
       {aConfirmar && (
         <ConfirmarFacturaC

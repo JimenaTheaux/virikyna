@@ -4,6 +4,7 @@ import { Pencil } from 'lucide-react'
 import type { ProveedorSaldo } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { formatCurrency, friendlyError, textoParaBuscar } from '@virikyna/shared'
+import { useBusquedaPagina } from '@virikyna/shared/lib/estadoPagina'
 import { SearchInput } from '../../components/SearchInput'
 import { ProveedorFormModal } from './ProveedorFormModal'
 
@@ -16,7 +17,8 @@ export function ProveedoresTab() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [modal, setModal] = useState<'nuevo' | ProveedorSaldo | null>(null)
-  const [busqueda, setBusqueda] = useState('')
+  // En la URL (?q=…) y recordada en la sesión (docs/73): sobrevive a ir y volver.
+  const [busqueda, setBusqueda] = useBusquedaPagina('proveedores:lista')
 
   const proveedoresFiltrados = useMemo(() => {
     const q = textoParaBuscar(busqueda)

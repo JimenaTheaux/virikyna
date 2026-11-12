@@ -131,3 +131,37 @@ export async function restaurarBorradorFactura(
     avisos,
   }
 }
+
+// Factura restaurada desde la bandeja de documentos (docs/73): qué cambió en el inventario mientras
+// estaba minimizada. A diferencia de restaurarBorradorFactura no toca nada del formulario — se
+// conserva lo cargado (decisión de la dueña) — solo arma los avisos.
+export async function cambiosProductosFactura(supabase: SupabaseClient, items: ItemFacturaCompraUI[]): Promise<string[]> {
+  const conProducto = items.filter((it) => it.productoId)
+  const ids = Array.from(new Set(conProducto.map((it) => it.productoId as string)))
+  if (ids.length === 0) return []
+  const { data, error } = await supabase
+    .from('productos')
+    .select('id, nombre, marca, codigo_barras, estado, costo, margen_1, margen_2, iva_porcentaje, proveedor_id, precio_venta, precio_manual')
+    .in('id', ids)
+  if (error) return []
+  const productos = new Map(((data ?? []) as ProductoActual[]).map((p) => [p.id, p]))
+  const avisos: string[] = []
+  const monto = (n: number | null) => (n === null ? 'sin costo' : formatCurrency(n))
+  for (const it of conProducto) {
+    const p = productos.get(it.productoId as string)
+    const nombre = p?.nombre ?? it.descripcion.trim().toUpperCase()
+    if (!p) {
+      avisos.push(`"${nombre}" ya no está en el inventario: elegí otro producto en ese ítem.`)
+      continue
+    }
+    if (p.estado === 'inactivo' && !it.productoInactivo) avisos.push(`"${nombre}" pasó a inactivo.`)
+    const antes = it.productoPrecio
+    if (!antes) continue
+    const costo = p.costo === null ? null : Number(p.costo)
+    if (costo !== antes.costo) avisos.push(`Cambió el costo de "${nombre}" en el inventario: ${monto(antes.costo)} → ${monto(costo)}.`)
+    if (Number(p.precio_venta) !== antes.precio_venta) {
+      avisos.push(`Cambió el precio de venta de "${nombre}": ${formatCurrency(antes.precio_venta)} → ${formatCurrency(Number(p.precio_venta))}.`)
+    }
+  }
+  return avisos
+}

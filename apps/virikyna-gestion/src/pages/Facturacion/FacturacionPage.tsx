@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useParamsPagina } from '@virikyna/shared/lib/estadoPagina'
 import { VentasDelDiaTab } from './VentasDelDiaTab'
 import { FacturacionTab } from './FacturacionTab'
 import { DevolucionesTab } from './DevolucionesTab'
@@ -11,13 +10,14 @@ const TABS = [
 ] as const
 
 type TabId = (typeof TABS)[number]['id']
+const TAB_DEFAULT = { tab: 'ventas_dia' }
 
 export function FacturacionPage() {
-  // Si la URL trae filtros de la tab Facturación (?notas=1&q=…), se abre esa tab al recargar.
-  const [searchParams] = useSearchParams()
-  const [tab, setTab] = useState<TabId>(() =>
-    searchParams.has('notas') || searchParams.has('q') ? 'facturacion' : 'ventas_dia',
-  )
+  // Pestaña en la URL (?tab=facturacion) y recordada en la sesión (docs/73): recargar o volver desde
+  // el menú cae en la misma pestaña, con sus filtros.
+  const { valores, set } = useParamsPagina('facturacion:tab', TAB_DEFAULT)
+  const tab: TabId = TABS.some((t) => t.id === valores.tab) ? (valores.tab as TabId) : 'ventas_dia'
+  const setTab = (id: TabId) => set({ tab: id })
 
   return (
     <section className="flex h-full flex-col rounded-lg bg-surface p-card shadow-sm">

@@ -3,6 +3,12 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { usePerfil, useAuth } from '../auth/AuthContext'
 import { Footer } from '@virikyna/shared'
+import {
+  BandejaDocumentos,
+  DocumentosAbiertosProvider,
+  useDocumentosAbiertos,
+} from '@virikyna/shared/src/components/documentos/DocumentosAbiertos'
+import { olvidarEstadoPaginas } from '@virikyna/shared/lib/estadoPagina'
 import virikynaWordmark from '@virikyna/shared/src/assets/virikyna-wordmark.png'
 import {
   IconCajaGestion,
@@ -101,10 +107,30 @@ function NavItemLink({ to, label, Icon, colapsado }: NavItem & { colapsado: bool
   )
 }
 
+// Bandeja de documentos minimizados (docs/73): el provider envuelve todo el layout y dibuja los
+// documentos fuera del <Outlet/>, así navegar no los desmonta. Con la clave del usuario: otro
+// usuario arranca siempre con la bandeja vacía.
 export function AppShell() {
+  const { perfil } = usePerfil()
+  return (
+    <DocumentosAbiertosProvider key={perfil?.id ?? 'sin-usuario'} rol={perfil?.rol ?? null}>
+      <Layout />
+    </DocumentosAbiertosProvider>
+  )
+}
+
+function Layout() {
   const { perfil } = usePerfil()
   const { signOut } = useAuth()
   const { colapsado, alternar } = useSidebarColapsado()
+  const documentos = useDocumentosAbiertos()
+
+  // Cambiar de usuario: la factura con cambios guarda su borrador y la bandeja se vacía antes.
+  async function cambiarUsuario() {
+    await documentos?.vaciar()
+    olvidarEstadoPaginas()
+    await signOut()
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-bg text-ink">
@@ -153,11 +179,13 @@ export function AppShell() {
             onClick={alternar}
             aria-label={colapsado ? 'Expandir menú' : 'Contraer menú'}
             title={colapsado ? 'Expandir menú' : 'Contraer menú'}
-            className="flex h-11 w-11 items-center justify-center rounded text-ink-soft hover:bg-accent-light hover:text-accent-darker"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-ink-soft hover:bg-accent-light hover:text-accent-darker"
           >
             {colapsado ? <PanelLeftOpen size={20} strokeWidth={1.75} /> : <PanelLeftClose size={20} strokeWidth={1.75} />}
           </button>
-          <div className="flex items-center gap-3">
+          {/* Chips de los documentos minimizados: el espacio libre entre el menú y las píldoras. */}
+          <BandejaDocumentos />
+          <div className="flex shrink-0 items-center gap-3">
             <div className="flex items-center gap-2 rounded-full bg-bg px-4 py-2 font-sans text-label-bold text-ink-soft">
               Virikyna Gestión
             </div>
@@ -168,7 +196,7 @@ export function AppShell() {
             )}
             <button
               type="button"
-              onClick={() => signOut()}
+              onClick={() => void cambiarUsuario()}
               className="flex items-center gap-2 rounded px-3 py-2 font-sans text-label-bold text-ink-soft hover:bg-accent-light hover:text-accent-darker"
               title="Cambiar de usuario"
             >

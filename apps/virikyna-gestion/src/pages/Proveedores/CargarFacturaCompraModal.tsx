@@ -13,13 +13,15 @@ type Props = {
   copiadaDeId?: string
   // Borrador a retomar desde la lista (docs/54).
   borrador?: BorradorConNombres<PayloadBorradorFactura>
+  // Abierta como documento de la bandeja (docs/73).
+  minimizable?: boolean
 }
 
 // La planilla vive en packages/shared (misma que Virikyna Local); acá solo se conecta el
 // cliente de Supabase, el formulario de producto de esta app y el detalle que abre el link a la
 // factura original de una copia. La carga usa el mismo RPC atómico `cargar_factura_compra`, así
 // que un admin puede cargar una factura sin ir a la caja.
-export function CargarFacturaCompraModal({ onClose, onSaved, copiadaDeId, borrador }: Props) {
+export function CargarFacturaCompraModal({ onClose, onSaved, copiadaDeId, borrador, minimizable }: Props) {
   const [originalId, setOriginalId] = useState<string | null>(null)
   const { perfil } = usePerfil()
 
@@ -32,6 +34,7 @@ export function CargarFacturaCompraModal({ onClose, onSaved, copiadaDeId, borrad
         copiadaDeId={copiadaDeId}
         sistema="gestion"
         borrador={borrador}
+        minimizable={minimizable}
         onVerOriginal={setOriginalId}
         ofrecerAplicarACuenta
         // docs/57: contado = egreso general de Caja Gestión (sin caja abierta); el modal avisa al cerrar.

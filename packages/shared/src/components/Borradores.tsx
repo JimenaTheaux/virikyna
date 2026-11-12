@@ -38,6 +38,22 @@ export function IndicadorBorrador({ estado }: { estado: EstadoBorrador }) {
   )
 }
 
+// "Cambió algo…": lo que cambió en la base desde que se guardó un borrador o mientras un documento
+// estuvo minimizado en la bandeja (docs/73). Lo cargado no se pisa: solo se avisa.
+export function AvisoCambios({ titulo = 'Cambió algo desde que se guardó el borrador:', avisos }: { titulo?: string; avisos: string[] }) {
+  if (avisos.length === 0) return null
+  return (
+    <div role="alert" className="rounded bg-badge-amber-bg px-4 py-2 font-sans text-body-md text-badge-amber-text">
+      <p className="font-semibold">{titulo}</p>
+      <ul className="mt-1 list-disc pl-5">
+        {avisos.map((a) => (
+          <li key={a}>{a}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 type AvisosProps = {
   estado: EstadoBorrador
   // Borrador retomado de otro usuario: "Creado por X · fecha hora".
@@ -60,16 +76,7 @@ export function AvisosBorrador({ estado, autorAjeno, avisosRestauracion = [], on
           Creado por <strong>{autorAjeno.nombre ?? 'otro usuario'}</strong> · {formatFechaHora(autorAjeno.creado)}
         </p>
       )}
-      {avisosRestauracion.length > 0 && (
-        <div role="alert" className="rounded bg-badge-amber-bg px-4 py-2 font-sans text-body-md text-badge-amber-text">
-          <p className="font-semibold">Cambió algo desde que se guardó el borrador:</p>
-          <ul className="mt-1 list-disc pl-5">
-            {avisosRestauracion.map((a) => (
-              <li key={a}>{a}</li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <AvisoCambios avisos={avisosRestauracion} />
       {estado.tipo === 'conflicto' && (
         <div role="alert" className="flex flex-wrap items-center gap-3 rounded bg-badge-amber-bg px-4 py-2 font-sans text-body-md text-badge-amber-text">
           <p className="flex-1">

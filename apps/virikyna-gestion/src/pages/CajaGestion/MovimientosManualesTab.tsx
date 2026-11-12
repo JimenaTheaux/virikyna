@@ -10,6 +10,7 @@ import { EditarMovimientoModal } from './EditarMovimientoModal'
 import type { MovimientoCuentaConUsuario } from './types'
 import { useEnterComoTab } from '@virikyna/shared'
 import { MontoInput } from '@virikyna/shared'
+import { useAvisoSalidaSinGuardar } from '@virikyna/shared/src/components/AvisoSalidaSinGuardar'
 
 type TipoManual = 'ingreso_manual' | 'egreso'
 
@@ -40,6 +41,11 @@ export function MovimientosManualesTab() {
   } | null>(null)
 
   const [editando, setEditando] = useState<MovimientoCuentaConUsuario | null>(null)
+  // Algo cargado en el movimiento o en la transferencia: salir de la pantalla o de la pestaña
+  // pregunta (docs/73). Las cuentas elegidas solas no cuentan (vienen precargadas).
+  const avisoSalida = useAvisoSalidaSinGuardar(
+    [monto, descripcion, montoTransferencia, descripcionTransferencia].some((v) => v.trim() !== ''),
+  )
 
   async function cargar() {
     setLoading(true)
@@ -166,6 +172,7 @@ export function MovimientosManualesTab() {
 
   return (
     <div className="flex flex-col gap-stack-md">
+      {avisoSalida}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded border border-line bg-bg px-4 py-2">
         {cuentas.map((cuenta) => (
           <p key={cuenta.id} className="font-sans text-label-md text-ink-soft">

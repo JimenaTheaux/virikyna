@@ -465,6 +465,32 @@ Ver `docs/06_estructura_de_datos (1).md` (tabla `notas_internas`, vista `notas_i
 
 ---
 
+## 12. BANDEJA DE DOCUMENTOS MINIMIZADOS (Local y Gestión) — docs/73
+
+**Objetivo:** trabajar como con subventanas — dejar una factura a medio cargar o un detalle abierto,
+ir a otra pantalla y volver a encontrarlo igual.
+
+**Qué se minimiza (botón "−" junto a la ✕):** carga de factura/NC de compra (nueva, copia o borrador),
+detalle de factura de compra, detalle de venta (Facturación) y ficha de artículo (Inventario). Pagos,
+cobros, alta de producto y Ventas no.
+
+**Reglas:**
+- Cada documento minimizado queda como chip en el encabezado; tocarlo lo restaura tal como estaba
+  (campos, pestaña, ítem con foco, scroll). Uno solo visible a la vez.
+- Máximo 5; el 6.º avisa y no cierra ninguno. Abrir uno que ya está lo trae al frente.
+- La ✕ del chip pregunta lo mismo que la del documento si hay cambios.
+- Vive solo durante la sesión: no se reabre al día siguiente. Al cambiar de usuario, la factura con
+  cambios guarda su borrador (docs/54) y la bandeja se vacía.
+- Al restaurar, los detalles se actualizan; lo cargado nunca se pisa: si cambió algo en la base, se avisa
+  ("Cambió algo mientras estaba minimizado/a").
+- En Ventas (Local), con un documento abierto encima, el teclado de Ventas no actúa (Enter no cobra).
+
+**Estado por página:** Facturación (pestaña y filtros), Proveedores (pestaña y búsqueda), Caja Gestión y
+Egresos (pestaña), Historial (filtros) e Inventario (orden, selección y scroll) se conservan al ir y
+volver desde el menú. Registrar egreso y Movimientos manuales preguntan antes de perder lo cargado.
+
+---
+
 ## Próximos desarrollos (fuera de esta fase)
 
 - Factura A y B

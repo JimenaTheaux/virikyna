@@ -19,6 +19,7 @@ import {
   VincularItemFacturaModal,
   type MedioDePago,
 } from '@virikyna/shared'
+import { useAlRestaurar } from '@virikyna/shared/src/components/documentos/contexto'
 import { supabase } from '../../lib/supabaseClient'
 import { usePerfil } from '../../auth/AuthContext'
 import { Modal } from '../../components/Modal'
@@ -50,6 +51,8 @@ type Props = {
   // Botón "Copiar" (docs/33), también en anuladas. Sin esta prop no aparece — así el detalle
   // abierto desde una copia no ofrece copiar otra vez.
   onCopiar?: () => void
+  // Abierto como documento de la bandeja (docs/73), desde Proveedores → Facturas.
+  minimizable?: boolean
 }
 
 const ESTADO: Record<FacturaCompraSaldo['estado'], { label: string; variant: 'amber' | 'green' | 'red' }> = {
@@ -64,7 +67,7 @@ const ESTADO: Record<FacturaCompraSaldo['estado'], { label: string; variant: 'am
 // comprobantes y una NC cancelar parte de uno. Misma lectura que el detalle de Gestión, sin
 // Editar/Anular (exclusivos de Gestión). El pago se oculta en anuladas y en notas de crédito —
 // una NC no se paga, se aplica.
-export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, onPagoRegistrado, onCopiar }: Props) {
+export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, onPagoRegistrado, onCopiar, minimizable }: Props) {
   const [facturaActual, setFacturaActual] = useState(factura)
   const [items, setItems] = useState<FacturaCompraItem[]>([])
   const [aplicaciones, setAplicaciones] = useState<AplicacionDetalle[]>([])
@@ -79,8 +82,10 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
   // docs/53: servicios no tiene cantidad (es 1) ni producto — no se ofrece vincular.
   const servicios = tipoCompraDe(facturaActual) === 'servicios'
 
-  async function cargar() {
-    setLoading(true)
+  // `silencioso`: al volver de minimizado (docs/73) se releen los datos sin pasar por "Cargando...",
+  // así la tabla no se vacía y el scroll queda donde estaba.
+  async function cargar(silencioso = false) {
+    if (!silencioso) setLoading(true)
     setError(null)
 
     const [facturaRes, itemsRes, aplicacionesRes] = await Promise.all([
@@ -121,6 +126,8 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [factura.id])
 
+  useAlRestaurar(() => void cargar(true))
+
   const estado = ESTADO[facturaActual.estado]
 
   // Para un comprobante: de dónde salió la plata. Para una NC: a qué comprobante se aplicó.
@@ -137,6 +144,9 @@ export function FacturaCompraDetalleModal({ factura, proveedorNombre, onClose, o
       onClose={onClose}
       widthClassName="max-w-[680px]"
       dialogo={{ onEscape: onClose }}
+      minimizable={minimizable}
+      // Proveedor primero: es lo que se reconoce cuando el chip se achica.
+      etiquetaBandeja={`${proveedorNombre} · ${etiquetaComprobanteCompra(facturaActual)}`}
       // Acciones en el pie fijo: con subtotal e IVA (docs/45) el detalle ya no entra en 720 px.
       footer={
         onCopiar ? (

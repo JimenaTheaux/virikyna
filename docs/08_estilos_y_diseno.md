@@ -159,6 +159,20 @@ Inventario (celular). No aplica a la tabla de Inventario de escritorio (§5.2) n
 - **Lector de pantalla:** el bloque se anuncia "NOMBRE, MARCA, $ precio" (`role="group"` + `aria-label`);
   dentro de un botón, es también el nombre del botón.
 
+## 5.4 Bandeja de documentos minimizados (docs/73)
+
+- **Dónde:** en el header de 64 px de Local y Gestión, en el espacio libre entre el botón del menú y
+  las píldoras de usuario (`BandejaDocumentos`). Nunca le saca alto al área de trabajo.
+- **Chip:** ícono lucide por tipo (factura nueva `FilePlus`, detalle de factura `Receipt`, venta
+  `ShoppingBag`, artículo `Package`) + texto en DM Sans `label-bold` `accent-darker`, borde `accent`,
+  44 px de alto, entre 160 y 240 px de ancho, truncado con `title`. Lo más reconocible va primero
+  ("AGABELLA · Remito X …", "Factura · AGABELLA · 3 ítems", "Venta #1234", "Art. PELOTA 20CM").
+  Punto `accent` de 8 px = cambios sin guardar. El documento visible lleva fondo `accent-light`.
+- **Dos botones por chip:** el chip ("Restaurar …" / "Minimizar …", `aria-pressed`) y la ✕ ("Cerrar …"),
+  separados por un filete `accent/40`. Foco visible con outline `accent-dark`.
+- **Si no entran:** "+N" con desplegable (o "N abiertos" si no entra ningún chip), mismo borde.
+- **En el modal:** botón "Minimizar" (ícono `Minus`) a la izquierda de la ✕, mismo tamaño y estilo.
+
 ## 6. Accesibilidad y contexto de uso (resumen — detalle en skill `pos-ux-ui-design`)
 
 - Contraste alto siempre; evitar grises medios en texto que importa.

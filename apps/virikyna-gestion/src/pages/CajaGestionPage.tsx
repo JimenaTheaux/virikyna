@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { avisarIntentoSalir } from '@virikyna/shared'
+import { useParamsPagina } from '@virikyna/shared/lib/estadoPagina'
 import { ResumenCuentasTab } from './CajaGestion/ResumenCuentasTab'
 import { TableroTab } from './CajaGestion/TableroTab'
 import { CargaInicialTab } from './CajaGestion/CargaInicialTab'
@@ -12,9 +13,17 @@ const TABS = [
 ] as const
 
 type TabId = (typeof TABS)[number]['id']
+const TAB_DEFAULT = { tab: 'resumen' }
 
 export function CajaGestionPage() {
-  const [tab, setTab] = useState<TabId>('resumen')
+  // Pestaña en la URL (?tab=movimientos) y recordada en la sesión (docs/73).
+  const { valores, set } = useParamsPagina('caja-gestion:tab', TAB_DEFAULT)
+  const tab: TabId = TABS.some((t) => t.id === valores.tab) ? (valores.tab as TabId) : 'resumen'
+  // Cambiar de pestaña desmonta la de ahora: con Movimientos manuales a medio cargar, pregunta
+  // primero (la pestaña no cambia la ruta, así que GuardiaNavegacion no lo ve).
+  const setTab = (id: TabId) => {
+    if (!avisarIntentoSalir({ continuar: () => set({ tab: id }), cancelar: () => {} })) set({ tab: id })
+  }
 
   return (
     <section className="flex h-full flex-col rounded-lg bg-surface p-card shadow-sm">

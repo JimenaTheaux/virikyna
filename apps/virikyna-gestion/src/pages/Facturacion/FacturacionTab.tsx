@@ -1,12 +1,14 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useParamsPagina } from '@virikyna/shared/lib/estadoPagina'
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { EstadoComprobante, FormaPagoVenta } from '@virikyna/shared'
 import { supabase } from '../../lib/supabaseClient'
 import { friendlyError, formatCurrency, emitirFacturaCReal, rangoTimestampsAR, hoyAR } from '@virikyna/shared'
 import { ConfirmarFacturaC, SELECT_CLIENTE_FACTURA, AvisoEmisionesARevisar, useEmisionesARevisar } from '@virikyna/shared'
 import { formatFechaCortaLocal, formatHora, EstadoBadge } from '@virikyna/shared'
-import { FORMA_PAGO_LABEL, itemsComprobanteDesdeVenta, type DatosComprobante } from '@virikyna/shared'
+import { FORMA_PAGO_LABEL } from '@virikyna/shared'
+import { useBandeja } from '@virikyna/shared/src/components/documentos/DocumentosAbiertos'
+import { abrirComprobanteVenta } from '@virikyna/shared/src/components/documentos/ComprobanteVentaDocumento'
 import {
   clasesFilaConItems,
   FilaItemsVenta,
@@ -32,6 +34,8 @@ const ESTADO_LABEL: Record<'sin_facturar' | 'facturado', string> = {
 }
 
 type EstadoFiltro = 'todas' | EstadoComprobante
+
+const FILTROS_DEFAULT = { desde: '', hasta: '', estado: 'todas', pago: 'todas', notas: '', q: '' }
 
 // Ítems embebidos en la misma consulta: renglón bajo cada venta y "Ver comprobante" sin otra consulta.
 type VentaFila = VentaConFactura & ConItemsVenta
@@ -71,34 +75,22 @@ async function fetchVentas(
 export function FacturacionTab() {
   const queryClient = useQueryClient()
 
-  const [fechaDesde, setFechaDesde] = useState('')
-  const [fechaHasta, setFechaHasta] = useState('')
-  const [estadoFiltro, setEstadoFiltro] = useState<EstadoFiltro>('todas')
-  const [formaPagoFiltro, setFormaPagoFiltro] = useState<'todas' | FormaPagoVenta>('todas')
-
-  // Chip "Con notas" y buscador: filtran en cliente y viven en la URL (?notas=1&q=…) para
-  // sobrevivir a recargar. El input escribe en la URL con 200 ms de debounce.
-  const [searchParams, setSearchParams] = useSearchParams()
-  const soloConNotas = searchParams.get('notas') === '1'
-  const q = searchParams.get('q') ?? ''
+  // Filtros, chip "Con notas" y buscador en la URL (?desde=&hasta=&estado=&pago=&notas=1&q=…) y
+  // recordados en la sesión (docs/73): sobreviven a recargar y a ir a otra pantalla y volver desde
+  // el menú. El input escribe en la URL con 200 ms de debounce.
+  const { valores: filtros, set: setFiltros } = useParamsPagina('facturacion:filtros', FILTROS_DEFAULT)
+  const fechaDesde = filtros.desde
+  const fechaHasta = filtros.hasta
+  const estadoFiltro = filtros.estado as EstadoFiltro
+  const formaPagoFiltro = filtros.pago as 'todas' | FormaPagoVenta
+  const soloConNotas = filtros.notas === '1'
+  const q = filtros.q
   const [busqueda, setBusqueda] = useState(q)
-
-  function actualizarParam(clave: 'notas' | 'q', valor: string | null) {
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev)
-        if (valor) next.set(clave, valor)
-        else next.delete(clave)
-        return next
-      },
-      { replace: true },
-    )
-  }
 
   useEffect(() => {
     const valor = busqueda.trim()
     if (valor === q) return
-    const t = setTimeout(() => actualizarParam('q', valor || null), 200)
+    const t = setTimeout(() => setFiltros({ q: valor }), 200)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busqueda])
@@ -112,7 +104,8 @@ export function FacturacionTab() {
   const [aConfirmar, setAConfirmar] = useState<VentaFila[] | null>(null)
   const [resultadoEmision, setResultadoEmision] = useState<string | null>(null)
 
-  const [verComprobante, setVerComprobante] = useState<DatosComprobante | null>(null)
+  // Detalle de la venta: documento de la bandeja (docs/73).
+  const bandeja = useBandeja()
 
   // placeholderData: al cambiar un filtro se siguen viendo las filas anteriores hasta que llegan
   // las nuevas, sin parpadear a "Cargando...". staleTime 0: al volver a la tab se muestra lo que
@@ -189,42 +182,8 @@ export function FacturacionTab() {
     queryClient.invalidateQueries({ queryKey: ['facturacion'] })
   }
 
-  async function verDetalle(venta: VentaFila) {
-    const items = itemsComprobanteDesdeVenta(venta.items)
-
-    let pagos: { formaPago: FormaPagoVenta; monto: number }[] | undefined
-    if (venta.forma_pago === 'combinado') {
-      const { data: pagosData } = await supabase
-        .from('venta_pagos')
-        .select('forma_pago, monto')
-        .eq('venta_id', venta.id)
-      pagos = (pagosData ?? []).map((p) => ({ formaPago: p.forma_pago as FormaPagoVenta, monto: p.monto as number }))
-    }
-
-    const clienteNombre = venta.cliente
-      ? venta.cliente.razon_social ?? venta.cliente.nombre_fantasia ?? 'Cliente'
-      : 'Consumidor final'
-
-    setVerComprobante({
-      tipo: venta.factura_c ? 'factura_c' : 'comprobante_x',
-      numero: venta.factura_c
-        ? `${venta.factura_c.punto_venta}-${venta.factura_c.numero_factura}`
-        : String(venta.numero),
-      fecha: venta.factura_c?.fecha_emision ?? venta.created_at,
-      clienteNombre,
-      clienteMail: venta.cliente?.mail ?? null,
-      clienteCelular: venta.cliente?.celular ?? null,
-      formaPago: venta.forma_pago,
-      pagos,
-      items,
-      subtotal: venta.subtotal,
-      descuentoPorcentaje: venta.descuento_porcentaje,
-      recargoPorcentaje: venta.recargo_porcentaje,
-      precioOficial: venta.precio_oficial,
-      total: venta.total,
-      cae: venta.factura_c?.cae ?? null,
-      nota: venta.nota,
-    })
+  function verDetalle(venta: VentaFila) {
+    void abrirComprobanteVenta(bandeja, { supabase, venta, ComprobanteModal })
   }
 
   const mensajeVacio = soloConNotas
@@ -241,7 +200,7 @@ export function FacturacionTab() {
           <input
             type="date"
             value={fechaDesde}
-            onChange={(e) => setFechaDesde(e.target.value)}
+            onChange={(e) => setFiltros({ desde: e.target.value })}
             className="rounded border border-line bg-surface px-3 py-2 font-sans text-body-md text-ink outline-none focus:border-accent"
           />
         </label>
@@ -250,7 +209,7 @@ export function FacturacionTab() {
           <input
             type="date"
             value={fechaHasta}
-            onChange={(e) => setFechaHasta(e.target.value)}
+            onChange={(e) => setFiltros({ hasta: e.target.value })}
             className="rounded border border-line bg-surface px-3 py-2 font-sans text-body-md text-ink outline-none focus:border-accent"
           />
         </label>
@@ -258,7 +217,7 @@ export function FacturacionTab() {
           <span className="font-sans text-label-md text-ink-soft">Estado</span>
           <select
             value={estadoFiltro}
-            onChange={(e) => setEstadoFiltro(e.target.value as EstadoFiltro)}
+            onChange={(e) => setFiltros({ estado: e.target.value })}
             className="rounded border border-line bg-surface px-3 py-2 font-sans text-body-md text-ink outline-none focus:border-accent"
           >
             <option value="todas">Todas</option>
@@ -270,7 +229,7 @@ export function FacturacionTab() {
           <span className="font-sans text-label-md text-ink-soft">Medio de pago</span>
           <select
             value={formaPagoFiltro}
-            onChange={(e) => setFormaPagoFiltro(e.target.value as 'todas' | FormaPagoVenta)}
+            onChange={(e) => setFiltros({ pago: e.target.value })}
             className="rounded border border-line bg-surface px-3 py-2 font-sans text-body-md text-ink outline-none focus:border-accent"
           >
             <option value="todas">Todos</option>
@@ -294,7 +253,7 @@ export function FacturacionTab() {
         <button
           type="button"
           aria-pressed={soloConNotas}
-          onClick={() => actualizarParam('notas', soloConNotas ? null : '1')}
+          onClick={() => setFiltros({ notas: soloConNotas ? '' : '1' })}
           className={[
             'rounded-full border px-4 py-2 font-sans text-label-bold transition',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1',
@@ -496,8 +455,6 @@ export function FacturacionTab() {
           </tbody>
         </table>
       </div>
-
-      {verComprobante && <ComprobanteModal datos={verComprobante} onClose={() => setVerComprobante(null)} />}
 
       {aConfirmar && (
         <ConfirmarFacturaC

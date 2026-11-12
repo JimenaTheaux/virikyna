@@ -23,6 +23,12 @@ if (typeof document !== 'undefined') {
   )
 }
 
+// El foco está en la página (o en el chip de la bandeja que se tocó), no dentro de un diálogo abierto.
+export function focoFueraDeDialogos(): boolean {
+  const el = document.activeElement
+  return !el || el === document.body || !el.closest('[role="dialog"]')
+}
+
 // Comportamiento de diálogo accesible para Modal / BottomSheet (opt-in con la prop `dialogo`):
 // - Tab / Shift+Tab no salen del diálogo (dan la vuelta).
 // - Esc llama a onEscape. Con onEscape = null el diálogo queda activo pero Esc no hace nada (ni
@@ -35,7 +41,11 @@ if (typeof document !== 'undefined') {
 // React burbujean por el árbol de componentes, y un diálogo abierto encima (ej. ConfirmDialog
 // "¿Cerrar sin guardar?", otro portal) es hijo en React del de abajo — con onKeyDown, un Esc en
 // el de arriba cerraría también el de abajo. En el DOM son nodos hermanos y no se pisan.
-export function useFocoAtrapado(ref: RefObject<HTMLElement>, onEscape: (() => void) | null | undefined) {
+//
+// `restaurando` (documento de la bandeja que vuelve de minimizado, docs/73): no se mueve el foco si
+// ya está dentro de un diálogo (el propio Modal lo devolvió al campo donde estaba, o un diálogo
+// anidado que también se restauró). Si quedó en la página o en el chip, va al primero, como al abrir.
+export function useFocoAtrapado(ref: RefObject<HTMLElement>, onEscape: (() => void) | null | undefined, restaurando = false) {
   // Siempre la última versión del callback, sin re-suscribir el listener en cada render.
   const onEscapeRef = useRef(onEscape)
   onEscapeRef.current = onEscape
@@ -55,7 +65,7 @@ export function useFocoAtrapado(ref: RefObject<HTMLElement>, onEscape: (() => vo
     const enfocables = () =>
       Array.from(contenedor.querySelectorAll<HTMLElement>(ENFOCABLES)).filter((el) => el.offsetParent !== null)
 
-    if (!contenedor.contains(document.activeElement)) {
+    if (restaurando ? focoFueraDeDialogos() : !contenedor.contains(document.activeElement)) {
       const inicial = contenedor.querySelector<HTMLElement>('[data-autofocus]') ?? enfocables()[0]
       inicial?.focus()
     }

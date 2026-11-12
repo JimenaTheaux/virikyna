@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Eye } from 'lucide-react'
 import type { Auditoria, PerfilPublico, TipoAccionAuditoria } from '@virikyna/shared'
 import { formatFechaHora, friendlyError, nombresPorId, EstadoBadge, rangoTimestampsAR } from '@virikyna/shared'
+import { useParamsPagina } from '@virikyna/shared/lib/estadoPagina'
 import { supabase } from '../lib/supabaseClient'
 import { ACCION_LABEL, accionRevertible, claveRegistro, registrosEliminados, tablaLabel } from '../lib/historial'
 import { DetalleAuditoriaModal } from './Historial/DetalleAuditoriaModal'
@@ -9,6 +10,8 @@ import { NotaCorreccionModal } from './Historial/NotaCorreccionModal'
 import type { AuditoriaConUsuario } from './Historial/types'
 
 const LIMITE = 200
+
+const FILTROS_DEFAULT = { usuario: 'todos', tabla: 'todos', accion: 'todos', desde: '', hasta: '' }
 
 // Historial y Auditoría (docs/04_modulos_y_funciones.md, módulo 10) — exclusivo de Virikyna
 // Gestión. Todo lo que pasa en el sistema, quién lo hizo, y reversión según la tabla de reglas
@@ -22,11 +25,18 @@ export function HistorialPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const [usuarioFiltro, setUsuarioFiltro] = useState('todos')
-  const [tablaFiltro, setTablaFiltro] = useState('todos')
-  const [accionFiltro, setAccionFiltro] = useState<'todos' | TipoAccionAuditoria>('todos')
-  const [fechaDesde, setFechaDesde] = useState('')
-  const [fechaHasta, setFechaHasta] = useState('')
+  // Filtros en la URL y recordados en la sesión (docs/73): sobreviven a ir a otra pantalla y volver.
+  const { valores: filtros, set: setFiltros } = useParamsPagina('historial:filtros', FILTROS_DEFAULT)
+  const usuarioFiltro = filtros.usuario
+  const tablaFiltro = filtros.tabla
+  const accionFiltro = filtros.accion as 'todos' | TipoAccionAuditoria
+  const fechaDesde = filtros.desde
+  const fechaHasta = filtros.hasta
+  const setUsuarioFiltro = (usuario: string) => setFiltros({ usuario })
+  const setTablaFiltro = (tabla: string) => setFiltros({ tabla })
+  const setAccionFiltro = (accion: 'todos' | TipoAccionAuditoria) => setFiltros({ accion })
+  const setFechaDesde = (desde: string) => setFiltros({ desde })
+  const setFechaHasta = (hasta: string) => setFiltros({ hasta })
 
   const [verDetalle, setVerDetalle] = useState<AuditoriaConUsuario | null>(null)
   const [modalNota, setModalNota] = useState(false)

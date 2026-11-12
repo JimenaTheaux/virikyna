@@ -5,6 +5,7 @@ import { mensajeErrorGuardado } from '@virikyna/shared'
 import { formatCurrency, nombreConMarca } from '@virikyna/shared'
 import type { DatosComprobante } from '../lib/comprobante'
 import { ComprobanteModal } from '../components/ComprobanteModal'
+import { hayDocumentoVisible } from '@virikyna/shared/src/components/documentos/contexto'
 import { Modal } from '../components/Modal'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Field, inputClass } from '../components/FormField'
@@ -497,8 +498,10 @@ export function VentasPage() {
   // buscador vacío saca el foco. Así un código del lector que empieza con E, T, D… nunca dispara nada.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      // Los modales de Ventas manejan su propio teclado (useFocoAtrapado).
-      if (stateRef.current.modalOpen) return
+      // Los modales de Ventas manejan su propio teclado (useFocoAtrapado). Un documento de la
+      // bandeja restaurado encima de Ventas (docs/73), también: ni Enter cobra ni las letras van
+      // al buscador de atrás.
+      if (stateRef.current.modalOpen || hayDocumentoVisible()) return
       const { confirmando, saving } = stateRef.current
 
       const target = e.target as HTMLElement

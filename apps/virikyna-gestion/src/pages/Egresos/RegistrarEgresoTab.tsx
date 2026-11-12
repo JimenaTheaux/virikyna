@@ -6,6 +6,7 @@ import { CATEGORIA_EGRESO_LABEL, CATEGORIAS_EGRESO_GENERAL, FORMA_PAGO_EGRESO_LA
 import { Field, ErrorText, inputClass, selectClass } from '../../components/FormField'
 import { useEnterComoTab } from '@virikyna/shared'
 import { MontoInput } from '@virikyna/shared'
+import { useAvisoSalidaSinGuardar } from '@virikyna/shared/src/components/AvisoSalidaSinGuardar'
 
 const FORMAS_PAGO_EGRESO = Object.keys(FORMA_PAGO_EGRESO_LABEL) as FormaPagoEgreso[]
 
@@ -22,6 +23,8 @@ export function RegistrarEgresoTab() {
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [ok, setOk] = useState(false)
+  // Monto o descripción cargados: salir de la pantalla o de la pestaña pregunta (docs/73).
+  const avisoSalida = useAvisoSalidaSinGuardar(monto.trim() !== '' || descripcion.trim() !== '')
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -64,6 +67,7 @@ export function RegistrarEgresoTab() {
   }
 
   return (
+    <>
     <form onKeyDown={enterComoTab} onSubmit={handleSubmit} className="rounded-lg border border-line p-4">
       <p className="font-sans text-label-bold text-ink-soft">Registrar egreso general</p>
       <p className="mt-1 font-sans text-body-md text-ink-soft">Sueldo, servicio u otro gasto sin proveedor.</p>
@@ -128,5 +132,8 @@ export function RegistrarEgresoTab() {
         </button>
       </div>
     </form>
+    {/* Fuera del <form>: el Enter del diálogo no tiene que pasar por Enter = Tab del formulario. */}
+    {avisoSalida}
+    </>
   )
 }

@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
+import { useDocumentoOculto } from './documentos/contexto'
 
 type Props = {
   anchorRef: RefObject<HTMLElement>
@@ -74,7 +75,10 @@ export function DropdownFlotante({ anchorRef, children, ancho = 'fijo' }: Props)
     calcular()
   })
 
-  if (!pos) return null
+  // Adentro de un documento minimizado de la bandeja (docs/73) no se dibuja.
+  const oculto = useDocumentoOculto()
+
+  if (!pos || oculto) return null
   return createPortal(
     // mousedown sin default: el click en una sugerencia no le quita el foco al input (si no, el
     // blur cerraría el dropdown antes de que el click llegue a dispararse).

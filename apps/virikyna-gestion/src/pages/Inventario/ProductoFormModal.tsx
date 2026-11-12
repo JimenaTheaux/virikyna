@@ -23,7 +23,9 @@ import {
   avisoStockMinimo,
   STOCK_MINIMO_AYUDA,
   STOCK_MINIMO_LABEL,
+  AvisoCambios,
 } from '@virikyna/shared'
+import type { DocumentoProducto, PestanaProducto } from '@virikyna/shared/src/components/inventario/ProductosTab'
 import { Modal } from '../../components/Modal'
 import { CodigoBarrasBox } from '@virikyna/shared'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
@@ -33,7 +35,6 @@ import { FacturaCompraDetallePorId } from '../Proveedores/FacturaCompraDetallePo
 import { AjustarStockModal } from './AjustarStockModal'
 import type { ProductoConRelaciones } from './types'
 
-type PestanaProducto = 'datos' | 'precio' | 'movimientos'
 const PESTANAS_PRODUCTO: { id: PestanaProducto; label: string }[] = [
   { id: 'datos', label: 'Datos' },
   { id: 'precio', label: 'Historial de precio' },
@@ -61,12 +62,14 @@ type Props = {
   onStockChanged: () => void
   // Admin: tras eliminar el producto (docs/48) el listado cierra, recarga y avisa.
   onEliminado?: (nombre: string) => void
+  // Abierta como documento de la bandeja (docs/73), desde Inventario.
+  documento?: DocumentoProducto
 }
 
 // Admin siempre — Virikyna Gestión es exclusiva de administradoras (docs/02_roles_y_permisos.md),
 // así que a diferencia de Virikyna Local acá no hace falta condicionar el margen ni el ajuste
 // de stock por rol: quien entró a esta app ya es admin.
-export function ProductoFormModal({ producto, proveedores, nombreInicial, codigoBarrasInicial, onClose, onSaved, onStockChanged, onEditarExistente, accionExistente, onEliminado }: Props) {
+export function ProductoFormModal({ producto, proveedores, nombreInicial, codigoBarrasInicial, onClose, onSaved, onStockChanged, onEditarExistente, accionExistente, onEliminado, documento }: Props) {
   const [nombre, setNombre] = useState(producto?.nombre ?? nombreInicial ?? '')
   const [descripcion, setDescripcion] = useState(producto?.descripcion ?? '')
   const [codigoBarras, setCodigoBarras] = useState(producto?.codigo_barras ?? codigoBarrasInicial ?? '')
@@ -106,8 +109,15 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, codigo
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [confirmCerrar, setConfirmCerrar] = useState(false)
-  const [tab, setTab] = useState<PestanaProducto>('datos')
+  const [tab, setTabEstado] = useState<PestanaProducto>(documento?.tabInicial ?? 'datos')
+  const setTab = (t: PestanaProducto) => {
+    setTabEstado(t)
+    documento?.onTabChange(t)
+  }
   const idPestanas = useId()
+  // Id propio del <form>: con dos fichas abiertas en la bandeja (docs/73), "Guardar" de una no
+  // tiene que enviar el formulario de la otra.
+  const idFormulario = useId()
   // Historial de precio: también alimenta la línea "Última modificación de margen" del formulario.
   const {
     cambios: cambiosMargen,
@@ -248,6 +258,8 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, codigo
       title={producto ? 'Editar producto' : 'Nuevo producto'}
       onClose={pedirCierre}
       cambiosSinGuardar={dirty}
+      minimizable={documento?.minimizable}
+      etiquetaBandeja={`Art. ${producto?.nombre ?? nombre}`}
       widthClassName="max-w-[960px]"
       footer={
         tab === 'datos' || !producto ? (
@@ -272,7 +284,7 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, codigo
               </button>
               <button
                 type="submit"
-                form="producto-form"
+                form={idFormulario}
                 disabled={saving}
                 className="rounded bg-accent px-5 py-2.5 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-60"
               >
@@ -283,6 +295,11 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, codigo
         ) : undefined
       }
     >
+      {documento && documento.avisoCambios.length > 0 && (
+        <div className="mb-stack-md">
+          <AvisoCambios titulo="Cambió algo mientras estaba minimizado:" avisos={documento.avisoCambios} />
+        </div>
+      )}
       {producto && (
         <Pestanas
           label="Secciones del producto"
@@ -309,7 +326,7 @@ export function ProductoFormModal({ producto, proveedores, nombreInicial, codigo
       ) : (
       <PanelPestana idBase={producto ? idPestanas : null} id="datos">
       <form
-        id="producto-form"
+        id={idFormulario}
         onSubmit={handleSubmit}
         onChangeCapture={() => setDirty(true)}
         className="grid grid-cols-[minmax(0,1fr)_240px] gap-stack-md"

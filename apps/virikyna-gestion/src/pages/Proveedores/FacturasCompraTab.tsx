@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Copy, Eye } from 'lucide-react'
-import type { BorradorConNombres, FacturaCompraSaldo, PayloadBorradorFactura, Proveedor } from '@virikyna/shared'
+import type { FacturaCompraSaldo, PayloadBorradorFactura, Proveedor } from '@virikyna/shared'
 import {
   etiquetaComprobanteCompra,
   formatCurrency,
@@ -13,9 +13,10 @@ import {
   ListaBorradores,
   useBorradores,
 } from '@virikyna/shared'
+import { useAlCambiarDatos } from '@virikyna/shared/lib/cambiosDatos'
+import { useBandeja } from '@virikyna/shared/src/components/documentos/DocumentosAbiertos'
 import { supabase } from '../../lib/supabaseClient'
-import { CargarFacturaCompraModal } from './CargarFacturaCompraModal'
-import { FacturaCompraDetalleModal } from './FacturaCompraDetalleModal'
+import { abrirCargaFactura, abrirDetalleFactura } from './documentosFactura'
 import type { FacturaCompraConProveedor } from './types'
 
 // Facturas de compra vistas desde Virikyna Gestión — la carga usa el mismo RPC atómico
@@ -27,13 +28,15 @@ export function FacturasCompraTab() {
   const [facturas, setFacturas] = useState<FacturaCompraConProveedor[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [detalle, setDetalle] = useState<FacturaCompraConProveedor | null>(null)
-  const [nuevaFactura, setNuevaFactura] = useState(false)
-  // Factura de la que se abre una copia (docs/33), también anuladas.
-  const [copiarId, setCopiarId] = useState<string | null>(null)
+  // Detalle, carga nueva, copia (docs/33, también de anuladas) y borrador retomado se abren como
+  // documentos de la bandeja (docs/73): se pueden minimizar e ir a otra pantalla.
+  const bandeja = useBandeja()
+  const verDetalle = (f: FacturaCompraConProveedor) => abrirDetalleFactura(bandeja, f, f.proveedor?.razon_social ?? '—')
   // Borradores de factura/NC (docs/54): arriba del listado; no cuentan en saldos.
   const borradores = useBorradores<PayloadBorradorFactura>(supabase, 'factura_compra', 'gestion')
-  const [retomar, setRetomar] = useState<BorradorConNombres<PayloadBorradorFactura> | null>(null)
+  // Lo que se guarda o se cierra en un documento de la bandeja refresca el listado montado.
+  useAlCambiarDatos('facturas_compra', () => void cargar())
+  useAlCambiarDatos('borradores_factura', () => borradores.recargar())
 
   async function cargar() {
     setLoading(true)
@@ -73,7 +76,7 @@ export function FacturasCompraTab() {
         </p>
         <button
           type="button"
-          onClick={() => setNuevaFactura(true)}
+          onClick={() => abrirCargaFactura(bandeja)}
           className="rounded bg-accent px-4 py-3 font-sans text-label-bold text-white transition hover:bg-accent-dark"
         >
           + Nueva factura
@@ -86,7 +89,12 @@ export function FacturasCompraTab() {
 
       {borradores.borradores.length > 0 && (
         <div className="mt-stack-md">
-          <ListaBorradores supabase={supabase} sistema="gestion" lista={borradores} onRetomar={setRetomar} />
+          <ListaBorradores
+            supabase={supabase}
+            sistema="gestion"
+            lista={borradores}
+            onRetomar={(b) => abrirCargaFactura(bandeja, { borrador: b })}
+          />
         </div>
       )}
 
@@ -123,7 +131,7 @@ export function FacturasCompraTab() {
             {facturas.map((f) => (
               <tr
                 key={f.id}
-                onClick={() => setDetalle(f)}
+                onClick={() => verDetalle(f)}
                 className={`cursor-pointer border-b border-table-divider last:border-0 even:bg-table-row-alt hover:bg-accent-light/40 ${
                   f.anulada ? 'text-ink-soft line-through' : ''
                 }`}
@@ -155,8 +163,8 @@ export function FacturasCompraTab() {
                   <RowActionsMenu
                     ariaLabel={`Acciones para ${etiquetaComprobanteCompra(f)}`}
                     items={[
-                      { label: 'Ver detalle', icon: Eye, onClick: () => setDetalle(f) },
-                      { label: 'Copiar', icon: Copy, onClick: () => setCopiarId(f.id) },
+                      { label: 'Ver detalle', icon: Eye, onClick: () => verDetalle(f) },
+                      { label: 'Copiar', icon: Copy, onClick: () => abrirCargaFactura(bandeja, { copiadaDeId: f.id }) },
                     ]}
                   />
                 </td>
@@ -165,62 +173,6 @@ export function FacturasCompraTab() {
           </tbody>
         </table>
       </div>
-
-      {detalle && (
-        <FacturaCompraDetalleModal
-          factura={detalle}
-          proveedorNombre={detalle.proveedor?.razon_social ?? '—'}
-          onClose={() => setDetalle(null)}
-          onChanged={cargar}
-          onCopiar={() => {
-            setDetalle(null)
-            setCopiarId(detalle.id)
-          }}
-        />
-      )}
-
-      {copiarId && (
-        <CargarFacturaCompraModal
-          copiadaDeId={copiarId}
-          onClose={() => {
-            setCopiarId(null)
-            borradores.recargar()
-          }}
-          onSaved={() => {
-            setCopiarId(null)
-            cargar()
-            borradores.recargar()
-          }}
-        />
-      )}
-
-      {nuevaFactura && (
-        <CargarFacturaCompraModal
-          onClose={() => {
-            setNuevaFactura(false)
-            borradores.recargar()
-          }}
-          onSaved={() => {
-            setNuevaFactura(false)
-            cargar()
-            borradores.recargar()
-          }}
-        />
-      )}
-      {retomar && (
-        <CargarFacturaCompraModal
-          borrador={retomar}
-          onClose={() => {
-            setRetomar(null)
-            borradores.recargar()
-          }}
-          onSaved={() => {
-            setRetomar(null)
-            cargar()
-            borradores.recargar()
-          }}
-        />
-      )}
     </div>
   )
 }

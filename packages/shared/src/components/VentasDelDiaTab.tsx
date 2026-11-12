@@ -4,9 +4,12 @@ import { FileText } from 'lucide-react'
 import { friendlyError } from '../../lib/supabaseErrors'
 import { formatCurrency, fechaHoyISO, formatFechaCortaLocal, formatHora, rangoTimestampsAR } from '../../lib/format'
 import { emitirFacturaCReal } from '../../lib/arcaFacturacion'
-import type { Cliente, FacturaC, FormaPagoVenta, Venta, VentaPago } from '../../types/database'
-import { itemsComprobanteDesdeVenta, type DatosComprobante } from '../../lib/comprobante'
+import type { Cliente, FacturaC, FormaPagoVenta, Venta } from '../../types/database'
+import { armarDatosComprobanteVenta, type DatosComprobante } from '../../lib/comprobante'
 import { ConfirmarFacturaC, SELECT_CLIENTE_FACTURA } from './ConfirmarFacturaC'
+import type { ComprobanteModalProps } from './ComprobanteModal'
+import { useDocumentosAbiertos } from './documentos/DocumentosAbiertos'
+import { abrirComprobanteVenta } from './documentos/ComprobanteVentaDocumento'
 import { EstadoBadge } from './EstadoBadge'
 import { RowActionsMenu, type RowActionsMenuItem } from './RowActionsMenu'
 import {
@@ -27,7 +30,7 @@ type VentaConItems = VentaConFactura & ConItemsVenta
 export interface VentasDelDiaTabProps {
   supabase: SupabaseClient
   formaPagoLabel: Record<FormaPagoVenta, string>
-  ComprobanteModal: ComponentType<{ datos: DatosComprobante; onClose: () => void }>
+  ComprobanteModal: ComponentType<ComprobanteModalProps>
   IconVerDetalle: ComponentType<{ className?: string }>
   IconEnviar: ComponentType<{ className?: string }>
 }
@@ -81,48 +84,15 @@ export function VentasDelDiaTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  async function armarComprobante(venta: VentaConItems): Promise<DatosComprobante> {
-    const items = itemsComprobanteDesdeVenta(venta.items)
-
-    let pagos: { formaPago: FormaPagoVenta; monto: number }[] | undefined
-    if (venta.forma_pago === 'combinado') {
-      const { data: pagosData } = await supabase
-        .from('venta_pagos')
-        .select('forma_pago, monto')
-        .eq('venta_id', venta.id)
-      pagos = ((pagosData ?? []) as unknown as Pick<VentaPago, 'forma_pago' | 'monto'>[]).map((p) => ({
-        formaPago: p.forma_pago,
-        monto: p.monto,
-      }))
-    }
-
-    const clienteNombre = venta.cliente
-      ? venta.cliente.razon_social ?? venta.cliente.nombre_fantasia ?? 'Cliente'
-      : 'Consumidor final'
-
-    return {
-      tipo: venta.factura_c ? 'factura_c' : 'comprobante_x',
-      numero: venta.factura_c
-        ? `${venta.factura_c.punto_venta}-${venta.factura_c.numero_factura}`
-        : String(venta.numero),
-      fecha: venta.factura_c?.fecha_emision ?? venta.created_at,
-      clienteNombre,
-      clienteMail: venta.cliente?.mail ?? null,
-      clienteCelular: venta.cliente?.celular ?? null,
-      formaPago: venta.forma_pago,
-      pagos,
-      items,
-      subtotal: venta.subtotal,
-      descuentoPorcentaje: venta.descuento_porcentaje,
-      recargoPorcentaje: venta.recargo_porcentaje,
-      precioOficial: venta.precio_oficial,
-      total: venta.total,
-      cae: venta.factura_c?.cae ?? null,
-    }
-  }
-
+  // Detalle de la venta: documento de la bandeja (docs/73) en Local y Gestión; sin bandeja, el modal
+  // de siempre. Sin la nota interna, como siempre en Ventas del día.
+  const bandeja = useDocumentosAbiertos()
   async function verDetalle(venta: VentaConItems) {
-    setVerComprobante(await armarComprobante(venta))
+    if (bandeja) {
+      await abrirComprobanteVenta(bandeja, { supabase, venta, ComprobanteModal, conNota: false })
+      return
+    }
+    setVerComprobante(await armarDatosComprobanteVenta(supabase, venta, { conNota: false }))
   }
 
   // Se llama solo desde la confirmación (ConfirmarFacturaC).

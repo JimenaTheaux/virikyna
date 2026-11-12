@@ -68,6 +68,62 @@ export function itemsComprobanteDesdeVenta(rows: VentaItemComprobanteRow[]): Ite
   }))
 }
 
+// Venta ya registrada con lo necesario para su comprobante (la consulta de Facturación y de Ventas
+// del día: factura_c, cliente e ítems embebidos).
+export type VentaConComprobante = Pick<
+  Venta,
+  | 'id'
+  | 'numero'
+  | 'forma_pago'
+  | 'created_at'
+  | 'subtotal'
+  | 'descuento_porcentaje'
+  | 'recargo_porcentaje'
+  | 'precio_oficial'
+  | 'total'
+  | 'nota'
+> & {
+  factura_c: Pick<FacturaC, 'punto_venta' | 'numero_factura' | 'fecha_emision' | 'cae'> | null
+  cliente: Pick<Cliente, 'razon_social' | 'nombre_fantasia' | 'mail' | 'celular'> | null
+  items: VentaItemComprobanteRow[] | null
+}
+
+// Comprobante X / Factura C de una venta ya cargada en la lista — una sola vez para Facturación
+// (Local y Gestión) y Ventas del día (docs/73). Si solo se tiene el id: cargarComprobanteVenta, más
+// abajo. `conNota`: Ventas del día arma el comprobante sin la nota interna (como siempre).
+export async function armarDatosComprobanteVenta(
+  supabase: SupabaseClient,
+  venta: VentaConComprobante,
+  { conNota = true }: { conNota?: boolean } = {},
+): Promise<DatosComprobante> {
+  let pagos: { formaPago: FormaPagoVenta; monto: number }[] | undefined
+  if (venta.forma_pago === 'combinado') {
+    const { data: pagosData } = await supabase.from('venta_pagos').select('forma_pago, monto').eq('venta_id', venta.id)
+    pagos = ((pagosData ?? []) as { forma_pago: FormaPagoVenta; monto: number }[]).map((p) => ({
+      formaPago: p.forma_pago,
+      monto: p.monto,
+    }))
+  }
+  return {
+    tipo: venta.factura_c ? 'factura_c' : 'comprobante_x',
+    numero: venta.factura_c ? `${venta.factura_c.punto_venta}-${venta.factura_c.numero_factura}` : String(venta.numero),
+    fecha: venta.factura_c?.fecha_emision ?? venta.created_at,
+    clienteNombre: venta.cliente ? venta.cliente.razon_social ?? venta.cliente.nombre_fantasia ?? 'Cliente' : 'Consumidor final',
+    clienteMail: venta.cliente?.mail ?? null,
+    clienteCelular: venta.cliente?.celular ?? null,
+    formaPago: venta.forma_pago,
+    pagos,
+    items: itemsComprobanteDesdeVenta(venta.items ?? []),
+    subtotal: venta.subtotal,
+    descuentoPorcentaje: venta.descuento_porcentaje,
+    recargoPorcentaje: venta.recargo_porcentaje,
+    precioOficial: venta.precio_oficial,
+    total: venta.total,
+    cae: venta.factura_c?.cae ?? null,
+    ...(conNota ? { nota: venta.nota } : {}),
+  }
+}
+
 // Una línea si es pago simple ("Forma de pago: Efectivo"), o el encabezado + una línea por
 // cada parte si es combinado — usado por pantalla, PDF e imagen del comprobante.
 export function lineasFormaPago(datos: DatosComprobante): string[] {

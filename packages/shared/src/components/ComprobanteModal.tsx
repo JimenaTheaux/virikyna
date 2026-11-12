@@ -13,6 +13,9 @@ export type ComprobanteModalProps = {
   // Es un detalle (solo lectura + envío): Esc cierra y el foco queda atrapado (Modal → useFocoAtrapado).
   // Activo por defecto en todas las pantallas (docs/auditoria-2026-10-19.md, B.2).
   dialogo?: boolean
+  // Bandeja de documentos (docs/73): detalle de venta abierto desde Facturación.
+  minimizable?: boolean
+  etiquetaBandeja?: string
 }
 
 type Opciones = {
@@ -36,6 +39,8 @@ export function ComprobanteModal({
   onClose,
   footer,
   dialogo = true,
+  minimizable,
+  etiquetaBandeja,
   abrirUrl = abrirEnPestana,
   descargarAlEnviar = false,
   onAviso,
@@ -83,6 +88,8 @@ export function ComprobanteModal({
       onClose={onClose}
       widthClassName="max-w-[560px]"
       dialogo={dialogo ? { onEscape: onClose } : undefined}
+      minimizable={minimizable}
+      etiquetaBandeja={etiquetaBandeja}
     >
       <div className="flex flex-col gap-stack-md">
         <div className="flex items-start justify-between gap-3 font-sans text-body-md text-ink-soft">

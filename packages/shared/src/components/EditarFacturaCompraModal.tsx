@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { FacturaCompraSaldo, FormaPagoCompra, TipoComprobanteCompra } from '../../types/database'
 import {
@@ -39,6 +39,8 @@ type Props = {
 // Ajuste por redondeo (docs/71, D3): mismo bloqueo que el IVA; se suma al final, fuera del IVA.
 export function EditarFacturaCompraModal({ supabase, factura, onClose, onSaved }: Props) {
   const enterComoTab = useEnterComoTab()
+  // Id propio del <form>: puede haber dos detalles de factura abiertos en la bandeja (docs/73).
+  const idFormulario = useId()
   const [tipoComprobante, setTipoComprobante] = useState<TipoComprobanteCompra>(factura.tipo_comprobante)
   const [ivaAlicuota, setIvaAlicuota] = useState<AlicuotaIvaCompra>(aAlicuotaIvaCompra(factura.iva_alicuota))
   const ajusteGuardado = ajusteRedondeoNumero(factura.ajuste_redondeo)
@@ -121,7 +123,7 @@ export function EditarFacturaCompraModal({ supabase, factura, onClose, onSaved }
             </button>
             <button
               type="submit"
-              form="form-editar-factura-compra"
+              form={idFormulario}
               disabled={saving}
               className="rounded bg-accent px-4 py-3 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-60"
             >
@@ -132,7 +134,7 @@ export function EditarFacturaCompraModal({ supabase, factura, onClose, onSaved }
       }
     >
       <form onKeyDown={enterComoTab}
-        id="form-editar-factura-compra"
+        id={idFormulario}
         onSubmit={handleSubmit}
         onChangeCapture={() => setDirty(true)}
         className="flex flex-col gap-stack-md"

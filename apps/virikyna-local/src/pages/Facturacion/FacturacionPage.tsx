@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useParamsPagina } from '@virikyna/shared/lib/estadoPagina'
 import { VentasDelDiaTab } from './VentasDelDiaTab'
 import { FacturacionTab } from './FacturacionTab'
 import { DevolucionesTab } from './DevolucionesTab'
@@ -10,9 +10,14 @@ const TABS = [
 ] as const
 
 type TabId = (typeof TABS)[number]['id']
+const TAB_DEFAULT = { tab: 'ventas_dia' }
 
 export function FacturacionPage() {
-  const [tab, setTab] = useState<TabId>('ventas_dia')
+  // Pestaña en la URL (?tab=facturacion) y recordada en la sesión (docs/73): volver desde el menú
+  // cae en la misma pestaña, con sus filtros.
+  const { valores, set } = useParamsPagina('facturacion:tab', TAB_DEFAULT)
+  const tab: TabId = TABS.some((t) => t.id === valores.tab) ? (valores.tab as TabId) : 'ventas_dia'
+  const setTab = (id: TabId) => set({ tab: id })
 
   return (
     <section className="flex h-full flex-col rounded-lg bg-surface p-card shadow-sm">

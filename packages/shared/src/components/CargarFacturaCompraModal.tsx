@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type {
   FacturaCompraSaldo,
@@ -47,13 +47,15 @@ import {
 import { useComprobanteDuplicado, useCopiaFacturaCompra } from '../../lib/useCopiaFacturaCompra'
 import { useBorrador, type BorradorConNombres, type BorradorFila, type SistemaApp } from '../../lib/borradores'
 import {
+  cambiosProductosFactura,
   payloadBorradorFactura,
   restaurarBorradorFactura,
   resumenBorradorFactura,
   type PayloadBorradorFactura,
 } from '../../lib/borradorFactura'
 import { esBorradorInexistente } from '../../lib/facturasCompra'
-import { AvisosBorrador, IndicadorBorrador } from './Borradores'
+import { AvisoCambios, AvisosBorrador, IndicadorBorrador } from './Borradores'
+import { useAliasDocumento, useAlRestaurar, useDocumento } from './documentos/contexto'
 import { obtenerACuentaProveedor } from '../../lib/pagosACuenta'
 import { formatCurrency } from '../../lib/format'
 import { cambiosPrecioFactura } from '../../lib/precios'
@@ -127,6 +129,8 @@ type Props = {
   // para el diálogo de confirmación. Con `onRegistrado` (Local: toast) el aviso final lo muestra la
   // app; sin él, el modal muestra el aviso antes de cerrar (Gestión).
   pagoContado: { origen: OrigenEgreso; usuarioNombre: string; onRegistrado?: (texto: string) => void }
+  // Abierta como documento de la bandeja (docs/73): se puede minimizar y seguir después.
+  minimizable?: boolean
 }
 
 // Carga de factura de compra de escritorio, compartida por Virikyna Local y Virikyna Gestión (una
@@ -149,6 +153,7 @@ export function CargarFacturaCompraModal({
   sistema,
   borrador: borradorInicial,
   pagoContado,
+  minimizable,
 }: Props) {
   const inicial = valoresIniciales ?? valoresFacturaCompraVacios()
   // Abierto con solo el id: hasta que llega la factura no se muestra un formulario vacío. Lo
@@ -180,6 +185,8 @@ export function CargarFacturaCompraModal({
   // que se guardó, y la confirmación de "Guardar igual" si el borrador ya no existe.
   const [retomado, setRetomado] = useState(false)
   const [avisosRestauracion, setAvisosRestauracion] = useState<string[]>([])
+  // Lo que cambió en el inventario mientras estuvo minimizada en la bandeja (docs/73).
+  const [avisosMinimizada, setAvisosMinimizada] = useState<string[]>([])
   const [confirmSinBorrador, setConfirmSinBorrador] = useState(false)
   const [verificarDuplicado, setVerificarDuplicado] = useState(0)
   // Cambio de artículos ↔ servicios pedido con ítems cargados: se confirma porque los limpia.
@@ -199,6 +206,10 @@ export function CargarFacturaCompraModal({
   // En una copia lo que falta es lo propio de la factura nueva: el foco arranca en "Número".
   const numeroRef = useRef<HTMLInputElement>(null)
   const [focoNumero, setFocoNumero] = useState(inicial.copiaDe ? 1 : 0)
+  // Ids propios: con dos facturas abiertas en la bandeja (docs/73), "Guardar factura" de una no
+  // tiene que enviar el formulario de la otra (ni la etiqueta enfocar el campo de la otra).
+  const idFormulario = useId()
+  const idAjuste = useId()
 
   function aplicarValores(v: ValoresFacturaCompra) {
     setProveedorId(v.proveedorId)
@@ -279,6 +290,35 @@ export function CargarFacturaCompraModal({
   })
   // Con algo que perder, cerrar pregunta "Guardar borrador / Descartar / Seguir editando".
   const cambiosSinGuardar = dirty && (hayDatoReal || retomado)
+
+  // ── Bandeja de documentos (docs/73) ──
+  // "Seguir editando" del mismo borrador en la lista trae esta factura al frente: no la duplica.
+  useAliasDocumento(minimizable ? `factura_compra:borrador:${borrador.id}` : null)
+  // Al volver de minimizada: se conserva lo cargado; se avisa qué cambió en el inventario y se
+  // vuelve a mirar si el comprobante se cargó mientras tanto.
+  useAlRestaurar(() => {
+    setVerificarDuplicado((n) => n + 1)
+    void cambiosProductosFactura(supabase, items).then(setAvisosMinimizada)
+  })
+  const proveedorNombre = proveedores.find((p) => p.id === proveedorId)?.razon_social ?? ''
+  const cantidadItems = items.filter((it) => it.descripcion.trim()).length
+  const etiquetaBandeja = [
+    tipoComprobante === 'nota_credito' ? 'NC' : 'Factura',
+    proveedorNombre || 'Sin proveedor',
+    `${cantidadItems} ${cantidadItems === 1 ? 'ítem' : 'ítems'}`,
+  ].join(' · ')
+  // Ya guardada (aviso de contado u oferta de aplicar a cuenta): la ✕ del chip termina como un
+  // guardado normal, así el listado se actualiza.
+  const doc = useDocumento()
+  const onSavedRef = useRef(onSaved)
+  onSavedRef.current = onSaved
+  const postGuardado = Boolean(contadoGuardado || ofertaACuenta)
+  const registrarCierreDoc = minimizable ? doc?.registrarCierre : undefined
+  useEffect(() => {
+    if (!registrarCierreDoc || !postGuardado) return
+    registrarCierreDoc(() => onSavedRef.current())
+    return () => registrarCierreDoc(null)
+  }, [registrarCierreDoc, postGuardado])
 
   async function abrirBorrador(fila: BorradorFila<unknown>) {
     const { valores, avisos } = await restaurarBorradorFactura(supabase, fila.payload as PayloadBorradorFactura)
@@ -619,6 +659,8 @@ export function CargarFacturaCompraModal({
       onClose={onClose}
       cambiosSinGuardar={cambiosSinGuardar}
       cierreBorrador={{ onGuardar: borrador.guardarAhora, onDescartar: borrador.descartar, retomado }}
+      minimizable={minimizable}
+      etiquetaBandeja={etiquetaBandeja}
       widthClassName="max-w-[1180px]"
       footer={
         <div className="flex flex-col gap-stack-sm">
@@ -646,11 +688,11 @@ export function CargarFacturaCompraModal({
               </div>
               {/* docs/71: fuera del <form> como el IVA (marca dirty a mano). Suma o resta al total final. */}
               <div className="w-36">
-                <label htmlFor="ajuste-redondeo-factura" className="font-sans text-label-md text-ink-soft">
+                <label htmlFor={idAjuste} className="font-sans text-label-md text-ink-soft">
                   {AJUSTE_REDONDEO_LABEL}
                 </label>
                 <MontoInput
-                  id="ajuste-redondeo-factura"
+                  id={idAjuste}
                   value={ajusteRedondeo}
                   onChange={(v) => {
                     setDirty(true)
@@ -694,7 +736,7 @@ export function CargarFacturaCompraModal({
             </button>
             <button
               type="submit"
-              form="form-factura-compra"
+              form={idFormulario}
               disabled={ocupado}
               className="rounded bg-accent px-4 py-3 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-60"
             >
@@ -710,7 +752,7 @@ export function CargarFacturaCompraModal({
         </p>
       ) : (
         <form
-          id="form-factura-compra"
+          id={idFormulario}
           onSubmit={handleSubmit}
           onChangeCapture={() => setDirty(true)}
           // El lector de código de barras manda Enter al terminar cada lectura. En un <form> con
@@ -736,6 +778,7 @@ export function CargarFacturaCompraModal({
             onRecargar={() => void recargarBorrador()}
             onGuardarComoNuevo={() => void borrador.guardarComoNuevo()}
           />
+          <AvisoCambios titulo="Cambió algo mientras estaba minimizada (lo cargado no cambió):" avisos={avisosMinimizada} />
 
           {/* Origen de la copia + "Copiar desde…" */}
           <div className="flex flex-wrap items-center justify-between gap-stack-sm">

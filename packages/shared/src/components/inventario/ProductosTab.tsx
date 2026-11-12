@@ -1,4 +1,8 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useAlCambiarDatos } from '../../../lib/cambiosDatos'
+import { leerDePagina, recordarEnPagina } from '../../../lib/estadoPagina'
+import { useDocumentosAbiertos } from '../documentos/DocumentosAbiertos'
+import { abrirProducto } from '../documentos/ProductoDocumento'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Proveedor } from '../../../types/database'
 import { friendlyError } from '../../../lib/supabaseErrors'
@@ -24,6 +28,18 @@ import {
   useFiltrosInventario,
 } from './FiltrosInventario'
 
+// Pestañas de la ficha de artículo (ProductoFormModal de Gestión, ProductoFormSheet de Local).
+export type PestanaProducto = 'datos' | 'precio' | 'movimientos'
+
+// Ficha abierta como documento de la bandeja (docs/73): se puede minimizar, vuelve en la misma
+// pestaña si se rearma con datos nuevos, y muestra lo que cambió si tenía cambios sin guardar.
+export type DocumentoProducto = {
+  minimizable: boolean
+  tabInicial: PestanaProducto
+  onTabChange: (tab: PestanaProducto) => void
+  avisoCambios: string[]
+}
+
 export type FormularioProductoRender = (args: {
   producto?: ProductoConRelaciones // undefined = alta
   proveedores: Proveedor[]
@@ -32,6 +48,7 @@ export type FormularioProductoRender = (args: {
   onStockChanged: () => void
   onEditarExistente: (id: string) => void
   onEliminado: (nombre: string) => void // docs/48: solo lo usa el formulario de un admin
+  documento?: DocumentoProducto
 }) => ReactNode
 
 export type ActualizarPreciosRender = (args: {
@@ -71,13 +88,21 @@ export function ProductosTab({ supabase, renderFormulario, renderActualizarPreci
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [modal, setModal] = useState<'nuevo' | ProductoConRelaciones | null>(null)
-  const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
+  // Orden, selección y scroll se recuerdan en la sesión (docs/73): al volver a Inventario quedan
+  // como estaban. Los filtros ya iban en la URL (useFiltrosInventario).
+  const [seleccion, setSeleccion] = useState<Set<string>>(() => new Set(leerDePagina<string[]>('inventario:seleccion') ?? []))
   const [actualizandoPrecios, setActualizandoPrecios] = useState(false)
   const [marcandoIva, setMarcandoIva] = useState(false)
   const [resultadoPrecios, setResultadoPrecios] = useState<string | null>(null)
   const { filtros, busqueda, setBusqueda, aplicar, limpiar } = useFiltrosInventario()
   // null = orden por defecto del chip (nombre, o stock ascendente en los de problemas).
-  const [orden, setOrden] = useState<OrdenInventario | null>(null)
+  const [orden, setOrden] = useState<OrdenInventario | null>(() => leerDePagina<OrdenInventario | null>('inventario:orden') ?? null)
+  useEffect(() => recordarEnPagina('inventario:orden', orden), [orden])
+  useEffect(() => recordarEnPagina('inventario:seleccion', Array.from(seleccion)), [seleccion])
+  const tablaRef = useRef<HTMLDivElement>(null)
+  const scrollRestaurado = useRef(false)
+  // La ficha de un artículo se abre como documento de la bandeja (docs/73) en Local y Gestión.
+  const bandeja = useDocumentosAbiertos()
 
   const { visibles, totalEstado, contadores } = useMemo(
     () => filtrarInventario(productos, filtros, { stockDe: stockTotal, coincideBusqueda: coincideBusquedaInventario, orden }),
@@ -97,8 +122,10 @@ export function ProductosTab({ supabase, renderFormulario, renderActualizarPreci
   const opcionesProveedor = useMemo(() => proveedores.map((p) => ({ value: p.id, label: p.razon_social })), [proveedores])
   const hayFiltros = cantidadFiltrosAplicados(filtros) > 0
 
-  async function cargar() {
-    setLoading(true)
+  // `silencioso`: recarga sin "Cargando..." (lo que cambió en una ficha de la bandeja): la tabla no se
+  // vacía y el scroll no salta.
+  async function cargar(silencioso = false) {
+    if (!silencioso) setLoading(true)
     setError(null)
 
     const [productosRes, proveedoresRes] = await Promise.all([
@@ -110,6 +137,12 @@ export function ProductosTab({ supabase, renderFormulario, renderActualizarPreci
       setError(friendlyError(productosRes.error))
     } else {
       setProductos(productosRes.data)
+      // Lo recordado de antes puede incluir un artículo que ya no está.
+      const ids = new Set(productosRes.data.map((p) => p.id))
+      setSeleccion((prev) => {
+        const vigentes = Array.from(prev).filter((id) => ids.has(id))
+        return vigentes.length === prev.size ? prev : new Set(vigentes)
+      })
     }
     setProveedores((proveedoresRes.data ?? []) as Proveedor[])
     setLoading(false)
@@ -119,6 +152,25 @@ export function ProductosTab({ supabase, renderFormulario, renderActualizarPreci
     cargar()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Guardado, eliminado o stock ajustado desde una ficha de la bandeja (que vive fuera de esta página).
+  useAlCambiarDatos('productos', (detalle) => {
+    if (detalle) setResultadoPrecios(detalle)
+    void cargar(true)
+  })
+
+  // Con la primera carga, el scroll vuelve a donde se dejó.
+  useLayoutEffect(() => {
+    if (loading || scrollRestaurado.current) return
+    scrollRestaurado.current = true
+    const y = leerDePagina<number>('inventario:scroll')
+    if (y && tablaRef.current) tablaRef.current.scrollTop = y
+  }, [loading])
+
+  function abrirFicha(producto: ProductoConRelaciones) {
+    if (bandeja) abrirProducto(bandeja, { supabase, producto, proveedores, renderFormulario })
+    else setModal(producto)
+  }
 
   function toggleSeleccion(id: string) {
     setSeleccion((prev) => {
@@ -278,7 +330,13 @@ export function ProductosTab({ supabase, renderFormulario, renderActualizarPreci
         </p>
       )}
 
-      <div className="mt-2 flex-1 overflow-auto rounded-xl shadow-sm">
+      <div
+        ref={tablaRef}
+        onScroll={(e) => {
+          if (scrollRestaurado.current) recordarEnPagina('inventario:scroll', e.currentTarget.scrollTop)
+        }}
+        className="mt-2 flex-1 overflow-auto rounded-xl shadow-sm"
+      >
         {/* table-fixed + colgroup: checkbox, precio y stock con ancho fijo; Marca 14% y Nombre y
             Descripción se reparten el resto — sin scroll horizontal (docs/08 §5.2). Encabezado fijo
             al scrollear (sticky en cada th, dentro de este contenedor con scroll). */}
@@ -328,7 +386,7 @@ export function ProductosTab({ supabase, renderFormulario, renderActualizarPreci
               return (
                 <tr
                   key={producto.id}
-                  onClick={() => setModal(producto)}
+                  onClick={() => abrirFicha(producto)}
                   className={`cursor-pointer border-b border-table-divider last:border-0 even:bg-table-row-alt hover:bg-accent-light/40 ${
                     inactivo ? 'text-ink-soft [&>td]:opacity-60' : ''
                   }`}
@@ -349,7 +407,7 @@ export function ProductosTab({ supabase, renderFormulario, renderActualizarPreci
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation()
-                        setModal(producto)
+                        abrirFicha(producto)
                       }}
                       className="text-left font-semibold hover:text-accent-darker focus-visible:underline focus-visible:outline-none"
                     >
@@ -395,7 +453,12 @@ export function ProductosTab({ supabase, renderFormulario, renderActualizarPreci
           },
           onEditarExistente: (id) => {
             const existente = productos.find((p) => p.id === id)
-            if (existente) setModal(existente)
+            if (!existente) return
+            // Desde el alta (que no es documento): el existente se abre como ficha de la bandeja.
+            if (bandeja) {
+              setModal(null)
+              abrirFicha(existente)
+            } else setModal(existente)
           },
         })}
 

@@ -1,5 +1,6 @@
 import { useState, useSyncExternalStore } from 'react'
 import { hayCambiosSinGuardar } from '@virikyna/shared'
+import { hayDocumentosConCambios } from '@virikyna/shared/src/components/documentos/contexto'
 import { ConfirmDialog } from './ConfirmDialog'
 import { actualizacionParaOfrecer, instalarYReiniciar, posponerActualizacion, suscribirActualizacion } from '../lib/updater'
 import { AVISO_COBRO, hayCobroEnCurso } from '../lib/proteccionVentana'
@@ -34,7 +35,8 @@ export function AvisoActualizacion() {
       showToast(AVISO_COBRO)
       return
     }
-    if (hayCambiosSinGuardar()) {
+    // Un documento minimizado de la bandeja (docs/73) con cambios también se perdería.
+    if (hayCambiosSinGuardar() || hayDocumentosConCambios()) {
       setConfirmando(true)
       return
     }

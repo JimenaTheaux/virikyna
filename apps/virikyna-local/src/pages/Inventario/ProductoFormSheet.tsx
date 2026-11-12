@@ -28,7 +28,9 @@ import {
   avisoStockMinimo,
   STOCK_MINIMO_AYUDA,
   STOCK_MINIMO_LABEL,
+  AvisoCambios,
 } from '@virikyna/shared'
+import type { DocumentoProducto, PestanaProducto } from '@virikyna/shared/src/components/inventario/ProductosTab'
 import { CodigoBarrasBox } from '@virikyna/shared'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field, ErrorText, inputClass } from '../../components/FormField'
@@ -39,7 +41,6 @@ import { AjustarStockSheet } from './AjustarStockSheet'
 import type { ProductoConRelaciones } from './types'
 import { MontoInput } from '@virikyna/shared'
 
-type PestanaProducto = 'datos' | 'precio' | 'movimientos'
 // Historial de precio sale de `auditoria` (solo admin). El de movimientos lo ve también el cajero
 // (D2, docs/70): la base le devuelve movimientos y precios, sin cambios de datos.
 const PESTANAS_ADMIN: { id: PestanaProducto; label: string }[] = [
@@ -70,6 +71,8 @@ type Props = {
   onStockChanged: () => void
   // Admin: tras eliminar el producto (docs/48) el listado cierra, recarga y avisa.
   onEliminado?: (nombre: string) => void
+  // Abierta como documento de la bandeja (docs/73), desde Inventario.
+  documento?: DocumentoProducto
 }
 
 export function ProductoFormSheet({
@@ -84,6 +87,7 @@ export function ProductoFormSheet({
   onEditarExistente,
   onEliminado,
   accionExistente,
+  documento,
 }: Props) {
   const esAdmin = rol === 'admin'
 
@@ -127,8 +131,15 @@ export function ProductoFormSheet({
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [confirmCerrar, setConfirmCerrar] = useState(false)
-  const [tab, setTab] = useState<PestanaProducto>('datos')
+  const [tab, setTabEstado] = useState<PestanaProducto>(documento?.tabInicial ?? 'datos')
+  const setTab = (t: PestanaProducto) => {
+    setTabEstado(t)
+    documento?.onTabChange(t)
+  }
   const idPestanas = useId()
+  // Id propio del <form>: con dos fichas abiertas en la bandeja (docs/73), "Guardar" de una no
+  // tiene que enviar el formulario de la otra.
+  const idFormulario = useId()
   // Historial de precio (solo admin): también alimenta la línea "Última modificación de margen".
   const {
     cambios: cambiosMargen,
@@ -269,6 +280,8 @@ export function ProductoFormSheet({
       title={producto ? 'Editar producto' : 'Nuevo producto'}
       onClose={pedirCierre}
       cambiosSinGuardar={dirty}
+      minimizable={documento?.minimizable}
+      etiquetaBandeja={`Art. ${producto?.nombre ?? nombre}`}
       widthClassName="max-w-[960px]"
       footer={
         tab === 'datos' || !producto ? (
@@ -293,7 +306,7 @@ export function ProductoFormSheet({
               </button>
               <button
                 type="submit"
-                form="producto-form"
+                form={idFormulario}
                 disabled={saving}
                 className="rounded bg-accent px-5 py-2.5 font-sans text-label-bold text-white transition hover:bg-accent-dark disabled:opacity-60"
               >
@@ -304,6 +317,11 @@ export function ProductoFormSheet({
         ) : undefined
       }
     >
+      {documento && documento.avisoCambios.length > 0 && (
+        <div className="mb-stack-md">
+          <AvisoCambios titulo="Cambió algo mientras estaba minimizado:" avisos={documento.avisoCambios} />
+        </div>
+      )}
       {producto && (
         <Pestanas
           label="Secciones del producto"
@@ -330,7 +348,7 @@ export function ProductoFormSheet({
       ) : (
       <PanelPestana idBase={producto ? idPestanas : null} id="datos">
       <form
-        id="producto-form"
+        id={idFormulario}
         onSubmit={handleSubmit}
         onChangeCapture={() => setDirty(true)}
         className="grid grid-cols-[minmax(0,1fr)_240px] gap-stack-md"
