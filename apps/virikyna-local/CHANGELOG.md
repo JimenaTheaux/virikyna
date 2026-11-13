@@ -1,5 +1,9 @@
 # Novedades de Virikyna Local
 
+## 0.15.0 — noviembre 2026
+
+- El **pago a proveedor** también se puede minimizar: queda arriba como "Pago · proveedor", se va a otra pantalla (por ejemplo, a revisar una factura) y al volver está tal cual quedó. Hay uno por proveedor: si ya hay uno abierto, "Pagar" trae ese.
+
 ## 0.14.1 — noviembre 2026
 
 - Devoluciones: lo devuelto vuelve al stock según el motivo, como antes. La casilla **Defectuoso** solo aparece con motivo Defectuoso (viene tildada; se destildan los productos sanos). Con Regalo, Arrepentimiento u Otro, todo vuelve al stock.
