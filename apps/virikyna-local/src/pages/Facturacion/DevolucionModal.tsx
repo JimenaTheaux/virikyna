@@ -77,7 +77,8 @@ type ResolucionNegativa = 'reintegro' | 'a_favor'
 type Borrador = {
   tickets: string[] // ids, en orden
   cantidades: Record<string, string>
-  defectuosos: Record<string, boolean>
+  // Solo cuenta con motivo "defectuoso": líneas destildadas (sanas, sí vuelven al stock).
+  sanos: Record<string, boolean>
   nuevos: ItemNuevo[]
   motivo: MotivoDevolucion | ''
   motivoDetalle: string
@@ -99,7 +100,8 @@ function leerBorrador(): Borrador | null {
     return {
       tickets: b.tickets.filter((t): t is string => typeof t === 'string').slice(0, MAX_TICKETS_DEVOLUCION),
       cantidades: b.cantidades ?? {},
-      defectuosos: b.defectuosos ?? {},
+      // Un borrador de la versión anterior (campo "defectuosos") se ignora: manda el motivo.
+      sanos: b.sanos ?? {},
       nuevos: Array.isArray(b.nuevos) ? b.nuevos : [],
       motivo: b.motivo ?? '',
       motivoDetalle: b.motivoDetalle ?? '',
@@ -259,7 +261,7 @@ export function DevolucionModal({ ventaInicialId, onClose, onDone }: Props) {
   const ids = useId()
   const [tickets, setTickets] = useState<TicketCargado[]>([])
   const [cantidades, setCantidades] = useState<Record<string, string>>({})
-  const [defectuosos, setDefectuosos] = useState<Record<string, boolean>>({})
+  const [sanos, setSanos] = useState<Record<string, boolean>>({})
   const [nuevos, setNuevos] = useState<ItemNuevo[]>([])
   const [motivo, setMotivo] = useState<MotivoDevolucion | ''>('')
   const [motivoDetalle, setMotivoDetalle] = useState('')
@@ -303,7 +305,7 @@ export function DevolucionModal({ ventaInicialId, onClose, onDone }: Props) {
           else cargados.push(r.ticket)
         }
         setCantidades(borrador.cantidades)
-        setDefectuosos(borrador.defectuosos)
+        setSanos(borrador.sanos)
         setNuevos(borrador.nuevos)
         setMotivo(borrador.motivo)
         setMotivoDetalle(borrador.motivoDetalle)
@@ -345,6 +347,10 @@ export function DevolucionModal({ ventaInicialId, onClose, onDone }: Props) {
   }, [])
 
   // ── Cálculos ──
+  // Stock: con motivo Defectuoso, lo devuelto NO vuelve al stock salvo las líneas que se destilden
+  // (sanas). Con cualquier otro motivo todo vuelve al stock y la columna "Defectuoso" no se muestra.
+  const conDefectuosos = motivo === 'defectuoso'
+  const esDefectuoso = (ventaItemId: string) => conDefectuosos && !sanos[ventaItemId]
   const lineasDevueltas = useMemo(
     () =>
       tickets.flatMap((t) =>
@@ -390,7 +396,7 @@ export function DevolucionModal({ ventaInicialId, onClose, onDone }: Props) {
         ? {
             tickets: tickets.map((t) => t.id),
             cantidades,
-            defectuosos,
+            sanos,
             nuevos,
             motivo,
             motivoDetalle,
@@ -402,7 +408,7 @@ export function DevolucionModal({ ventaInicialId, onClose, onDone }: Props) {
           }
         : null,
     )
-  }, [preparando, hayCambios, tickets, cantidades, defectuosos, nuevos, motivo, motivoDetalle, observaciones, formaPago, pagosCombinados, resolucionNegativa, notaAFavor])
+  }, [preparando, hayCambios, tickets, cantidades, sanos, nuevos, motivo, motivoDetalle, observaciones, formaPago, pagosCombinados, resolucionNegativa, notaAFavor])
 
   // ── Tickets ──
   async function agregarTicket() {
@@ -428,7 +434,7 @@ export function DevolucionModal({ ventaInicialId, onClose, onDone }: Props) {
     setTickets((prev) => prev.filter((x) => x.id !== t.id))
     const lineasIds = new Set(t.lineas.map((l) => l.ventaItemId))
     setCantidades((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !lineasIds.has(k))))
-    setDefectuosos((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !lineasIds.has(k))))
+    setSanos((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !lineasIds.has(k))))
     setFormaPago(null)
     setPagosCombinados(null)
     setErrorTicket(null)
@@ -495,7 +501,7 @@ export function DevolucionModal({ ventaInicialId, onClose, onDone }: Props) {
       itemsDevueltos: lineasDevueltas.map((x) => ({
         ventaItemId: x.linea.ventaItemId,
         cantidad: x.cantidad,
-        defectuoso: Boolean(defectuosos[x.linea.ventaItemId]),
+        defectuoso: esDefectuoso(x.linea.ventaItemId),
       })),
       itemsNuevos: nuevos.map((n) => ({ productoId: n.productoId, cantidad: Number(n.cantidad) })),
       resolucion,
@@ -711,7 +717,7 @@ export function DevolucionModal({ ventaInicialId, onClose, onDone }: Props) {
                     <col className="w-[4.25rem]" />
                     <col className="w-[4.25rem]" />
                     <col className="w-[5.5rem]" />
-                    <col className="w-[5.25rem]" />
+                    {conDefectuosos && <col className="w-[6.5rem]" />}
                   </colgroup>
                   <thead>
                     <tr className="border-b border-line bg-bg text-label-bold text-ink-soft">
@@ -720,7 +726,11 @@ export function DevolucionModal({ ventaInicialId, onClose, onDone }: Props) {
                       <th className="px-2 py-2 text-right" title="Ya devuelta">Ya dev.</th>
                       <th className="px-2 py-2 text-right" title="Disponible">Disp.</th>
                       <th className="px-2 py-2 text-right">Devolver</th>
-                      <th className="px-2 py-2 text-center">Defect.</th>
+                      {conDefectuosos && (
+                        <th className="px-2 py-2 text-center" title="Tildado: no vuelve al stock">
+                          Defectuoso
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   {tickets.map((t, i) => (
@@ -729,7 +739,7 @@ export function DevolucionModal({ ventaInicialId, onClose, onDone }: Props) {
                         <th colSpan={4} scope="rowgroup" className="px-3 py-1.5 text-label-bold text-accent-darker">
                           Ticket {i + 1} — N° {t.numero} ({formatFechaCortaLocal(t.createdAt)})
                         </th>
-                        <td colSpan={2} className="px-3 py-1.5 text-right text-label-bold text-accent-darker">
+                        <td colSpan={conDefectuosos ? 2 : 1} className="px-3 py-1.5 text-right text-label-bold text-accent-darker">
                           {formatCurrency(subtotalTicket(t))}
                         </td>
                       </tr>
@@ -760,16 +770,18 @@ export function DevolucionModal({ ventaInicialId, onClose, onDone }: Props) {
                                 className={`w-full rounded border bg-surface px-2 py-1.5 text-right font-sans text-body-md text-ink outline-none focus:border-accent disabled:bg-bg ${excede ? 'border-error' : 'border-line'}`}
                               />
                             </td>
-                            <td className="px-2 py-1.5 text-center">
-                              <input
-                                type="checkbox"
-                                checked={Boolean(defectuosos[l.ventaItemId])}
-                                disabled={disp <= 0}
-                                onChange={(e) => setDefectuosos((prev) => ({ ...prev, [l.ventaItemId]: e.target.checked }))}
-                                aria-label={`${l.nombre} defectuoso (no vuelve al stock)`}
-                                className="h-5 w-5 cursor-pointer accent-accent disabled:cursor-not-allowed"
-                              />
-                            </td>
+                            {conDefectuosos && (
+                              <td className="px-2 py-1.5 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={!sanos[l.ventaItemId]}
+                                  disabled={disp <= 0}
+                                  onChange={(e) => setSanos((prev) => ({ ...prev, [l.ventaItemId]: !e.target.checked }))}
+                                  aria-label={`${l.nombre} defectuoso (no vuelve al stock)`}
+                                  className="h-5 w-5 cursor-pointer accent-accent disabled:cursor-not-allowed"
+                                />
+                              </td>
+                            )}
                           </tr>
                         )
                       })}
@@ -778,7 +790,9 @@ export function DevolucionModal({ ventaInicialId, onClose, onDone }: Props) {
                 </table>
               </div>
               <p className="mt-1 font-sans text-label-md text-ink-soft">
-                Lo marcado como defectuoso no vuelve al stock: queda separado para revisión.
+                {conDefectuosos
+                  ? 'Motivo Defectuoso: lo tildado no vuelve al stock (queda separado para revisión). Destildá los productos que estén sanos.'
+                  : 'Lo devuelto vuelve al stock del local.'}
               </p>
             </section>
           )}
@@ -869,7 +883,7 @@ export function DevolucionModal({ ventaInicialId, onClose, onDone }: Props) {
               <Field
                 label={motivo === 'otro' ? 'Detalle del motivo (obligatorio)' : 'Detalle del motivo (opcional)'}
                 compact
-                hint={motivo === 'defectuoso' ? 'Tildá "Defect." en los productos que no vuelven al stock.' : undefined}
+                hint={conDefectuosos ? 'Lo tildado como Defectuoso no vuelve al stock. Destildá los productos sanos.' : undefined}
               >
                 <input
                   value={motivoDetalle}
@@ -1049,7 +1063,8 @@ export function DevolucionModal({ ventaInicialId, onClose, onDone }: Props) {
                     ? 'Se imputa a la cuenta corriente del cliente'
                     : null
             }
-            cantidadDefectuosos={lineasDevueltas.filter((x) => defectuosos[x.linea.ventaItemId]).length}
+            cantidadDefectuosos={lineasDevueltas.filter((x) => esDefectuoso(x.linea.ventaItemId)).length}
+            cantidadAlStock={lineasDevueltas.filter((x) => !esDefectuoso(x.linea.ventaItemId)).length}
           />
         </ConfirmDialog>
       )}
@@ -1080,6 +1095,7 @@ function ResumenConfirmacion({
   textoDiferencia,
   detalleResolucion,
   cantidadDefectuosos,
+  cantidadAlStock,
 }: {
   tickets: TicketCargado[]
   subtotalTicket: (t: TicketCargado) => number
@@ -1089,6 +1105,7 @@ function ResumenConfirmacion({
   textoDiferencia: string
   detalleResolucion: string | null
   cantidadDefectuosos: number
+  cantidadAlStock: number
 }) {
   return (
     <dl className="flex flex-col gap-1 font-sans text-body-md text-ink">
@@ -1114,8 +1131,13 @@ function ResumenConfirmacion({
         <p className="text-label-bold">{textoDiferencia}</p>
         {detalleResolucion && <p className="text-ink-soft [overflow-wrap:anywhere]">{detalleResolucion}</p>}
       </div>
-      {cantidadDefectuosos > 0 && (
+      {cantidadAlStock > 0 && (
         <p className="text-label-md text-ink-soft">
+          {cantidadAlStock} producto{cantidadAlStock === 1 ? '' : 's'} vuelve{cantidadAlStock === 1 ? '' : 'n'} al stock.
+        </p>
+      )}
+      {cantidadDefectuosos > 0 && (
+        <p className="text-label-md text-error">
           {cantidadDefectuosos} producto{cantidadDefectuosos === 1 ? '' : 's'} defectuoso{cantidadDefectuosos === 1 ? '' : 's'}: no vuelve{cantidadDefectuosos === 1 ? '' : 'n'} al stock.
         </p>
       )}
