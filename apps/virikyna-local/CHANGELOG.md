@@ -1,5 +1,9 @@
 # Novedades de Virikyna Local
 
+## 0.14.1 — noviembre 2026
+
+- Devoluciones: lo devuelto vuelve al stock según el motivo, como antes. La casilla **Defectuoso** solo aparece con motivo Defectuoso (viene tildada; se destildan los productos sanos). Con Regalo, Arrepentimiento u Otro, todo vuelve al stock.
+
 ## 0.14.0 — noviembre 2026
 
 - Podés minimizar facturas, detalles de venta y artículos, y seguir trabajando en otra pantalla.
