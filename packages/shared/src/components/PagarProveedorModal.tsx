@@ -13,7 +13,7 @@ import {
   useRegistrarPagoProveedorV3,
   validarPagoProveedor,
 } from '../../lib/facturasCompra'
-import { diferenciaMedios, validarMedios } from '../../lib/mediosPago'
+import { diferenciaMedios, totalMedios, validarMedios } from '../../lib/mediosPago'
 import { diferenciaParaAjuste, simularRepartoPago } from '../../lib/repartoPagoProveedor'
 import { CampoAjusteRedondeo } from './CampoAjusteRedondeo'
 import { MediosPagoEditor, ResumenMedios, useMediosPago } from './MediosPagoEditor'
@@ -40,6 +40,8 @@ type Props = {
   // docs/69: lo que falta cancelar del saldo inicial. Lo que sobra del pago (a cuenta) lo cancela
   // primero; sin selección, también se suma al monto precargado.
   saldoInicialPendiente?: number
+  // Bandeja (docs/73): abierto como documento (PagoProveedorDocumento) se puede minimizar.
+  minimizable?: boolean
   onClose: () => void
   onPagado: () => void
 }
@@ -62,6 +64,7 @@ export function PagarProveedorModal({
   aCuenta = 0,
   onAplicarACuenta,
   saldoInicialPendiente = 0,
+  minimizable,
   onClose,
   onPagado,
 }: Props) {
@@ -116,7 +119,16 @@ export function PagarProveedorModal({
       }),
     [comprobantes, facturaIds, notaCreditoIds, montoNum, ajusteNum],
   )
-  const diferencia = diferenciaParaAjuste(aPagar, montoNum)
+  // Con varios medios la plata que sale es lo que suman los medios (los cheques), no el "Total del
+  // pago" escrito a mano: el ajuste se calcula contra esa suma, y "Ajustar la diferencia" además
+  // lleva el total a la suma para que el pago cierre (pedido de Alicia, 13/11: total precargado con
+  // la deuda, cheques que suman $ 1,10 más → el botón quedaba gris y el pago no cerraba).
+  const sumaMedios = totalMedios(medios)
+  const plataPorMedios = variosMedios && !sinPlata && sumaMedios > 0
+  const plata = plataPorMedios ? sumaMedios : montoNum
+  const totalDistintoDeMedios =
+    plataPorMedios && (!Number.isFinite(montoNum) || Math.round(montoNum * 100) !== Math.round(sumaMedios * 100))
+  const diferencia = diferenciaParaAjuste(aPagar, plata)
   // docs/69: el sobrante (a cuenta) cancela primero el saldo inicial, como la vista de la base.
   const cancelaSaldoInicial = Math.min(Math.round(reparto.aCuenta * 100), Math.round(Math.max(saldoInicialPendiente, 0) * 100)) / 100
   const quedaACuenta = (Math.round(reparto.aCuenta * 100) - Math.round(cancelaSaldoInicial * 100)) / 100
@@ -232,6 +244,8 @@ export function PagarProveedorModal({
       onClose={pedirCierre}
       widthClassName={variosMedios ? 'max-w-[720px]' : 'max-w-[640px]'}
       cambiosSinGuardar={dirty}
+      minimizable={minimizable}
+      etiquetaBandeja={`Pago · ${proveedorNombre}`}
       footer={
         <div className="flex items-center justify-end gap-3">
           {variosMedios && !sinPlata && <ResumenMedios medios={medios} total={montoNum} className="mr-auto" />}
@@ -318,7 +332,9 @@ export function PagarProveedorModal({
             setAjuste(v)
           }}
           diferencia={diferencia}
-          plata={montoNum}
+          plata={plata}
+          totalPorAjustar={totalDistintoDeMedios}
+          onAjustar={plataPorMedios ? () => setMonto(montoTexto(sumaMedios)) : undefined}
         />
 
         {sinPlata ? (

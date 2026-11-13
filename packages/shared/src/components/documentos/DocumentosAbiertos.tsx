@@ -19,14 +19,14 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { ChevronDown, FilePlus, Package, Receipt, ShoppingBag, X, type LucideIcon } from 'lucide-react'
+import { ChevronDown, FilePlus, Package, Receipt, ShoppingBag, Wallet, X, type LucideIcon } from 'lucide-react'
 import type { RolUsuario } from '../../../types/database'
 import { Modal } from '../Modal'
 import { DocumentoContext, marcarEstadoBandeja, type DocumentoCtx, type InfoDocumento } from './contexto'
 
 export const MAX_DOCUMENTOS = 5
 
-export type TipoDocumento = 'factura_compra' | 'detalle_factura_compra' | 'detalle_venta' | 'producto'
+export type TipoDocumento = 'factura_compra' | 'detalle_factura_compra' | 'detalle_venta' | 'producto' | 'pago_proveedor'
 
 export type ControlDocumento = {
   clave: string
@@ -337,6 +337,7 @@ const ICONO: Record<TipoDocumento, LucideIcon> = {
   detalle_factura_compra: Receipt,
   detalle_venta: ShoppingBag,
   producto: Package,
+  pago_proveedor: Wallet,
 }
 
 // Cada chip mide entre 160 y 240 px (se achica para que entren más) + separación (gap-2). El "+N"

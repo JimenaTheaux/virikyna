@@ -29,6 +29,8 @@ import { Field, inputClass, selectClass } from './FormField'
 import { ChipTipoCompra, EstadoBadge } from './EstadoBadge'
 import { RowActionsMenu, type RowActionsMenuItem } from './RowActionsMenu'
 import { PagarProveedorModal } from './PagarProveedorModal'
+import { PagoProveedorDocumento } from './PagoProveedorDocumento'
+import { useDocumentosAbiertos } from './documentos/DocumentosAbiertos'
 import { FormaPagoConDetalle } from './FormaPagoConDetalle'
 import { AplicarACuentaModal } from './AplicarACuentaModal'
 import { EditarFacturaCompraModal } from './EditarFacturaCompraModal'
@@ -167,6 +169,40 @@ export function ProveedorCuentaCorriente({
   useEffect(() => {
     if (pago || aplicar) setAviso('')
   }, [pago, aplicar])
+
+  // Bandeja (docs/73): en Local y Gestión el pago se abre como documento y se puede minimizar para
+  // ir a otra pantalla. Uno por proveedor: volver a "Pagar" trae al frente el que ya está abierto.
+  // Fuera de la bandeja (no debería pasar) sigue siendo el modal de siempre.
+  const bandeja = useDocumentosAbiertos()
+  function abrirPago(sel: { facturaIds: string[]; notaCreditoIds: string[] }) {
+    if (!bandeja) {
+      setPago(sel)
+      return
+    }
+    setAviso('')
+    bandeja.abrir({
+      clave: `pago_proveedor:${proveedorId}`,
+      tipo: 'pago_proveedor',
+      etiqueta: nombre ? `Pago · ${nombre}` : 'Pago a proveedor',
+      render: ({ cerrar }) => (
+        <PagoProveedorDocumento
+          supabase={supabase}
+          proveedorId={proveedorId}
+          facturaIds={sel.facturaIds}
+          notaCreditoIds={sel.notaCreditoIds}
+          origen={origen}
+          permitirAplicarACuenta={permitirAplicarACuenta}
+          onCerrar={cerrar}
+          onTerminado={(texto) => {
+            cerrar()
+            // Si la cuenta corriente sigue montada (no se navegó a otra pantalla), limpia y avisa.
+            setSeleccion(new Set())
+            setAviso(texto)
+          }}
+        />
+      ),
+    })
+  }
 
   // ── Comprobantes de la pestaña, con filtros ──
   const visibles = useMemo(() => {
@@ -358,7 +394,7 @@ export function ProveedorCuentaCorriente({
         const acciones: RowActionsMenuItem[] = [
           { label: 'Ver detalle', icon: Eye, onClick: () => setDetalleId(c.id) },
           ...(esSeleccionableParaPago(c) && !nc
-            ? [{ label: 'Pagar este comprobante', icon: Wallet, onClick: () => setPago({ facturaIds: [c.id], notaCreditoIds: [] }) }]
+            ? [{ label: 'Pagar este comprobante', icon: Wallet, onClick: () => abrirPago({ facturaIds: [c.id], notaCreditoIds: [] }) }]
             : []),
           ...(onCopiar ? [{ label: 'Copiar', icon: Copy, onClick: () => onCopiar(c) }] : []),
           ...(permitirEditarAnular && !c.anulada
@@ -388,7 +424,7 @@ export function ProveedorCuentaCorriente({
         { label: 'Contacto', valor: [proveedor.contacto, proveedor.telefono, proveedor.mail].filter(Boolean).join(' · ') || '—' },
         { label: 'Márgenes', valor: <>{proveedor.margen_1_default}% · {proveedor.margen_2_default}%</> },
       ]}
-      accionPrincipal={{ label: 'Registrar pago', onClick: () => setPago({ facturaIds: [], notaCreditoIds: [] }) }}
+      accionPrincipal={{ label: 'Registrar pago', onClick: () => abrirPago({ facturaIds: [], notaCreditoIds: [] }) }}
       conSeleccion={seleccion.size > 0}
       debajoCabecera={<ObservacionesProveedor observaciones={proveedor.observaciones} className="mt-stack-md" />}
       kpisClassName={saldoInicial ? 'sm:grid-cols-3 2xl:grid-cols-6' : undefined}
@@ -551,7 +587,7 @@ export function ProveedorCuentaCorriente({
           ? {
               resumen: resumenSeleccion,
               accionLabel: 'Pagar',
-              onAccion: () => setPago({ facturaIds: seleccionFacturas, notaCreditoIds: seleccionNotas }),
+              onAccion: () => abrirPago({ facturaIds: seleccionFacturas, notaCreditoIds: seleccionNotas }),
               onQuitar: () => setSeleccion(new Set()),
             }
           : null
